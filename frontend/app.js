@@ -352,21 +352,6 @@ function updateTimerDisplay() {
     }
 }
 
-// ========== 10. WRAP API CALLS WITH LOADING ==========
-// Update the original apiCall function to show loading
-const originalApiCall = apiCall;
-async function apiCall(endpoint, options = {}) {
-    showLoading();
-    try {
-        const result = await originalApiCall(endpoint, options);
-        hideLoading();
-        return result;
-    } catch (e) {
-        hideLoading();
-        throw e;
-    }
-}
-
 // ========== UPDATE EXISTING FUNCTIONS ==========
 
 // Update deleteQuiz to use confirmation dialog
