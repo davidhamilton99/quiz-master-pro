@@ -50,7 +50,7 @@
         .flex-1 { flex: 1; } .flex-wrap { flex-wrap: wrap; }
         
         /* FIXED: Grid system with proper centering */
-        .grid { display: grid; width: 100%; }
+        .grid { display: grid; width: 100%; overflow: visible; }
         .grid-3 { grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
         .grid-4 { grid-template-columns: repeat(4, 1fr); gap: 1rem; }
         @media (max-width: 1024px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
@@ -134,11 +134,19 @@
         .stat-card.accent .stat-value, .stat-card.accent .stat-label { color: white; }
         
         /* FIXED: Quiz card with proper text overflow */
-        .quiz-card {
-            display: flex; flex-direction: column; padding: 1.5rem; background: var(--paper-warm);
-            border: 1px solid var(--cream); border-radius: var(--radius-lg); cursor: pointer; 
-            transition: all 0.25s; min-width: 0; /* Important for text overflow */
-        }
+      .quiz-card {
+    display: flex; 
+    flex-direction: column; 
+    padding: 1.5rem; 
+    background: var(--paper-warm);
+    border: 1px solid var(--cream); 
+    border-radius: var(--radius-lg); 
+    cursor: pointer; 
+    transition: all 0.25s; 
+    min-width: 0;
+    overflow: visible; /* Add this */
+    position: relative; /* Make sure this exists */
+}
         .quiz-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: transparent; }
         .quiz-card-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--cream); border-radius: var(--radius-md); font-size: 1.5rem; flex-shrink: 0; }
         .quiz-card-title { 
@@ -643,4 +651,16 @@
 
 .dropdown-menu {
     z-index: 201;
+}
+.quiz-card {
+    overflow: visible !important;
+}
+
+.quiz-card .dropdown {
+    position: static;
+}
+
+.dropdown-menu {
+    position: fixed !important;
+    z-index: 1000 !important;
 }
