@@ -815,7 +815,7 @@ function toggleFlag() {
                     else q.options.forEach((o, j) => t += `${String.fromCharCode(65 + j)}. ${o}${q.correct.includes(j) ? ' *' : ''}\n`);
                     if (q.explanation) t += `[explanation: ${q.explanation}]\n`;
                     return t;
-                }).join('\n');
+                }).join('\n\n');
                 state.quizTitle = qd.title; state.quizData = txt; state.quizCategory = qd.description || ''; state.editingQuizId = id; state.view = 'create'; render();
             } catch (e) { showToast('Failed to load', 'error'); }
         }
