@@ -293,23 +293,45 @@ function showQuizPreview(quizId) {
 }
 
 // ========== 8. SUCCESS CONFETTI ==========
+// ========== 8. SUCCESS CONFETTI ==========
 function showConfetti() {
-    const colors = ['#d97706', '#059669', '#0284c7', '#7c3aed', '#db2777', '#dc2626'];
-    const confettiCount = 50;
+    const colors = ['#d97706', '#059669', '#0284c7', '#7c3aed', '#db2777', '#dc2626', '#fbbf24', '#22c55e'];
+    const confettiCount = 80; // Increased from 50
     
     for (let i = 0; i < confettiCount; i++) {
         setTimeout(() => {
             const confetti = document.createElement('div');
             confetti.className = 'confetti';
             confetti.style.left = Math.random() * 100 + 'vw';
+            confetti.style.top = '-10px'; // Start from top
             confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
-            confetti.style.animationDelay = Math.random() * 0.5 + 's';
+            confetti.style.width = (Math.random() * 10 + 5) + 'px'; // Random sizes 5-15px
+            confetti.style.height = (Math.random() * 10 + 5) + 'px';
+            confetti.style.animationDelay = Math.random() * 0.3 + 's';
+            confetti.style.animationDuration = (Math.random() * 1 + 2) + 's'; // 2-3 seconds
             confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px'; // Mix of circles and squares
             document.body.appendChild(confetti);
             
-            setTimeout(() => confetti.remove(), 3000);
-        }, i * 30);
+            setTimeout(() => confetti.remove(), 4000);
+        }, i * 20); // Stagger the confetti
     }
+    
+    // Add some celebration text
+    const celebration = document.createElement('div');
+    celebration.style.cssText = `
+        position: fixed;
+        top: 20%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        font-size: 4rem;
+        z-index: 10000;
+        animation: celebrationPop 0.6s ease forwards;
+        pointer-events: none;
+    `;
+    celebration.textContent = '🎉';
+    document.body.appendChild(celebration);
+    setTimeout(() => celebration.remove(), 1000);
 }
 
 // ========== 9. TIMER PULSE WARNING ==========
