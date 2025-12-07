@@ -1,0 +1,23 @@
+# Database files (don't commit these!)
+*.db
+*.sqlite
+*.sqlite3
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+#Environment
+.env
+venv/
+env/
+#IDE
+.vscode/
+.idea/
+*.swp
+#OS
+.DS_Store
+Thumbs.db
+# Logs
+*.log
