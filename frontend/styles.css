@@ -632,3 +632,15 @@
         opacity: 0;
     }
 }
+.quiz-card .dropdown {
+    position: relative;
+    z-index: 101;
+}
+
+.quiz-card .dropdown.open {
+    z-index: 200;
+}
+
+.dropdown-menu {
+    z-index: 201;
+}
