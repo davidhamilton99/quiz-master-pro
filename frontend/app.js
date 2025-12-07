@@ -21,7 +21,434 @@ const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
         function getRandomColor() { return ['#d97706','#059669','#0284c7','#7c3aed','#db2777','#dc2626'][Math.floor(Math.random() * 6)]; }
         function shuffleArray(arr) { const s = [...arr]; for (let i = s.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [s[i], s[j]] = [s[j], s[i]]; } return s; }
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+        /* ============================================
+   QUICK WIN FEATURES - ADD TO BEGINNING OF app.js
+   (After the API_URL and state declarations)
+   ============================================ */
+
+// ========== 1. LOADING SPINNER ==========
+let loadingCount = 0;
+
+function showLoading() {
+    loadingCount++;
+    if (loadingCount === 1) {
+        const spinner = document.createElement('div');
+        spinner.id = 'loading-spinner';
+        spinner.className = 'spinner-overlay';
+        spinner.innerHTML = '<div class="spinner"></div>';
+        document.body.appendChild(spinner);
+    }
+}
+
+function hideLoading() {
+    loadingCount = Math.max(0, loadingCount - 1);
+    if (loadingCount === 0) {
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) spinner.remove();
+    }
+}
+
+// ========== 2. AUTO-SAVE INDICATOR ==========
+let saveIndicatorTimeout;
+
+function showSaveIndicator(status = 'saving') {
+    clearTimeout(saveIndicatorTimeout);
+    
+    let indicator = document.getElementById('save-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'save-indicator';
+        indicator.className = 'save-indicator';
+        document.body.appendChild(indicator);
+    }
+    
+    indicator.className = `save-indicator ${status}`;
+    indicator.innerHTML = status === 'saving' 
+        ? '<span class="spinner-small"></span><span>Saving...</span>'
+        : '<span>✓</span><span>Saved</span>';
+    
+    if (status === 'saved') {
+        saveIndicatorTimeout = setTimeout(() => {
+            indicator.classList.add('fade-out');
+            setTimeout(() => indicator.remove(), 300);
+        }, 2000);
+    }
+}
+
+// ========== 3. IMPROVED TOAST (Dismissible) ==========
+function showToast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    const id = 'toast-' + Date.now();
+    toast.id = id;
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: '✓',
+        error: '✕',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span style="flex: 1">${msg}</span>
+        <button class="toast-close" onclick="dismissToast('${id}')">×</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-dismiss after 4 seconds
+    setTimeout(() => dismissToast(id), 4000);
+}
+
+function dismissToast(id) {
+    const toast = document.getElementById(id);
+    if (toast) {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }
+}
+
+// ========== 4. CONFIRMATION DIALOGS ==========
+function showConfirmDialog(options) {
+    return new Promise((resolve) => {
+        const {
+            title = 'Confirm Action',
+            message = 'Are you sure?',
+            confirmText = 'Confirm',
+            cancelText = 'Cancel',
+            type = 'warning' // 'warning' or 'danger'
+        } = options;
         
+        const icons = {
+            warning: '⚠️',
+            danger: '🗑️'
+        };
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay confirm-modal';
+        modal.innerHTML = `
+            <div class="modal">
+                <div class="modal-body" style="text-align: center; padding: 2rem">
+                    <div class="confirm-icon ${type}">
+                        ${icons[type] || icons.warning}
+                    </div>
+                    <h2 style="margin-bottom: 0.5rem">${title}</h2>
+                    <p class="text-muted">${message}</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost flex-1" onclick="this.closest('.modal-overlay').remove()">
+                        ${cancelText}
+                    </button>
+                    <button class="btn ${type === 'danger' ? 'btn-accent' : 'btn-primary'} flex-1" id="confirm-btn">
+                        ${confirmText}
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('confirm-btn').onclick = () => {
+            modal.remove();
+            resolve(true);
+        };
+        
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                resolve(false);
+            }
+        };
+    });
+}
+
+// ========== 5. SEARCH HIGHLIGHTING ==========
+function highlightText(text, query) {
+    if (!query) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const regex = new RegExp(`(${escapeHtml(query)})`, 'gi');
+    return escaped.replace(regex, '<span class="search-highlight">$1</span>');
+}
+
+// ========== 6. KEYBOARD SHORTCUTS ==========
+const shortcuts = {
+    'n': { action: () => nextQuestion(), context: 'quiz', description: 'Next question' },
+    'p': { action: () => prevQuestion(), context: 'quiz', description: 'Previous question' },
+    ' ': { action: (e) => { e.preventDefault(); if (state.view === 'quiz') document.querySelector('.option-btn')?.click(); }, context: 'quiz', description: 'Select option' },
+    'Enter': { action: (e) => { e.preventDefault(); if (state.view === 'quiz') nextQuestion(); }, context: 'quiz', description: 'Next/Submit' },
+    'f': { action: () => toggleFlag(), context: 'quiz', description: 'Flag question' },
+    '?': { action: () => showKeyboardShortcuts(), context: 'all', description: 'Show shortcuts' },
+    'Escape': { action: () => document.querySelector('.modal-overlay')?.remove(), context: 'all', description: 'Close modal' }
+};
+
+document.addEventListener('keydown', (e) => {
+    // Don't trigger if typing in input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    
+    const shortcut = shortcuts[e.key];
+    if (shortcut && (shortcut.context === 'all' || shortcut.context === state.view)) {
+        shortcut.action(e);
+    }
+});
+
+function showKeyboardShortcuts() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal keyboard-shortcuts-modal">
+            <div class="modal-header">
+                <h2>⌨️ Keyboard Shortcuts</h2>
+                <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcut-list">
+                    <div class="shortcut-item">
+                        <span>Next question</span>
+                        <div class="shortcut-keys">
+                            <kbd class="keyboard-hint">N</kbd>
+                            <span class="text-muted">or</span>
+                            <kbd class="keyboard-hint">Enter</kbd>
+                        </div>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>Previous question</span>
+                        <kbd class="keyboard-hint">P</kbd>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>Select option</span>
+                        <kbd class="keyboard-hint">Space</kbd>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>Flag question</span>
+                        <kbd class="keyboard-hint">F</kbd>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>Close modal</span>
+                        <kbd class="keyboard-hint">Esc</kbd>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>Show this help</span>
+                        <kbd class="keyboard-hint">?</kbd>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+}
+
+// ========== 7. QUIZ PREVIEW ==========
+function showQuizPreview(quizId) {
+    showLoading();
+    apiCall(`/quizzes/${quizId}`).then(d => {
+        hideLoading();
+        const quiz = d.quiz || d;
+        const preview = quiz.questions.slice(0, 3);
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal modal-lg">
+                <div class="modal-header">
+                    <h2>📝 ${escapeHtml(quiz.title)}</h2>
+                    <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted" style="margin-bottom: 1.5rem">
+                        ${quiz.questions.length} questions • ${quiz.description || 'No category'}
+                    </p>
+                    <h3 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem">
+                        Preview (first 3 questions)
+                    </h3>
+                    ${preview.map((q, i) => `
+                        <div class="preview-question">
+                            <div style="display: flex; align-items: start">
+                                <span class="preview-question-number">${i + 1}</span>
+                                <span style="flex: 1">${escapeHtml(q.question)}</span>
+                            </div>
+                            ${q.options ? `
+                                <div class="preview-options">
+                                    ${q.options.map((opt, j) => `${String.fromCharCode(65 + j)}. ${escapeHtml(opt)}`).join('<br>')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                    ${quiz.questions.length > 3 ? `<p class="text-sm text-muted" style="text-align: center">... and ${quiz.questions.length - 3} more questions</p>` : ''}
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost flex-1" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                    <button class="btn btn-accent flex-1" onclick="this.closest('.modal-overlay').remove(); showQuizOptions(${quizId})">Start Quiz</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    }).catch(e => {
+        hideLoading();
+        showToast('Failed to load preview', 'error');
+    });
+}
+
+// ========== 8. SUCCESS CONFETTI ==========
+function showConfetti() {
+    const colors = ['#d97706', '#059669', '#0284c7', '#7c3aed', '#db2777', '#dc2626'];
+    const confettiCount = 50;
+    
+    for (let i = 0; i < confettiCount; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.left = Math.random() * 100 + 'vw';
+            confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.animationDelay = Math.random() * 0.5 + 's';
+            confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+            document.body.appendChild(confetti);
+            
+            setTimeout(() => confetti.remove(), 3000);
+        }, i * 30);
+    }
+}
+
+// ========== 9. TIMER PULSE WARNING ==========
+// Add to updateTimerDisplay function
+function updateTimerDisplay() {
+    const el = document.getElementById('timer');
+    if (el) {
+        const minutes = Math.floor(state.timeRemaining / 60);
+        const seconds = state.timeRemaining % 60;
+        el.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        // Add pulse animation when under 60 seconds
+        if (state.timeRemaining <= 60) {
+            el.classList.add('timer-urgent', 'timer-pulse');
+        } else {
+            el.classList.remove('timer-urgent', 'timer-pulse');
+        }
+    }
+}
+
+// ========== 10. WRAP API CALLS WITH LOADING ==========
+// Update the original apiCall function to show loading
+const originalApiCall = apiCall;
+async function apiCall(endpoint, options = {}) {
+    showLoading();
+    try {
+        const result = await originalApiCall(endpoint, options);
+        hideLoading();
+        return result;
+    } catch (e) {
+        hideLoading();
+        throw e;
+    }
+}
+
+// ========== UPDATE EXISTING FUNCTIONS ==========
+
+// Update deleteQuiz to use confirmation dialog
+async function deleteQuiz(id) {
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Quiz?',
+        message: 'This action cannot be undone. All quiz data and attempts will be permanently deleted.',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'danger'
+    });
+    
+    if (!confirmed) return;
+    
+    try {
+        await apiCall(`/quizzes/${id}`, { method: 'DELETE' });
+        
+        state.folders.forEach(f => {
+            const idx = f.quizIds.indexOf(id);
+            if (idx > -1) f.quizIds.splice(idx, 1);
+        });
+        saveFolders();
+        
+        const idx = state.customOrder.indexOf(id);
+        if (idx > -1) state.customOrder.splice(idx, 1);
+        saveCustomOrder();
+        
+        clearQuizProgress(id);
+        
+        await loadQuizzes();
+        showToast('Quiz deleted successfully', 'success');
+        render();
+    } catch (e) {
+        showToast('Failed to delete quiz', 'error');
+    }
+}
+
+// Update deleteFolder to use confirmation dialog
+async function deleteFolder(id) {
+    const folder = state.folders.find(f => f.id === id);
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Folder?',
+        message: `Delete "${folder?.name}"? Quizzes inside will not be deleted.`,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
+    
+    state.folders = state.folders.filter(f => f.id !== id);
+    if (state.selectedFolder == id) state.selectedFolder = 'all';
+    saveFolders();
+    showToast('Folder deleted', 'success');
+    render();
+}
+
+// Update saveQuizProgress to show save indicator
+const originalSaveQuizProgress = saveQuizProgress;
+function saveQuizProgress() {
+    showSaveIndicator('saving');
+    originalSaveQuizProgress();
+    setTimeout(() => showSaveIndicator('saved'), 300);
+}
+
+// Update submitQuiz to show confetti on perfect score
+async function submitQuiz() {
+    stopTimer();
+    const score = calculateScore();
+    const total = state.currentQuiz.questions.length;
+    const pct = Math.round((score / total) * 100);
+    
+    // Show confetti for perfect score
+    if (pct === 100) {
+        showConfetti();
+    }
+    
+    try {
+        await apiCall(`/quizzes/${state.currentQuiz.id}/attempts`, {
+            method: 'POST',
+            body: JSON.stringify({
+                score, total, percentage: pct, answers: state.answers,
+                study_mode: state.studyMode, timed: state.timerEnabled,
+                max_streak: state.maxStreak,
+                time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) : null
+            })
+        });
+    } catch (e) {
+        showToast('Failed to save results', 'error');
+    }
+    
+    clearQuizProgress();
+    state.view = 'results';
+    render();
+}
+
+// Update renderLibrary to include search highlighting and preview button
+// Find the quiz card rendering section and update the title line to:
+// <h3 class="quiz-card-title">${state.searchQuery ? highlightText(q.title, state.searchQuery) : escapeHtml(q.title)}</h3>
+
+// Add preview button to quiz card dropdown menu (in renderLibrary):
+// <button class="dropdown-item" onclick="event.stopPropagation(); showQuizPreview(${q.id})">👁️ Preview</button>
+
+console.log('✨ Quick Win features loaded!');
         async function apiCall(endpoint, options = {}) {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
@@ -892,8 +1319,7 @@ function discardProgress(quizId) {
     showToast('Progress cleared', 'info');
     render();
 }
-				
-				
+					
         function renderAuth() {
             const isLogin = state.authMode === 'login';
             return `<div class="auth-page"><div class="auth-card"><div class="auth-logo"><div class="logo-mark">Q</div><span style="font-family:var(--font-display);font-size:1.5rem;font-weight:700">Quiz Master Pro</span></div><h1 class="auth-title">${isLogin ? 'Welcome back' : 'Create account'}</h1><p class="auth-subtitle">${isLogin ? 'Sign in to continue' : 'Start your journey'}</p><form onsubmit="event.preventDefault();${isLogin ? 'handleLogin()' : 'handleRegister()'}"><div style="margin-bottom:1rem"><label class="input-label">Username</label><input type="text" id="username" class="input" placeholder="Username" required></div><div style="margin-bottom:1.5rem"><label class="input-label">Password</label><input type="password" id="password" class="input" placeholder="Password" required></div><button type="submit" class="btn btn-accent btn-lg" style="width:100%">${isLogin ? 'Sign In' : 'Create Account'}</button></form><div class="auth-divider">${isLogin ? 'New here?' : 'Have an account?'}</div><button onclick="state.authMode='${isLogin ? 'register' : 'login'}';render()" class="btn btn-ghost" style="width:100%">${isLogin ? 'Create account' : 'Sign in'}</button></div></div>`;
@@ -1037,13 +1463,13 @@ function discardProgress(quizId) {
                                             <div class="flex items-start gap-md" style="margin-bottom:1rem;min-width:0">
                                                 <div class="quiz-card-icon" style="background:${q.color || 'var(--cream)'}20;color:${q.color || 'var(--accent)'}">📚</div>
                                                 <div style="flex:1;min-width:0;overflow:hidden">
-                                                    <h3 class="quiz-card-title">${escapeHtml(q.title)}</h3>
+                                                    <h3 class="quiz-card-title">${state.searchQuery ? highlightText(q.title, state.searchQuery) : escapeHtml(q.title)}</h3>
                                                     <p class="quiz-card-meta">${q.description || 'No category'}</p>
                                                 </div>
                                                 <div class="dropdown" onclick="event.stopPropagation()">
                                                     <button onclick="this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
                                                     <div class="dropdown-menu">
-                                                        <button class="dropdown-item" onclick="editQuiz(${q.id})">✏️ Edit</button>
+                                                        <button class="dropdown-item" onclick="event.stopPropagation(); showQuizPreview(${q.id})">👁️ Preview</button>
                                                         ${state.folders.map(f => `<button class="dropdown-item" onclick="addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
                                                         <button class="dropdown-item danger" onclick="deleteQuiz(${q.id})">🗑️ Delete</button>
                                                     </div>
