@@ -993,6 +993,7 @@ function toggleFlag() {
         }
         
         function renderQuizGrid() {
+            console.log('renderQuizGrid called');
     const gridContainer = document.getElementById('quiz-grid');
     if (!gridContainer) return;
     
