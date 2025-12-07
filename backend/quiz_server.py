@@ -21,7 +21,7 @@ CORS(app, origins=['*'])
 def index():
     return send_from_directory('static', 'index.html')
 
-DATABASE = '/home/davidhamilton/quiz_master.db'
+DATABASE = '/home/davidhamilton/quiz-master-pro/backend/quiz_master.db'
 
 # ============== Database Setup ==============
 
