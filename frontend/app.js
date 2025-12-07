@@ -402,14 +402,6 @@ async function deleteFolder(id) {
     render();
 }
 
-// Update saveQuizProgress to show save indicator
-const originalSaveQuizProgress = saveQuizProgress;
-function saveQuizProgress() {
-    showSaveIndicator('saving');
-    originalSaveQuizProgress();
-    setTimeout(() => showSaveIndicator('saved'), 300);
-}
-
 // Update submitQuiz to show confetti on perfect score
 async function submitQuiz() {
     stopTimer(); 
@@ -805,33 +797,6 @@ function toggleFlag() {
         showToast('Failed to save quiz', 'error'); 
     }
 }
-async function deleteQuiz(id) { 
-    if (!confirm('Delete this quiz?')) return; 
-    try { 
-        await apiCall(`/quizzes/${id}`, { method: 'DELETE' }); 
-        
-        // Remove from folders
-        state.folders.forEach(f => {
-            const idx = f.quizIds.indexOf(id);
-            if (idx > -1) f.quizIds.splice(idx, 1);
-        });
-        saveFolders();
-        
-        // Remove from custom order
-        const idx = state.customOrder.indexOf(id);
-        if (idx > -1) state.customOrder.splice(idx, 1);
-        saveCustomOrder();
-        
-        // Clear any saved progress
-        clearQuizProgress(id);
-        
-        await loadQuizzes(); 
-        showToast('Deleted', 'success'); 
-        render(); 
-    } catch (e) { 
-        showToast('Failed to delete', 'error'); 
-    } 
-}
         async function editQuiz(id) {
             try {
                 const d = await apiCall(`/quizzes/${id}`); const qd = d.quiz || d;
@@ -916,14 +881,6 @@ async function deleteQuiz(id) {
         }
         
         function createFolder() { const n = prompt('Folder name:'); if (!n?.trim()) return; state.folders.push({ id: Date.now(), name: n.trim(), quizIds: [], color: getRandomColor() }); saveFolders(); showToast('Created', 'success'); render(); }
-function deleteFolder(id) { 
-    if (!confirm('Delete folder? Quizzes will not be deleted.')) return; 
-    state.folders = state.folders.filter(f => f.id !== id); 
-    if (state.selectedFolder == id) state.selectedFolder = 'all'; 
-    saveFolders(); 
-    showToast('Deleted', 'success'); 
-    render(); 
-}
        function addToFolder(qid, fid) { 
     const f = state.folders.find(fo => fo.id === fid); 
     if (!f) return;
