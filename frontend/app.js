@@ -821,7 +821,7 @@ function toggleFlag() {
         }
         
         function parseQuizData(data) {
-            const lines = data.split('\n').filter(l => l.trim()), questions = [];
+            const lines = data.split('\n'), questions = [];
             let i = 0;
             while (i < lines.length) {
                 let line = lines[i].trim();
