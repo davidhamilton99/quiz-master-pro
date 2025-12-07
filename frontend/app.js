@@ -412,32 +412,32 @@ function saveQuizProgress() {
 
 // Update submitQuiz to show confetti on perfect score
 async function submitQuiz() {
-    stopTimer();
+    stopTimer(); 
     const score = calculateScore();
     const total = state.currentQuiz.questions.length;
     const pct = Math.round((score / total) * 100);
     
-    // Show confetti for perfect score
+    // Show confetti for perfect score!
     if (pct === 100) {
         showConfetti();
     }
     
-    try {
-        await apiCall(`/quizzes/${state.currentQuiz.id}/attempts`, {
-            method: 'POST',
-            body: JSON.stringify({
-                score, total, percentage: pct, answers: state.answers,
-                study_mode: state.studyMode, timed: state.timerEnabled,
-                max_streak: state.maxStreak,
-                time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) : null
-            })
-        });
-    } catch (e) {
-        showToast('Failed to save results', 'error');
+    try { 
+        await apiCall(`/quizzes/${state.currentQuiz.id}/attempts`, { 
+            method: 'POST', 
+            body: JSON.stringify({ 
+                score, total, percentage: pct, answers: state.answers, 
+                study_mode: state.studyMode, timed: state.timerEnabled, 
+                max_streak: state.maxStreak, 
+                time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) : null 
+            }) 
+        }); 
+    } catch (e) { 
+        showToast('Failed to save results', 'error'); 
     }
     
-    clearQuizProgress();
-    state.view = 'results';
+    clearQuizProgress(); // Clear saved progress
+    state.view = 'results'; 
     render();
 }
 
