@@ -1021,14 +1021,14 @@ function toggleFlag() {
                             <p class="quiz-card-meta">${q.description || 'No category'}</p>
                         </div>
                         <div class="dropdown" onclick="event.stopPropagation()">
-                            <button onclick="this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
-                            <div class="dropdown-menu">
-                                <button class="dropdown-item" onclick="event.stopPropagation(); showQuizPreview(${q.id})">👁️ Preview</button>
-                                <button class="dropdown-item" onclick="event.stopPropagation(); editQuiz(${q.id})">✏️ Edit</button>
-                                ${state.folders.map(f => `<button class="dropdown-item" onclick="addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
-                                <button class="dropdown-item danger" onclick="deleteQuiz(${q.id})">🗑️ Delete</button>
-                            </div>
-                        </div>
+    <button onclick="event.stopPropagation(); this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
+    <div class="dropdown-menu">
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
+        ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
+        <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
+    </div>
+</div>
                     </div>
                     <div class="quiz-card-stats">
                         <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
@@ -1050,17 +1050,20 @@ function toggleFlag() {
     }
 }
         
-        function bindEvents() {
-            if (state.view === 'create' && state.isAuthenticated) {
-                setTimeout(() => {
-                    const ti = document.getElementById('quizTitle'), ci = document.getElementById('quizCategory'), di = document.getElementById('quizData');
-                    if (ti) { ti.value = state.quizTitle; ti.addEventListener('input', e => state.quizTitle = e.target.value); }
-                    if (ci) { ci.value = state.quizCategory; ci.addEventListener('input', e => state.quizCategory = e.target.value); }
-                    if (di) { di.value = state.quizData; di.addEventListener('input', e => state.quizData = e.target.value); }
-                }, 0);
-            }
-        if (state.view === 'library') {
+       function bindEvents() {
+    if (state.view === 'create' && state.isAuthenticated) {
         setTimeout(() => {
+            const ti = document.getElementById('quizTitle'), ci = document.getElementById('quizCategory'), di = document.getElementById('quizData');
+            if (ti) { ti.value = state.quizTitle; ti.addEventListener('input', e => state.quizTitle = e.target.value); }
+            if (ci) { ci.value = state.quizCategory; ci.addEventListener('input', e => state.quizCategory = e.target.value); }
+            if (di) { di.value = state.quizData; di.addEventListener('input', e => state.quizData = e.target.value); }
+        }, 0);
+    }
+    
+    // Combine all library view event bindings
+    if (state.view === 'library') {
+        setTimeout(() => {
+            // Search input
             const searchInput = document.getElementById('quiz-search');
             if (searchInput) {
                 searchInput.addEventListener('input', (e) => {
@@ -1068,24 +1071,32 @@ function toggleFlag() {
                     renderQuizGrid();
                 });
             }
+            
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.dropdown')) {
+                    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+                }
+            });
         }, 0);
+        
         renderQuizGrid();
     }
 
-
-            if (state.view === 'quiz' && state.currentQuiz?.questions[state.currentQuestionIndex]?.type === 'ordering') {
-                setTimeout(() => {
-                    document.querySelectorAll('.draggable-item').forEach((item, i) => {
-                        item.addEventListener('dragstart', e => handleDragStart(e, i));
-                        item.addEventListener('dragover', handleDragOver);
-                        item.addEventListener('dragleave', handleDragLeave);
-                        item.addEventListener('drop', e => handleDrop(e, i));
-                        item.addEventListener('dragend', handleDragEnd);
-                    });
-                }, 0);
-            }
-            if (state.view === 'quiz' && state.timerEnabled) updateTimerDisplay();
-        }
+    if (state.view === 'quiz' && state.currentQuiz?.questions[state.currentQuestionIndex]?.type === 'ordering') {
+        setTimeout(() => {
+            document.querySelectorAll('.draggable-item').forEach((item, i) => {
+                item.addEventListener('dragstart', e => handleDragStart(e, i));
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('dragleave', handleDragLeave);
+                item.addEventListener('drop', e => handleDrop(e, i));
+                item.addEventListener('dragend', handleDragEnd);
+            });
+        }, 0);
+    }
+    
+    if (state.view === 'quiz' && state.timerEnabled) updateTimerDisplay();
+}
         function saveQuizProgress() {
     if (!state.currentQuiz) return;
     
@@ -1483,14 +1494,14 @@ function discardProgress(quizId) {
                                                     <p class="quiz-card-meta">${q.description || 'No category'}</p>
                                                 </div>
                                                 <div class="dropdown" onclick="event.stopPropagation()">
-                                                    <button onclick="this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
-                                                    <div class="dropdown-menu">
-                                                        <button class="dropdown-item" onclick="event.stopPropagation(); showQuizPreview(${q.id})">👁️ Preview</button>
-                                                        <button class="dropdown-item" onclick="event.stopPropagation(); editQuiz(${q.id})">✏️ Edit</button>
-                                                        ${state.folders.map(f => `<button class="dropdown-item" onclick="addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
-                                                        <button class="dropdown-item danger" onclick="deleteQuiz(${q.id})">🗑️ Delete</button>
-                                                    </div>
-                                                </div>
+    <button onclick="event.stopPropagation(); this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
+    <div class="dropdown-menu">
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
+        ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
+        <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
+    </div>
+</div>
                                             </div>
                                             <div class="quiz-card-stats">
                                                 <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
