@@ -992,6 +992,62 @@ function toggleFlag() {
             bindEvents();
         }
         
+        function renderQuizGrid() {
+    const gridContainer = document.getElementById('quiz-grid');
+    if (!gridContainer) return;
+    
+    const fq = getFilteredQuizzes();
+    
+    if (fq.length > 0) {
+        gridContainer.className = 'grid grid-3';
+        gridContainer.innerHTML = fq.map(q => {
+            const qs = getQuizStats(q);
+            const isDraggable = state.sortBy === 'custom' && !state.searchQuery && state.categoryFilter === 'all';
+            return `
+                <div class="quiz-card ${isDraggable ? 'draggable' : ''}" 
+                    ${isDraggable ? `draggable="true" 
+                    ondragstart="handleQuizDragStart(event, ${q.id})"
+                    ondragover="handleQuizDragOver(event)"
+                    ondragleave="handleQuizDragLeave(event)"
+                    ondrop="handleQuizDrop(event, ${q.id})"
+                    ondragend="handleQuizDragEnd(event)"` : ''}
+                    onclick="showQuizOptions(${q.id})" style="position:relative">
+                    ${isDraggable ? '<span class="drag-handle">⋮⋮</span>' : ''}
+                    <div class="flex items-start gap-md" style="margin-bottom:1rem;min-width:0">
+                        <div class="quiz-card-icon" style="background:${q.color || 'var(--cream)'}20;color:${q.color || 'var(--accent)'}">📚</div>
+                        <div style="flex:1;min-width:0;overflow:hidden">
+                            <h3 class="quiz-card-title">${state.searchQuery ? highlightText(q.title, state.searchQuery) : escapeHtml(q.title)}</h3>
+                            <p class="quiz-card-meta">${q.description || 'No category'}</p>
+                        </div>
+                        <div class="dropdown" onclick="event.stopPropagation()">
+                            <button onclick="this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
+                            <div class="dropdown-menu">
+                                <button class="dropdown-item" onclick="event.stopPropagation(); showQuizPreview(${q.id})">👁️ Preview</button>
+                                ${state.folders.map(f => `<button class="dropdown-item" onclick="addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
+                                <button class="dropdown-item danger" onclick="deleteQuiz(${q.id})">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="quiz-card-stats">
+                        <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
+                        ${qs ? `<div class="quiz-card-stat"><span>🏆</span><span>${qs.best}%</span></div>` : `<div class="quiz-card-stat"><span>✨</span><span>New</span></div>`}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        gridContainer.className = '';
+        gridContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📚</div>
+                <h2 class="empty-state-title">${state.searchQuery || state.categoryFilter !== 'all' ? 'No quizzes found' : 'No quizzes yet'}</h2>
+                <p class="empty-state-desc">${state.searchQuery || state.categoryFilter !== 'all' ? 'Try adjusting your search' : 'Create your first quiz'}</p>
+                ${!state.searchQuery && state.categoryFilter === 'all' ? `<button onclick="state.view='create';render()" class="btn btn-accent">Create Quiz</button>` : ''}
+            </div>
+        `;
+    }
+}
+        
         function bindEvents() {
             if (state.view === 'create' && state.isAuthenticated) {
                 setTimeout(() => {
@@ -1001,6 +1057,20 @@ function toggleFlag() {
                     if (di) { di.value = state.quizData; di.addEventListener('input', e => state.quizData = e.target.value); }
                 }, 0);
             }
+        if (state.view === 'library') {
+        setTimeout(() => {
+            const searchInput = document.getElementById('quiz-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    state.searchQuery = e.target.value;
+                    renderQuizGrid();
+                });
+            }
+        }, 0);
+        renderQuizGrid();
+    }
+
+
             if (state.view === 'quiz' && state.currentQuiz?.questions[state.currentQuestionIndex]?.type === 'ordering') {
                 setTimeout(() => {
                     document.querySelectorAll('.draggable-item').forEach((item, i) => {
@@ -1376,7 +1446,7 @@ function discardProgress(quizId) {
                         <div class="flex gap-md items-center flex-wrap" style="margin-bottom:1.5rem">
                             <div class="search-wrapper" style="flex:1;min-width:200px">
                                 <span class="search-icon">🔍</span>
-                                <input type="text" class="input search-input" placeholder="Search..." value="${state.searchQuery}" oninput="state.searchQuery=this.value;render()">
+                                <input type="text" id="quiz-search" class="input search-input" placeholder="Search..." value="${state.searchQuery}">
                             </div>
                             <select class="input" style="width:auto" onchange="state.categoryFilter=this.value;render()">
                                 <option value="all">All Categories</option>
