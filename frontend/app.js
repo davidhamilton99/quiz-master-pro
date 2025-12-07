@@ -409,11 +409,6 @@ async function submitQuiz() {
     const total = state.currentQuiz.questions.length;
     const pct = Math.round((score / total) * 100);
     
-    // Show confetti for perfect score!
-    if (pct === 100) {
-        showConfetti();
-    }
-    
     try { 
         await apiCall(`/quizzes/${state.currentQuiz.id}/attempts`, { 
             method: 'POST', 
@@ -431,6 +426,11 @@ async function submitQuiz() {
     clearQuizProgress(); // Clear saved progress
     state.view = 'results'; 
     render();
+    
+    // Show confetti AFTER render for perfect score!
+    if (pct === 100) {
+        setTimeout(() => showConfetti(), 100);
+    }
 }
 
 // Update renderLibrary to include search highlighting and preview button
