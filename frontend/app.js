@@ -719,26 +719,6 @@ function toggleFlag() {
     render(); 
 }
         function calculateScore() { let s = 0; state.currentQuiz.questions.forEach((q, i) => { const ua = state.answers[i]; if (!ua) return; if (q.type === 'choice') { const as = new Set(ua), cs = new Set(q.correct); if (as.size === cs.size && [...as].every(a => cs.has(a))) s++; } else if (q.type === 'ordering' && JSON.stringify(ua) === JSON.stringify(q.correct)) s++; }); return s; }
-        async function submitQuiz() {
-    stopTimer(); 
-    const score = calculateScore(), total = state.currentQuiz.questions.length, pct = Math.round((score / total) * 100);
-    try { 
-        await apiCall(`/quizzes/${state.currentQuiz.id}/attempts`, { 
-            method: 'POST', 
-            body: JSON.stringify({ 
-                score, total, percentage: pct, answers: state.answers, 
-                study_mode: state.studyMode, timed: state.timerEnabled, 
-                max_streak: state.maxStreak, 
-                time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) : null 
-            }) 
-        }); 
-    } catch (e) { 
-        showToast('Failed to save results', 'error'); 
-    }
-    clearQuizProgress(); // Clear saved progress
-    state.view = 'results'; 
-    render();
-}
         
         let draggedIndex = null;
         function handleDragStart(e, i) { draggedIndex = i; e.target.classList.add('dragging'); }
