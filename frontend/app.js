@@ -1023,6 +1023,7 @@ function toggleFlag() {
                             <button onclick="this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
                             <div class="dropdown-menu">
                                 <button class="dropdown-item" onclick="event.stopPropagation(); showQuizPreview(${q.id})">👁️ Preview</button>
+                                <button class="dropdown-item" onclick="event.stopPropagation(); editQuiz(${q.id})">✏️ Edit</button>
                                 ${state.folders.map(f => `<button class="dropdown-item" onclick="addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
                                 <button class="dropdown-item danger" onclick="deleteQuiz(${q.id})">🗑️ Delete</button>
                             </div>
