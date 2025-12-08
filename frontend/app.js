@@ -1165,7 +1165,64 @@ function addNewQuestion() {
     state.currentEditQuestion = state.parsedQuestions.length - 1;
     render();
 }
+function addNewQuestion() {
+    state.parsedQuestions.push({
+        question: '',
+        type: 'choice',
+        options: ['', ''],
+        correct: [],
+        image: null,
+        explanation: null,
+        code: null
+    });
+    state.currentEditQuestion = state.parsedQuestions.length - 1;
+    render();
+}
 
+// ========== DRAG & DROP FOR ORDERING OPTIONS IN EDITOR ==========
+let editorDraggedIndex = null;
+
+function handleEditorDragStart(e, index) {
+    editorDraggedIndex = index;
+    e.currentTarget.classList.add('dragging');
+}
+
+function handleEditorDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleEditorDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleEditorDrop(e, targetIndex) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    if (editorDraggedIndex !== null && editorDraggedIndex !== targetIndex) {
+        const q = state.parsedQuestions[state.currentEditQuestion];
+        const options = [...q.options];
+        
+        // Swap the options
+        const [draggedItem] = options.splice(editorDraggedIndex, 1);
+        options.splice(targetIndex, 0, draggedItem);
+        
+        q.options = options;
+        
+        // Update correct order (it's just the new sequence)
+        q.correct = q.options.map((_, i) => i);
+        
+        render();
+    }
+}
+
+function handleEditorDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    editorDraggedIndex = null;
+}
+// ========== END DRAG & DROP ==========
 function renderVisualEditor() {
     const q = state.parsedQuestions[state.currentEditQuestion];
     const isValid = q.question.trim() && q.options.length >= 2 && q.correct.length > 0;
@@ -1273,7 +1330,7 @@ function renderVisualEditor() {
                             <!-- Code Block -->
                             <div class="editor-section">
                                 <label class="input-label">Code Block (Optional)</label>
-                                ${q.code !== null && q.code !== undefined && q.code !== '' ? `
+                                ${(q.code !== null && q.code !== undefined) ? `
                                     <textarea 
                                         class="input" 
                                         rows="8" 
@@ -1297,27 +1354,38 @@ function renderVisualEditor() {
                                     <label class="input-label">Answer Options</label>
                                     <button onclick="addOption()" class="btn btn-ghost btn-sm">+ Add Option</button>
                                 </div>
-                                ${q.type === 'ordering' ? `
-                                    <p class="text-sm text-muted" style="margin-bottom:1rem">
-                                        The current order defines the correct answer. Edit text only.
-                                    </p>
-                                    ${q.options.map((opt, i) => `
-                                        <div class="option-editor">
-                                            <span style="font-weight:600;min-width:24px">${i + 1}.</span>
-                                            <input 
-                                                type="text" 
-                                                class="input" 
-                                                value="${escapeHtml(opt)}"
-                                                oninput="updateOption(${i}, this.value)"
-                                                placeholder="Option ${i + 1}"
-                                            >
-                                            ${q.options.length > 2 ? `
-                                                <button onclick="removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
-                                                    ✕
-                                                </button>
-                                            ` : ''}
-                                        </div>
-                                    `).join('')}
+                               ${q.type === 'ordering' ? `
+    <p class="text-sm text-muted" style="margin-bottom:1rem">
+        💡 Drag to reorder. The order shown here is the correct answer.
+    </p>
+    ${q.options.map((opt, i) => `
+        <div 
+            class="draggable-item option-editor" 
+            draggable="true"
+            ondragstart="handleEditorDragStart(event, ${i})"
+            ondragover="handleEditorDragOver(event)"
+            ondragleave="handleEditorDragLeave(event)"
+            ondrop="handleEditorDrop(event, ${i})"
+            ondragend="handleEditorDragEnd(event)"
+            style="cursor:move"
+        >
+            <span class="drag-handle">☰</span>
+            <span style="font-weight:600;min-width:24px">${i + 1}.</span>
+            <input 
+                type="text" 
+                class="input" 
+                value="${escapeHtml(opt)}"
+                oninput="updateOption(${i}, this.value)"
+                placeholder="Option ${i + 1}"
+                style="flex:1"
+            >
+            ${q.options.length > 2 ? `
+                <button onclick="event.stopPropagation(); removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
+                    ✕
+                </button>
+            ` : ''}
+        </div>
+    `).join('')}
                                 ` : `
                                     <p class="text-sm text-muted" style="margin-bottom:1rem">
                                         Check the box(es) to mark correct answer(s). Multiple checks = "Select all that apply"
@@ -1351,7 +1419,7 @@ function renderVisualEditor() {
                             <!-- Explanation -->
                             <div class="editor-section" style="border-bottom:none">
                                 <label class="input-label">Explanation (Optional)</label>
-                                ${q.explanation !== null && q.explanation !== undefined && q.explanation !== '' ? `
+                                ${(q.explanation !== null && q.explanation !== undefined) ? `
                                     <textarea 
                                         class="input" 
                                         rows="3" 
