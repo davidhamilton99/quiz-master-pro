@@ -475,7 +475,57 @@ console.log('✨ Quick Win features loaded!');
 }
         function saveAuth() { if (state.token && state.user) { localStorage.setItem('authToken', state.token); localStorage.setItem('authUser', JSON.stringify(state.user)); } }
         function loadAuth() { const t = localStorage.getItem('authToken'), u = localStorage.getItem('authUser'); if (t && u) { state.token = t; state.user = JSON.parse(u); state.isAuthenticated = true; return true; } return false; }
+        // Add these new functions after the loadAuth/saveAuth functions
+
+function saveCreationState() {
+    if (state.view === 'create') {
+        const creationState = {
+            quizTitle: state.quizTitle,
+            quizData: state.quizData,
+            quizCategory: state.quizCategory,
+            editingQuizId: state.editingQuizId,
+            visualEditorMode: state.visualEditorMode,
+            parsedQuestions: state.parsedQuestions,
+            currentEditQuestion: state.currentEditQuestion,
+            timestamp: Date.now()
+        };
+        localStorage.setItem('quiz-creation-state', JSON.stringify(creationState));
+    }
+}
+
+function loadCreationState() {
+    try {
+        const stored = localStorage.getItem('quiz-creation-state');
+        if (!stored) return false;
         
+        const creationState = JSON.parse(stored);
+        
+        // Check if it's less than 24 hours old
+        const hoursSince = (Date.now() - creationState.timestamp) / (1000 * 60 * 60);
+        if (hoursSince > 24) {
+            localStorage.removeItem('quiz-creation-state');
+            return false;
+        }
+        
+        // Restore state
+        state.quizTitle = creationState.quizTitle || '';
+        state.quizData = creationState.quizData || '';
+        state.quizCategory = creationState.quizCategory || '';
+        state.editingQuizId = creationState.editingQuizId;
+        state.visualEditorMode = creationState.visualEditorMode || false;
+        state.parsedQuestions = creationState.parsedQuestions || null;
+        state.currentEditQuestion = creationState.currentEditQuestion || 0;
+        
+        return true;
+    } catch (e) {
+        console.error('Failed to load creation state:', e);
+        return false;
+    }
+}
+
+function clearCreationState() {
+    localStorage.removeItem('quiz-creation-state');
+}
         async function loadQuizzes() { 
     try { 
         const d = await apiCall('/quizzes'); 
@@ -992,6 +1042,7 @@ function saveFromVisualEditor() {
     saveQuizFromParsed();
 }
 
+// Update saveQuizFromParsed to clear creation state on success
 async function saveQuizFromParsed() {
     try {
         showLoading();
@@ -1019,6 +1070,8 @@ async function saveQuizFromParsed() {
         }
         
         await loadQuizzes();
+        
+        // Clear everything
         state.view = 'library';
         state.editingQuizId = null;
         state.quizTitle = '';
@@ -1026,6 +1079,8 @@ async function saveQuizFromParsed() {
         state.quizCategory = '';
         state.visualEditorMode = false;
         state.parsedQuestions = null;
+        clearCreationState(); // ADD THIS LINE
+        
         hideLoading();
         render();
     } catch (e) {
@@ -1120,6 +1175,7 @@ function handleImageUpload() {
             updateQuestionField('image', base64);
             hideLoading();
             showToast('Image uploaded!', 'success');
+            render(); // ADD THIS LINE - Force re-render to show image
         } catch (err) {
             hideLoading();
             showToast('Failed to upload image', 'error');
@@ -1132,6 +1188,7 @@ function handleImageUpload() {
 function removeImage() {
     updateQuestionField('image', null);
     showToast('Image removed', 'info');
+    render(); // ADD THIS LINE - Force re-render to show image
 }
 
 function deleteQuestion(index) {
@@ -1229,7 +1286,7 @@ function renderVisualEditor() {
         <nav class="navbar">
             <div class="container">
                 <div class="navbar-inner">
-                    <button onclick="state.visualEditorMode=false;render()" class="btn btn-ghost">← Back to Text</button>
+                    <button onclick="state.visualEditorMode=false;saveCreationState();render()" class="btn btn-ghost">← Back to Text</button>
                     <h2 style="font-size:1.125rem">Visual Editor</h2>
                     <button onclick="saveFromVisualEditor()" class="btn btn-accent">💾 Save Quiz</button>
                 </div>
@@ -1353,37 +1410,37 @@ function renderVisualEditor() {
                                     <button onclick="addOption()" class="btn btn-ghost btn-sm">+ Add Option</button>
                                 </div>
                                ${q.type === 'ordering' ? `
-    <p class="text-sm text-muted" style="margin-bottom:1rem">
-        💡 Drag to reorder. The order shown here is the correct answer.
-    </p>
-    ${q.options.map((opt, i) => `
-        <div 
-            class="draggable-item option-editor" 
-            draggable="true"
-            ondragstart="handleEditorDragStart(event, ${i})"
-            ondragover="handleEditorDragOver(event)"
-            ondragleave="handleEditorDragLeave(event)"
-            ondrop="handleEditorDrop(event, ${i})"
-            ondragend="handleEditorDragEnd(event)"
-            style="cursor:move"
-        >
-            <span class="drag-handle">☰</span>
-            <span style="font-weight:600;min-width:24px">${i + 1}.</span>
-            <input 
-                type="text" 
-                class="input" 
-                value="${escapeHtml(opt)}"
-                placeholder="Option ${i + 1}"
-                style="flex:1"
-                oninput="updateOption(${i}, this.value)"
-            >
-            ${q.options.length > 2 ? `
-                <button onclick="event.stopPropagation(); removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
-                    ✕
-                </button>
-            ` : ''}
-        </div>
-    `).join('')}
+                                    <p class="text-sm text-muted" style="margin-bottom:1rem">
+                                        💡 Drag to reorder. The order shown here is the correct answer.
+                                    </p>
+                                    ${q.options.map((opt, i) => `
+                                        <div 
+                                            class="draggable-item option-editor" 
+                                            draggable="true"
+                                            ondragstart="handleEditorDragStart(event, ${i})"
+                                            ondragover="handleEditorDragOver(event)"
+                                            ondragleave="handleEditorDragLeave(event)"
+                                            ondrop="handleEditorDrop(event, ${i})"
+                                            ondragend="handleEditorDragEnd(event)"
+                                            style="cursor:move"
+                                        >
+                                            <span class="drag-handle">☰</span>
+                                            <span style="font-weight:600;min-width:24px">${i + 1}.</span>
+                                            <input 
+                                                type="text" 
+                                                class="input" 
+                                                value="${escapeHtml(opt)}"
+                                                placeholder="Option ${i + 1}"
+                                                style="flex:1"
+                                                oninput="updateOption(${i}, this.value)"
+                                            >
+                                            ${q.options.length > 2 ? `
+                                                <button onclick="event.stopPropagation(); removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
+                                                    ✕
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
                                 ` : `
                                     <p class="text-sm text-muted" style="margin-bottom:1rem">
                                         Check the box(es) to mark correct answer(s). Multiple checks = "Select all that apply"
@@ -1587,6 +1644,10 @@ function renderVisualEditor() {
             else { switch (state.view) { case 'library': html = renderLibrary(); break; case 'create': html = renderCreate(); break; case 'quiz': html = renderQuiz(); break; case 'results': html = renderResults(); break; case 'review': html = renderReview(); break; default: html = renderLibrary(); } }
             document.getElementById('app').innerHTML = html;
             bindEvents();
+
+            // Save creation state after rendering
+    if (state.isAuthenticated && state.view === 'create') {
+        saveCreationState();}
         }
         
         function renderQuizGrid() {
@@ -2135,40 +2196,67 @@ function discardProgress(quizId) {
         }
         
         function renderCreate() {
-            const isEdit = state.editingQuizId !== null;
-    
+    const isEdit = state.editingQuizId !== null;
+
     // If in visual editor mode
     if (state.visualEditorMode && state.parsedQuestions && state.parsedQuestions.length > 0) {
         return renderVisualEditor();
     }
     
     // Otherwise show text input
-    return `<nav class="navbar"><div class="container"><div class="navbar-inner"><button onclick="state.view='library';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';state.visualEditorMode=false;state.parsedQuestions=null;render()" class="btn btn-ghost">← Back</button><h2 style="font-size:1.125rem">${isEdit ? 'Edit Quiz' : 'Create Quiz'}</h2><button onclick="proceedToVisualEditor()" class="btn btn-accent">Next: Visual Editor →</button></div></div></nav>
-            <main style="padding:2rem 0"><div class="container-narrow"><div class="card" style="padding:2rem"><div style="margin-bottom:1.5rem"><label class="input-label">Title</label><input type="text" id="quizTitle" class="input" placeholder="Quiz title"></div><div style="margin-bottom:1.5rem"><label class="input-label">Category</label><input type="text" id="quizCategory" class="input" placeholder="e.g., Networking"></div><div><div class="flex justify-between items-center" style="margin-bottom:0.5rem"><label class="input-label">Questions</label><button onclick="state.showFormatHelp=!state.showFormatHelp;render()" class="btn btn-ghost btn-sm">${state.showFormatHelp ? 'Hide' : 'Show'} help</button></div>${state.showFormatHelp ? `<div class="card" style="padding:1.5rem;margin-bottom:1rem;background:var(--cream)">
-<p class="font-semibold" style="margin-bottom:1.5rem">📝 Question Format Guide</p>
+    return `
+        <nav class="navbar">
+            <div class="container">
+                <div class="navbar-inner">
+                    <button onclick="state.view='library';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';state.visualEditorMode=false;state.parsedQuestions=null;clearCreationState();render()" class="btn btn-ghost">← Back</button>
+                    <h2 style="font-size:1.125rem">${isEdit ? 'Edit Quiz' : 'Create Quiz'}</h2>
+                    <button onclick="proceedToVisualEditor()" class="btn btn-accent">Next: Visual Editor →</button>
+                </div>
+            </div>
+        </nav>
+        
+        <main style="padding:2rem 0">
+            <div class="container-narrow">
+                <div class="card" style="padding:2rem">
+                    <div style="margin-bottom:1.5rem">
+                        <label class="input-label">Title</label>
+                        <input type="text" id="quizTitle" class="input" placeholder="Quiz title">
+                    </div>
+                    <div style="margin-bottom:1.5rem">
+                        <label class="input-label">Category</label>
+                        <input type="text" id="quizCategory" class="input" placeholder="e.g., Networking">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center" style="margin-bottom:0.5rem">
+                            <label class="input-label">Questions</label>
+                            <button onclick="state.showFormatHelp=!state.showFormatHelp;render()" class="btn btn-ghost btn-sm">${state.showFormatHelp ? 'Hide' : 'Show'} help</button>
+                        </div>
+                        ${state.showFormatHelp ? `
+                            <div class="card" style="padding:1.5rem;margin-bottom:1rem;background:var(--cream)">
+                                <p class="font-semibold" style="margin-bottom:1.5rem">📝 Question Format Guide</p>
 
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">Single Choice:</p>
-<div class="format-example" style="margin-bottom:1rem">1. What is the capital of France?
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">Single Choice:</p>
+                                <div class="format-example" style="margin-bottom:1rem">1. What is the capital of France?
 A. London
 B. Paris *
 C. Berlin</div>
 
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">Multiple Choice (Select All):</p>
-<div class="format-example" style="margin-bottom:1rem">2. Which are valid IPv4 classes?
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">Multiple Choice (Select All):</p>
+                                <div class="format-example" style="margin-bottom:1rem">2. Which are valid IPv4 classes?
 A. Class A *
 B. Class B *
 C. Class E *
 D. Class Z</div>
 
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">Ordering Questions:</p>
-<div class="format-example" style="margin-bottom:1rem">3. [order] Put the OSI layers in order (top to bottom)
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">Ordering Questions:</p>
+                                <div class="format-example" style="margin-bottom:1rem">3. [order] Put the OSI layers in order (top to bottom)
 1) Application
 2) Presentation
 3) Session
 4) Transport</div>
 
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Code Block:</p>
-<div class="format-example" style="margin-bottom:1rem">4. What does this command display?
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Code Block:</p>
+                                <div class="format-example" style="margin-bottom:1rem">4. What does this command display?
 [code]
 show ip route
 [/code]
@@ -2176,33 +2264,40 @@ A. Routing table *
 B. Interface list
 C. ARP cache</div>
 
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Image:</p>
-<div class="format-example" style="margin-bottom:1rem">5. What topology is shown in this diagram?
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Image:</p>
+                                <div class="format-example" style="margin-bottom:1rem">5. What topology is shown in this diagram?
 [image: https://example.com/network.png]
 A. Star *
 B. Ring
 C. Mesh</div>
 
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Explanation:</p>
-<div class="format-example" style="margin-bottom:1rem">6. What is the default admin distance for OSPF?
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Explanation:</p>
+                                <div class="format-example" style="margin-bottom:1rem">6. What is the default admin distance for OSPF?
 A. 90
 B. 110 *
 C. 120
 [explanation: OSPF has an admin distance of 110. EIGRP is 90, RIP is 120.]</div>
 
-<div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--cream)">
-<p class="text-sm font-semibold" style="margin-bottom:0.5rem">Quick Reference:</p>
-<ul class="text-xs text-muted" style="padding-left:1.25rem;line-height:1.8">
-<li><code>*</code> after an option marks it as correct</li>
-<li>Multiple <code>*</code> = "select all that apply"</li>
-<li><code>[order]</code> after question number = ordering question</li>
-<li><code>[code]...[/code]</code> = code block</li>
-<li><code>[image: URL]</code> = include an image</li>
-<li><code>[explanation: text]</code> = show after answering</li>
-</ul>
-</div>
-</div>` : ''}<textarea id="quizData" class="input" rows="20" placeholder="Enter questions..." style="font-family:monospace;font-size:0.875rem"></textarea></div></div></div></main>`;
-        }
+                                <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--cream)">
+                                    <p class="text-sm font-semibold" style="margin-bottom:0.5rem">Quick Reference:</p>
+                                    <ul class="text-xs text-muted" style="padding-left:1.25rem;line-height:1.8">
+                                        <li><code>*</code> after an option marks it as correct</li>
+                                        <li>Multiple <code>*</code> = "select all that apply"</li>
+                                        <li><code>[order]</code> after question number = ordering question</li>
+                                        <li><code>[code]...[/code]</code> = code block</li>
+                                        <li><code>[image: URL]</code> = include an image</li>
+                                        <li><code>[explanation: text]</code> = show after answering</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        ` : ''}
+                        <textarea id="quizData" class="input" rows="20" placeholder="Enter questions..." style="font-family:monospace;font-size:0.875rem"></textarea>
+                    </div>
+                </div>
+            </div>
+        </main>
+    `;
+}
         
         function renderQuiz() {
             const q = state.currentQuiz.questions[state.currentQuestionIndex];
@@ -2272,8 +2367,15 @@ C. 120
         
         // Initialize
 if (loadAuth()) { 
-    state.view = 'library'; 
     loadQuizzes().then(() => {
+        // Check for saved creation state first
+        const hasCreationState = loadCreationState();
+        if (hasCreationState) {
+            state.view = 'create';
+        } else {
+            state.view = 'library';
+        }
+        
         // Check for saved quiz progress - now handles multiple quizzes
         const allProgress = getAllInProgressQuizzes();
         
