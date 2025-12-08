@@ -694,33 +694,35 @@
 /* Custom scrollbar for sidebar */
 /* Replace the editor sidebar styles with these improved colors */
 
+/* Replace the editor sidebar styles with these minimal, clean colors */
+
 .editor-sidebar {
     position: sticky;
     top: 80px;
     max-height: calc(100vh - 100px);
     overflow-y: auto;
     overflow-x: hidden;
-    background: var(--paper); /* Changed from paper-warm */
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--cream);
-    padding: 1.5rem;
+    background: transparent; /* Removed background */
+    border-radius: 0;
+    border: none; /* Removed border */
+    padding: 0;
 }
 
 .editor-sidebar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--cream); /* Changed from 2px */
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--cream);
 }
 
 .editor-sidebar-title {
-    font-family: var(--font-display);
-    font-size: 0.75rem; /* Slightly smaller */
-    font-weight: 700;
+    font-family: var(--font-body); /* Changed from display */
+    font-size: 0.75rem;
+    font-weight: 600; /* Less heavy */
     text-transform: uppercase;
-    letter-spacing: 0.1em; /* More spacing */
+    letter-spacing: 0.1em;
     color: var(--ink-muted);
 }
 
@@ -729,72 +731,81 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.875rem 1rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--cream); /* Changed from 2px transparent */
-    background: var(--paper-warm); /* Added background */
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0.75rem 0.5rem; /* Less padding */
+    border-radius: var(--radius-sm); /* Smaller radius */
+    border: none; /* Removed border */
+    background: transparent; /* Start transparent */
+    transition: all 0.15s ease;
     text-align: left;
     cursor: pointer;
     overflow: hidden;
 }
 
 .editor-question-list-item:hover {
-    border-color: var(--accent);
-    transform: translateX(4px);
-    background: var(--cream); /* Lighter on hover */
-    box-shadow: var(--shadow-sm);
+    background: var(--cream); /* Just subtle background on hover */
+    transform: none; /* Removed movement */
 }
 
 .editor-question-list-item.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-    box-shadow: 0 4px 12px var(--accent-glow);
+    background: var(--cream); /* Subtle, not bright orange */
+    color: var(--ink);
+    border-left: 3px solid var(--accent); /* Just accent line on left */
+    padding-left: calc(0.5rem - 3px); /* Adjust for border */
 }
 
 .editor-question-list-item.active:hover {
-    background: #b45309;
-    border-color: #b45309;
+    background: var(--cream);
 }
 
 .question-number-badge {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: var(--cream);
+    width: 24px; /* Smaller */
+    height: 24px;
+    background: transparent; /* Removed background */
     border-radius: var(--radius-sm);
-    font-weight: 700;
-    font-size: 0.8125rem;
+    font-weight: 600; /* Less heavy */
+    font-size: 0.75rem; /* Smaller */
     flex-shrink: 0;
-    color: var(--ink);
+    color: var(--ink-muted);
 }
 
 .editor-question-list-item.active .question-number-badge {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
+    background: transparent;
+    color: var(--accent); /* Orange number for active */
+    font-weight: 700;
 }
 
 .question-list-text {
     flex: 1;
     font-size: 0.875rem;
-    font-weight: 500; /* Added weight */
+    font-weight: 400; /* Normal weight */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--ink-light);
+}
+
+.editor-question-list-item.active .question-list-text {
+    font-weight: 500; /* Slightly heavier when active */
+    color: var(--ink);
 }
 
 .question-validity-indicator {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 16px; /* Smaller */
+    height: 16px;
     border-radius: 50%;
-    font-size: 0.75rem;
+    font-size: 0.625rem; /* Smaller icon */
     flex-shrink: 0;
+    opacity: 0.6; /* More subtle */
+}
+
+.editor-question-list-item:hover .question-validity-indicator {
+    opacity: 1;
 }
 
 .editor-main {
