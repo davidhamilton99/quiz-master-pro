@@ -1122,9 +1122,22 @@ async function saveQuizFromParsed() {
 function updateQuestionField(field, value) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     q[field] = value;
-    render();
+    
+    // Only update the sidebar without re-rendering the whole page
+    if (field === 'question') {
+        updateSidebarQuestionName(state.currentEditQuestion, value);
+    }
 }
 
+function updateSidebarQuestionName(index, text) {
+    const buttons = document.querySelectorAll('.editor-question-list-item');
+    if (buttons[index]) {
+        const span = buttons[index].querySelector('span');
+        if (span) {
+            span.textContent = `${index + 1}. ${text || 'Untitled'}`;
+        }
+    }
+}
 function updateQuestionType(newType) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     const oldType = q.type;
