@@ -1122,6 +1122,7 @@ async function saveQuizFromParsed() {
 function updateQuestionField(field, value) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     q[field] = value;
+    render();
 }
 
 function updateQuestionType(newType) {
