@@ -696,16 +696,53 @@
 
 /* Replace the editor sidebar styles with these minimal, clean colors */
 
+/* ============================================
+   VISUAL EDITOR STYLES - PRODUCTION QUALITY
+   ============================================ */
+
+.editor-container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
 .editor-sidebar {
     position: sticky;
     top: 80px;
     max-height: calc(100vh - 100px);
     overflow-y: auto;
     overflow-x: hidden;
-    background: transparent; /* Removed background */
+    background: transparent;
     border-radius: 0;
-    border: none; /* Removed border */
+    border: none;
     padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink-muted) transparent;
+}
+
+/* Custom scrollbar for sidebar */
+.editor-sidebar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.editor-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 0.5rem 0;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.editor-sidebar:hover::-webkit-scrollbar-thumb {
+    background: var(--ink-muted);
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--accent) !important;
 }
 
 .editor-sidebar-header {
@@ -718,12 +755,18 @@
 }
 
 .editor-sidebar-title {
-    font-family: var(--font-body); /* Changed from display */
+    font-family: var(--font-body);
     font-size: 0.75rem;
-    font-weight: 600; /* Less heavy */
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--ink-muted);
+}
+
+.editor-question-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .editor-question-list-item {
@@ -731,10 +774,10 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 0.5rem; /* Less padding */
-    border-radius: var(--radius-sm); /* Smaller radius */
-    border: none; /* Removed border */
-    background: transparent; /* Start transparent */
+    padding: 0.75rem 0.5rem;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
     transition: all 0.15s ease;
     text-align: left;
     cursor: pointer;
@@ -742,15 +785,15 @@
 }
 
 .editor-question-list-item:hover {
-    background: var(--cream); /* Just subtle background on hover */
-    transform: none; /* Removed movement */
+    background: var(--cream);
+    transform: none;
 }
 
 .editor-question-list-item.active {
-    background: var(--cream); /* Subtle, not bright orange */
+    background: var(--cream);
     color: var(--ink);
-    border-left: 3px solid var(--accent); /* Just accent line on left */
-    padding-left: calc(0.5rem - 3px); /* Adjust for border */
+    border-left: 3px solid var(--accent);
+    padding-left: calc(0.5rem - 3px);
 }
 
 .editor-question-list-item.active:hover {
@@ -761,26 +804,26 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px; /* Smaller */
+    width: 24px;
     height: 24px;
-    background: transparent; /* Removed background */
+    background: transparent;
     border-radius: var(--radius-sm);
-    font-weight: 600; /* Less heavy */
-    font-size: 0.75rem; /* Smaller */
+    font-weight: 600;
+    font-size: 0.75rem;
     flex-shrink: 0;
     color: var(--ink-muted);
 }
 
 .editor-question-list-item.active .question-number-badge {
     background: transparent;
-    color: var(--accent); /* Orange number for active */
+    color: var(--accent);
     font-weight: 700;
 }
 
 .question-list-text {
     flex: 1;
     font-size: 0.875rem;
-    font-weight: 400; /* Normal weight */
+    font-weight: 400;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -788,7 +831,7 @@
 }
 
 .editor-question-list-item.active .question-list-text {
-    font-weight: 500; /* Slightly heavier when active */
+    font-weight: 500;
     color: var(--ink);
 }
 
@@ -796,12 +839,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px; /* Smaller */
+    width: 16px;
     height: 16px;
     border-radius: 50%;
-    font-size: 0.625rem; /* Smaller icon */
+    font-size: 0.625rem;
     flex-shrink: 0;
-    opacity: 0.6; /* More subtle */
+    opacity: 0.6;
 }
 
 .editor-question-list-item:hover .question-validity-indicator {
