@@ -1134,7 +1134,23 @@ function updateSidebarQuestionName(index, text) {
     if (buttons[index]) {
         const span = buttons[index].querySelector('.question-list-text');
         if (span) {
-            span.textContent = text || 'Untitled question';
+            const displayText = text || 'Untitled question';
+            
+            // Smart truncation at word boundary
+            let truncated = displayText;
+            if (displayText.length > 40) {
+                truncated = displayText.substring(0, 40);
+                // Find last space to avoid cutting mid-word
+                const lastSpace = truncated.lastIndexOf(' ');
+                if (lastSpace > 20) { // Only if we have enough text
+                    truncated = truncated.substring(0, lastSpace);
+                }
+                truncated += '...';
+            }
+            
+            span.textContent = truncated;
+            // Add full text as tooltip on hover
+            buttons[index].setAttribute('title', displayText);
         }
     }
 }
