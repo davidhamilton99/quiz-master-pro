@@ -1647,7 +1647,27 @@ function renderVisualEditor() {
     }
 }
         
-       function bindEvents() {
+function bindEvents() {
+    if (state.view === 'create' && !state.visualEditorMode && state.isAuthenticated) {
+        setTimeout(() => {
+            const ti = document.getElementById('quizTitle'), 
+                  ci = document.getElementById('quizCategory'), 
+                  di = document.getElementById('quizData');
+            
+            if (ti) { 
+                ti.value = state.quizTitle; 
+                ti.addEventListener('input', e => state.quizTitle = e.target.value); 
+            }
+            if (ci) { 
+                ci.value = state.quizCategory; 
+                ci.addEventListener('input', e => state.quizCategory = e.target.value); 
+            }
+            if (di) { 
+                di.value = state.quizData; 
+                di.addEventListener('input', e => state.quizData = e.target.value); 
+            }
+        }, 0);
+    }
     
     // Combine all library view event bindings
     if (state.view === 'library') {
