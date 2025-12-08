@@ -1097,18 +1097,33 @@ function updateQuestionField(field, value) {
 
 function updateQuestionType(newType) {
     const q = state.parsedQuestions[state.currentEditQuestion];
+    const oldType = q.type;
+    
+    // Store the previous correct answers before changing
+    if (!q._previousCorrect) {
+        q._previousCorrect = { choice: [], ordering: [] };
+    }
+    
+    // Save current state
+    q._previousCorrect[oldType] = [...q.correct];
+    
+    // Change type
     q.type = newType;
     
-    // Reset correct answers when changing type
-    if (newType === 'ordering') {
-        q.correct = q.options.map((_, i) => i);
+    // Restore previous state if exists, otherwise set defaults
+    if (q._previousCorrect[newType] && q._previousCorrect[newType].length > 0) {
+        q.correct = [...q._previousCorrect[newType]];
     } else {
-        q.correct = [];
+        // Set defaults for new type
+        if (newType === 'ordering') {
+            q.correct = q.options.map((_, i) => i);
+        } else {
+            q.correct = [];
+        }
     }
     
     render();
 }
-
 function toggleCorrectOption(index) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     const idx = q.correct.indexOf(index);
