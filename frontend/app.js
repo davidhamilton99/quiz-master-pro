@@ -946,7 +946,434 @@ function parseQuizData(data) {
     return questions;
 }
         function exportQuizzes() { const d = state.quizzes.map(q => ({ title: q.title, description: q.description, questions: q.questions, color: q.color })); const b = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `quiz-export-${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(u); showToast('Exported!', 'success'); }
+        // ========== VISUAL EDITOR FUNCTIONS ==========
+
+function proceedToVisualEditor() {
+    if (!state.quizTitle.trim()) {
+        showToast('Enter a title first', 'warning');
+        return;
+    }
+    
+    if (!state.quizData.trim()) {
+        showToast('Enter at least one question', 'warning');
+        return;
+    }
+    
+    try {
+        const questions = parseQuizData(state.quizData);
         
+        if (questions.length === 0) {
+            showToast('No valid questions found', 'warning');
+            return;
+        }
+        
+        state.parsedQuestions = questions;
+        state.currentEditQuestion = 0;
+        state.visualEditorMode = true;
+        render();
+    } catch (e) {
+        showToast('Error parsing questions: ' + e.message, 'error');
+    }
+}
+
+function saveFromVisualEditor() {
+    // Validate all questions
+    const invalid = state.parsedQuestions.filter(q => 
+        (q.type === 'choice' && q.correct.length === 0) ||
+        (q.type === 'ordering' && q.correct.length === 0) ||
+        q.options.length < 2
+    );
+    
+    if (invalid.length > 0) {
+        showToast(`${invalid.length} question(s) missing correct answers or options`, 'error');
+        return;
+    }
+    
+    saveQuizFromParsed();
+}
+
+async function saveQuizFromParsed() {
+    try {
+        showLoading();
+        
+        const payload = {
+            title: state.quizTitle,
+            questions: state.parsedQuestions,
+            description: state.quizCategory || '',
+            color: getRandomColor(),
+            is_public: false
+        };
+        
+        if (state.editingQuizId) {
+            await apiCall(`/quizzes/${state.editingQuizId}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            showToast('Quiz updated!', 'success');
+        } else {
+            await apiCall('/quizzes', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            showToast('Quiz created!', 'success');
+        }
+        
+        await loadQuizzes();
+        state.view = 'library';
+        state.editingQuizId = null;
+        state.quizTitle = '';
+        state.quizData = '';
+        state.quizCategory = '';
+        state.visualEditorMode = false;
+        state.parsedQuestions = null;
+        hideLoading();
+        render();
+    } catch (e) {
+        hideLoading();
+        console.error('Save quiz error:', e);
+        showToast(e.message || 'Failed to save quiz', 'error');
+    }
+}
+
+function updateQuestionField(field, value) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    q[field] = value;
+    render();
+}
+
+function updateQuestionType(newType) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    q.type = newType;
+    
+    // Reset correct answers when changing type
+    if (newType === 'ordering') {
+        q.correct = q.options.map((_, i) => i);
+    } else {
+        q.correct = [];
+    }
+    
+    render();
+}
+
+function toggleCorrectOption(index) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    const idx = q.correct.indexOf(index);
+    
+    if (idx > -1) {
+        q.correct.splice(idx, 1);
+    } else {
+        q.correct.push(index);
+    }
+    
+    render();
+}
+
+function updateOption(index, value) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    q.options[index] = value;
+    render();
+}
+
+function addOption() {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    q.options.push('');
+    render();
+}
+
+function removeOption(index) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    if (q.options.length <= 2) {
+        showToast('Need at least 2 options', 'warning');
+        return;
+    }
+    q.options.splice(index, 1);
+    
+    // Update correct answers
+    q.correct = q.correct.filter(i => i !== index).map(i => i > index ? i - 1 : i);
+    
+    render();
+}
+
+function handleImageUpload() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image must be under 5MB', 'error');
+            return;
+        }
+        
+        try {
+            showLoading();
+            
+            // Convert to base64
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            
+            updateQuestionField('image', base64);
+            hideLoading();
+            showToast('Image uploaded!', 'success');
+        } catch (err) {
+            hideLoading();
+            showToast('Failed to upload image', 'error');
+        }
+    };
+    
+    input.click();
+}
+
+function removeImage() {
+    updateQuestionField('image', null);
+    showToast('Image removed', 'info');
+}
+
+function deleteQuestion(index) {
+    if (state.parsedQuestions.length === 1) {
+        showToast('Cannot delete the last question', 'warning');
+        return;
+    }
+    
+    state.parsedQuestions.splice(index, 1);
+    
+    if (state.currentEditQuestion >= state.parsedQuestions.length) {
+        state.currentEditQuestion = state.parsedQuestions.length - 1;
+    }
+    
+    showToast('Question deleted', 'info');
+    render();
+}
+
+function addNewQuestion() {
+    state.parsedQuestions.push({
+        question: '',
+        type: 'choice',
+        options: ['', ''],
+        correct: [],
+        image: null,
+        explanation: null,
+        code: null
+    });
+    state.currentEditQuestion = state.parsedQuestions.length - 1;
+    render();
+}
+
+function renderVisualEditor() {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    const isValid = q.question.trim() && q.options.length >= 2 && q.correct.length > 0;
+    
+    return `
+        <nav class="navbar">
+            <div class="container">
+                <div class="navbar-inner">
+                    <button onclick="state.visualEditorMode=false;render()" class="btn btn-ghost">← Back to Text</button>
+                    <h2 style="font-size:1.125rem">Visual Editor</h2>
+                    <button onclick="saveFromVisualEditor()" class="btn btn-accent">💾 Save Quiz</button>
+                </div>
+            </div>
+        </nav>
+        
+        <main style="padding:2rem 0">
+            <div class="container">
+                <div style="display:grid;grid-template-columns:250px 1fr;gap:2rem">
+                    <!-- Question List Sidebar -->
+                    <div class="editor-sidebar">
+                        <div class="flex justify-between items-center" style="margin-bottom:1rem">
+                            <h3 style="font-size:0.875rem;font-weight:600">Questions</h3>
+                            <button onclick="addNewQuestion()" class="btn btn-icon btn-sm btn-accent">+</button>
+                        </div>
+                        <div class="flex flex-col gap-sm">
+                            ${state.parsedQuestions.map((question, i) => {
+                                const qValid = question.question.trim() && question.options.length >= 2 && question.correct.length > 0;
+                                return `
+                                    <button 
+                                        onclick="state.currentEditQuestion=${i};render()" 
+                                        class="btn btn-sm ${i === state.currentEditQuestion ? 'btn-primary' : 'btn-ghost'} editor-question-list-item"
+                                        style="justify-content:flex-start;position:relative;padding-right:2rem"
+                                    >
+                                        <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                                            ${i + 1}. ${escapeHtml(question.question || 'Untitled')}
+                                        </span>
+                                        ${!qValid ? '<span style="color:var(--error)">⚠️</span>' : '<span style="color:var(--success)">✓</span>'}
+                                    </button>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Question Editor -->
+                    <div class="editor-main">
+                        <div class="card" style="padding:2rem">
+                            <div class="flex justify-between items-center" style="margin-bottom:1.5rem">
+                                <h2 style="font-size:1.25rem">Question ${state.currentEditQuestion + 1} of ${state.parsedQuestions.length}</h2>
+                                ${state.parsedQuestions.length > 1 ? `
+                                    <button onclick="deleteQuestion(${state.currentEditQuestion})" class="btn btn-ghost btn-sm" style="color:var(--error)">
+                                        🗑️ Delete
+                                    </button>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- Question Text -->
+                            <div class="editor-section">
+                                <label class="input-label">Question Text</label>
+                                <textarea 
+                                    class="input" 
+                                    rows="3" 
+                                    placeholder="Enter your question..."
+                                    oninput="updateQuestionField('question', this.value)"
+                                >${escapeHtml(q.question)}</textarea>
+                            </div>
+                            
+                            <!-- Question Type -->
+                            <div class="editor-section">
+                                <label class="input-label">Question Type</label>
+                                <div class="tabs">
+                                    <button 
+                                        class="tab ${q.type === 'choice' ? 'active' : ''}" 
+                                        onclick="updateQuestionType('choice')"
+                                    >
+                                        Single/Multiple Choice
+                                    </button>
+                                    <button 
+                                        class="tab ${q.type === 'ordering' ? 'active' : ''}" 
+                                        onclick="updateQuestionType('ordering')"
+                                    >
+                                        Ordering
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Image Section -->
+                            <div class="editor-section">
+                                <label class="input-label">Image (Optional)</label>
+                                ${q.image ? `
+                                    <div class="image-preview-container">
+                                        <img src="${q.image}" alt="Question image">
+                                        <button 
+                                            onclick="removeImage()" 
+                                            class="image-preview-remove"
+                                        >
+                                            ✕ Remove
+                                        </button>
+                                    </div>
+                                ` : ''}
+                                <button onclick="handleImageUpload()" class="btn btn-ghost btn-sm">
+                                    🖼️ ${q.image ? 'Change' : 'Upload'} Image
+                                </button>
+                            </div>
+                            
+                            <!-- Code Block -->
+                            <div class="editor-section">
+                                <label class="input-label">Code Block (Optional)</label>
+                                ${q.code !== null && q.code !== undefined && q.code !== '' ? `
+                                    <textarea 
+                                        class="input" 
+                                        rows="8" 
+                                        placeholder="Enter code..."
+                                        style="font-family:monospace;font-size:0.875rem"
+                                        oninput="updateQuestionField('code', this.value)"
+                                    >${escapeHtml(q.code)}</textarea>
+                                    <button onclick="updateQuestionField('code', null)" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
+                                        ✕ Remove Code
+                                    </button>
+                                ` : `
+                                    <button onclick="updateQuestionField('code', '')" class="btn btn-ghost btn-sm">
+                                        💻 Add Code Block
+                                    </button>
+                                `}
+                            </div>
+                            
+                            <!-- Options -->
+                            <div class="editor-section">
+                                <div class="flex justify-between items-center" style="margin-bottom:0.5rem">
+                                    <label class="input-label">Answer Options</label>
+                                    <button onclick="addOption()" class="btn btn-ghost btn-sm">+ Add Option</button>
+                                </div>
+                                ${q.type === 'ordering' ? `
+                                    <p class="text-sm text-muted" style="margin-bottom:1rem">
+                                        The current order defines the correct answer. Edit text only.
+                                    </p>
+                                    ${q.options.map((opt, i) => `
+                                        <div class="option-editor">
+                                            <span style="font-weight:600;min-width:24px">${i + 1}.</span>
+                                            <input 
+                                                type="text" 
+                                                class="input" 
+                                                value="${escapeHtml(opt)}"
+                                                oninput="updateOption(${i}, this.value)"
+                                                placeholder="Option ${i + 1}"
+                                            >
+                                            ${q.options.length > 2 ? `
+                                                <button onclick="removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
+                                                    ✕
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                ` : `
+                                    <p class="text-sm text-muted" style="margin-bottom:1rem">
+                                        Check the box(es) to mark correct answer(s). Multiple checks = "Select all that apply"
+                                    </p>
+                                    ${q.options.map((opt, i) => `
+                                        <div class="option-editor">
+                                            <input 
+                                                type="checkbox" 
+                                                class="option-checkbox"
+                                                ${q.correct.includes(i) ? 'checked' : ''}
+                                                onchange="toggleCorrectOption(${i})"
+                                            >
+                                            <span style="font-weight:600;min-width:24px">${String.fromCharCode(65 + i)}.</span>
+                                            <input 
+                                                type="text" 
+                                                class="input" 
+                                                value="${escapeHtml(opt)}"
+                                                oninput="updateOption(${i}, this.value)"
+                                                placeholder="Option ${String.fromCharCode(65 + i)}"
+                                            >
+                                            ${q.options.length > 2 ? `
+                                                <button onclick="removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
+                                                    ✕
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                `}
+                            </div>
+                            
+                            <!-- Explanation -->
+                            <div class="editor-section" style="border-bottom:none">
+                                <label class="input-label">Explanation (Optional)</label>
+                                ${q.explanation !== null && q.explanation !== undefined && q.explanation !== '' ? `
+                                    <textarea 
+                                        class="input" 
+                                        rows="3" 
+                                        placeholder="Explain the correct answer..."
+                                        oninput="updateQuestionField('explanation', this.value)"
+                                    >${escapeHtml(q.explanation)}</textarea>
+                                    <button onclick="updateQuestionField('explanation', null)" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
+                                        ✕ Remove Explanation
+                                    </button>
+                                ` : `
+                                    <button onclick="updateQuestionField('explanation', '')" class="btn btn-ghost btn-sm">
+                                        💡 Add Explanation
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    `;
+}
         function showImportModal() {
             const m = document.createElement('div');
             m.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)this.remove()"><div class="modal"><div class="modal-header"><h2>Import Quizzes</h2><button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button></div><div class="modal-body"><div style="margin-bottom:1rem"><label class="input-label">Select JSON File</label><input type="file" id="importFile" accept=".json" class="input"></div><div id="importProgress" style="display:none"><div class="progress-bar"><div id="importProgressFill" class="progress-fill" style="width:0%"></div></div><p id="importStatus" class="text-sm text-muted" style="margin-top:0.5rem"></p></div></div><div class="modal-footer"><button class="btn btn-ghost flex-1" onclick="this.closest('.modal-overlay').remove()">Cancel</button><button class="btn btn-accent flex-1" onclick="processImport()">Import</button></div></div></div>`;
@@ -1631,7 +2058,14 @@ function discardProgress(quizId) {
         
         function renderCreate() {
             const isEdit = state.editingQuizId !== null;
-            return `<nav class="navbar"><div class="container"><div class="navbar-inner"><button onclick="state.view='library';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';render()" class="btn btn-ghost">← Back</button><h2 style="font-size:1.125rem">${isEdit ? 'Edit Quiz' : 'Create Quiz'}</h2><button onclick="saveQuiz()" class="btn btn-accent">${isEdit ? 'Save' : 'Create'}</button></div></div></nav>
+    
+    // If in visual editor mode
+    if (state.visualEditorMode && state.parsedQuestions && state.parsedQuestions.length > 0) {
+        return renderVisualEditor();
+    }
+    
+    // Otherwise show text input
+    return `<nav class="navbar"><div class="container"><div class="navbar-inner"><button onclick="state.view='library';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';state.visualEditorMode=false;state.parsedQuestions=null;render()" class="btn btn-ghost">← Back</button><h2 style="font-size:1.125rem">${isEdit ? 'Edit Quiz' : 'Create Quiz'}</h2><button onclick="proceedToVisualEditor()" class="btn btn-accent">Next: Visual Editor →</button></div></div></nav>
             <main style="padding:2rem 0"><div class="container-narrow"><div class="card" style="padding:2rem"><div style="margin-bottom:1.5rem"><label class="input-label">Title</label><input type="text" id="quizTitle" class="input" placeholder="Quiz title"></div><div style="margin-bottom:1.5rem"><label class="input-label">Category</label><input type="text" id="quizCategory" class="input" placeholder="e.g., Networking"></div><div><div class="flex justify-between items-center" style="margin-bottom:0.5rem"><label class="input-label">Questions</label><button onclick="state.showFormatHelp=!state.showFormatHelp;render()" class="btn btn-ghost btn-sm">${state.showFormatHelp ? 'Hide' : 'Show'} help</button></div>${state.showFormatHelp ? `<div class="card" style="padding:1.5rem;margin-bottom:1rem;background:var(--cream)">
 <p class="font-semibold" style="margin-bottom:1.5rem">📝 Question Format Guide</p>
 
