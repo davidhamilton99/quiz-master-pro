@@ -692,21 +692,18 @@
 }
 
 /* Custom scrollbar for sidebar */
-.editor-sidebar::-webkit-scrollbar {
-    width: 6px;
-}
+/* Replace the editor sidebar styles with these improved colors */
 
-.editor-sidebar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.editor-sidebar::-webkit-scrollbar-thumb {
-    background: var(--cream);
-    border-radius: 3px;
-}
-
-.editor-sidebar::-webkit-scrollbar-thumb:hover {
-    background: var(--ink-muted);
+.editor-sidebar {
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--paper); /* Changed from paper-warm */
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--cream);
+    padding: 1.5rem;
 }
 
 .editor-sidebar-header {
@@ -715,22 +712,16 @@
     align-items: center;
     margin-bottom: 1rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid var(--cream);
+    border-bottom: 1px solid var(--cream); /* Changed from 2px */
 }
 
 .editor-sidebar-title {
     font-family: var(--font-display);
-    font-size: 0.875rem;
+    font-size: 0.75rem; /* Slightly smaller */
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.1em; /* More spacing */
     color: var(--ink-muted);
-}
-
-.editor-question-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
 }
 
 .editor-question-list-item {
@@ -740,7 +731,8 @@
     gap: 0.75rem;
     padding: 0.875rem 1rem;
     border-radius: var(--radius-md);
-    border: 2px solid transparent;
+    border: 1px solid var(--cream); /* Changed from 2px transparent */
+    background: var(--paper-warm); /* Added background */
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: left;
     cursor: pointer;
@@ -748,9 +740,10 @@
 }
 
 .editor-question-list-item:hover {
-    border-color: var(--cream);
+    border-color: var(--accent);
     transform: translateX(4px);
-    background: var(--paper);
+    background: var(--cream); /* Lighter on hover */
+    box-shadow: var(--shadow-sm);
 }
 
 .editor-question-list-item.active {
@@ -776,16 +769,18 @@
     font-weight: 700;
     font-size: 0.8125rem;
     flex-shrink: 0;
+    color: var(--ink);
 }
 
 .editor-question-list-item.active .question-number-badge {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.25);
     color: white;
 }
 
 .question-list-text {
     flex: 1;
     font-size: 0.875rem;
+    font-weight: 500; /* Added weight */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
