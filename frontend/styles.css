@@ -677,6 +677,13 @@
     top: 80px;
     max-height: calc(100vh - 100px);
     overflow-y: auto;
+    overflow-x: hidden; /* ADD THIS LINE */
+}
+
+.editor-sidebar .btn {
+    overflow: hidden; /* ADD THIS */
+    text-overflow: ellipsis; /* ADD THIS */
+    white-space: nowrap; /* ADD THIS */
 }
 
 .editor-question-list-item {
