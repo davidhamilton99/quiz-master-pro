@@ -1118,7 +1118,22 @@ async function saveQuizFromParsed() {
         showToast(e.message || 'Failed to save quiz', 'error');
     }
 }
-
+function switchQuestion(index) {
+    // Save current scroll position
+    const sidebar = document.querySelector('.editor-sidebar');
+    const scrollPos = sidebar ? sidebar.scrollTop : 0;
+    
+    state.currentEditQuestion = index;
+    render();
+    
+    // Restore scroll position after render
+    setTimeout(() => {
+        const newSidebar = document.querySelector('.editor-sidebar');
+        if (newSidebar) {
+            newSidebar.scrollTop = scrollPos;
+        }
+    }, 0);
+}
 function updateQuestionField(field, value) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     q[field] = value;
@@ -1390,7 +1405,7 @@ function renderVisualEditor() {
                                 const qValid = question.question.trim() && question.options.length >= 2 && question.correct.length > 0;
                                 return `
                                     <button 
-                                        onclick="state.currentEditQuestion=${i};render()" 
+                                        onclick="switchQuestion(${i})"
                                         class="editor-question-list-item ${i === state.currentEditQuestion ? 'active' : ''}"
                                     >
                                         <span class="question-number-badge">${i + 1}</span>
