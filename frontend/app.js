@@ -1123,7 +1123,7 @@ function updateQuestionField(field, value) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     q[field] = value;
     
-    // Only update the sidebar without re-rendering the whole page
+    // Real-time sidebar update for question text
     if (field === 'question') {
         updateSidebarQuestionName(state.currentEditQuestion, value);
     }
@@ -1132,9 +1132,9 @@ function updateQuestionField(field, value) {
 function updateSidebarQuestionName(index, text) {
     const buttons = document.querySelectorAll('.editor-question-list-item');
     if (buttons[index]) {
-        const span = buttons[index].querySelector('span');
+        const span = buttons[index].querySelector('.question-list-text');
         if (span) {
-            span.textContent = `${index + 1}. ${text || 'Untitled'}`;
+            span.textContent = text || 'Untitled question';
         }
     }
 }
