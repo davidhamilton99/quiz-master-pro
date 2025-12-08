@@ -874,26 +874,28 @@ async function saveQuiz() {
         showToast(e.message || 'Failed to save quiz', 'error');
     }
 }
-   async function editQuiz(id) {
+  async function editQuiz(id) {
     try {
         const d = await apiCall(`/quizzes/${id}`); 
         const qd = d.quiz || d;
         
-        console.log('Loading quiz for editing:', qd); // Debug log
+        console.log('Loading quiz for editing:', qd);
         
         const txt = qd.questions.map((q, i) => {
             let t = `${i + 1}. ${q.type === 'ordering' ? '[order] ' : ''}${q.question}\n`;
             
-            // CRITICAL FIX: Ensure code blocks are properly preserved
             if (q.code !== undefined && q.code !== null && q.code !== '') {
-                // Make sure we're handling the code exactly as stored
                 const codeContent = String(q.code);
                 t += `[code]\n${codeContent}\n[/code]\n`;
-                console.log(`Added code block for Q${i + 1}:`, codeContent);
             }
             
+            // IMPROVED: Show placeholder for base64 images
             if (q.image !== undefined && q.image !== null && q.image !== '') {
-                t += `[image: ${q.image}]\n`;
+                if (q.image.startsWith('data:image/')) {
+                    t += `[image: uploaded]\n`;
+                } else {
+                    t += `[image: ${q.image}]\n`;
+                }
             }
             
             if (q.type === 'ordering') {
@@ -909,7 +911,7 @@ async function saveQuiz() {
             return t;
         }).join('\n\n');
         
-        console.log('Generated edit text:', txt); // Debug log
+        console.log('Generated edit text:', txt);
         
         state.quizTitle = qd.title; 
         state.quizData = txt; 
@@ -1015,6 +1017,22 @@ function proceedToVisualEditor() {
         if (questions.length === 0) {
             showToast('No valid questions found', 'warning');
             return;
+        }
+        
+        // PRESERVE IMAGES: If editing existing quiz, restore base64 images
+        if (state.editingQuizId) {
+            const originalQuiz = state.quizzes.find(q => q.id === state.editingQuizId);
+            if (originalQuiz) {
+                questions.forEach((q, i) => {
+                    if (i < originalQuiz.questions.length) {
+                        const origQuestion = originalQuiz.questions[i];
+                        // If text says "uploaded" and original has base64, restore it
+                        if (q.image === 'uploaded' && origQuestion.image && origQuestion.image.startsWith('data:image/')) {
+                            q.image = origQuestion.image;
+                        }
+                    }
+                });
+            }
         }
         
         state.parsedQuestions = questions;

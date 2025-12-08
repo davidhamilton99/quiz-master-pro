@@ -782,3 +782,12 @@
         grid-template-columns: 1fr !important;
     }
 }
+/* Add to the end of your CSS */
+#quizData {
+    line-height: 1.8;
+}
+
+/* Visual hint for common patterns */
+#quizData:focus {
+    caret-color: var(--accent);
+}
