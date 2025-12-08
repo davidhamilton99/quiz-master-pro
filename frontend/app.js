@@ -1344,35 +1344,44 @@ function renderVisualEditor() {
         <nav class="navbar">
             <div class="container">
                 <div class="navbar-inner">
-                    <button onclick="state.visualEditorMode=false;saveCreationState();render()" class="btn btn-ghost">← Back to Text</button>
-                    <h2 style="font-size:1.125rem">Visual Editor</h2>
-                    <button onclick="saveFromVisualEditor()" class="btn btn-accent">💾 Save Quiz</button>
+                    <button onclick="state.visualEditorMode=false;saveCreationState();render()" class="btn btn-ghost">
+                        <span style="font-size:1.125rem">←</span> Back to Text
+                    </button>
+                    <div style="text-align:center">
+                        <h2 style="font-size:1rem;font-weight:700;margin-bottom:2px">Visual Editor</h2>
+                        <p class="text-xs text-muted">${state.quizTitle || 'Untitled Quiz'}</p>
+                    </div>
+                    <button onclick="saveFromVisualEditor()" class="btn btn-accent">
+                        <span style="font-size:1.125rem">💾</span> Save Quiz
+                    </button>
                 </div>
             </div>
         </nav>
         
-        <main style="padding:2rem 0">
+        <main style="padding:2rem 0 4rem">
             <div class="container">
-                <div style="display:grid;grid-template-columns:250px 1fr;gap:2rem">
+                <div class="editor-container">
                     <!-- Question List Sidebar -->
                     <div class="editor-sidebar">
-                        <div class="flex justify-between items-center" style="margin-bottom:1rem">
-                            <h3 style="font-size:0.875rem;font-weight:600">Questions</h3>
-                            <button onclick="addNewQuestion()" class="btn btn-icon btn-sm btn-accent">+</button>
+                        <div class="editor-sidebar-header">
+                            <h3 class="editor-sidebar-title">Questions</h3>
+                            <button onclick="addNewQuestion()" class="btn btn-icon btn-sm btn-accent" style="width:32px;height:32px">
+                                <span style="font-size:1.25rem">+</span>
+                            </button>
                         </div>
-                        <div class="flex flex-col gap-sm">
+                        <div class="editor-question-list">
                             ${state.parsedQuestions.map((question, i) => {
                                 const qValid = question.question.trim() && question.options.length >= 2 && question.correct.length > 0;
                                 return `
                                     <button 
                                         onclick="state.currentEditQuestion=${i};render()" 
-                                        class="btn btn-sm ${i === state.currentEditQuestion ? 'btn-primary' : 'btn-ghost'} editor-question-list-item"
-                                        style="justify-content:flex-start;position:relative;padding-right:2rem"
+                                        class="editor-question-list-item ${i === state.currentEditQuestion ? 'active' : ''}"
                                     >
-                                        <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                                            ${i + 1}. ${escapeHtml(question.question || 'Untitled')}
+                                        <span class="question-number-badge">${i + 1}</span>
+                                        <span class="question-list-text">${escapeHtml(question.question || 'Untitled question')}</span>
+                                        <span class="question-validity-indicator">
+                                            ${qValid ? '<span style="color:var(--success)">✓</span>' : '<span style="color:var(--error)">⚠</span>'}
                                         </span>
-                                        ${!qValid ? '<span style="color:var(--error)">⚠️</span>' : '<span style="color:var(--success)">✓</span>'}
                                     </button>
                                 `;
                             }).join('')}
@@ -1381,59 +1390,73 @@ function renderVisualEditor() {
                     
                     <!-- Question Editor -->
                     <div class="editor-main">
-                        <div class="card" style="padding:2rem">
-                            <div class="flex justify-between items-center" style="margin-bottom:1.5rem">
-                                <h2 style="font-size:1.25rem">Question ${state.currentEditQuestion + 1} of ${state.parsedQuestions.length}</h2>
+                        <div class="editor-card">
+                            <div class="editor-card-header">
+                                <div>
+                                    <h2 class="editor-card-title">Question ${state.currentEditQuestion + 1}</h2>
+                                    <p class="text-sm text-muted">of ${state.parsedQuestions.length} total</p>
+                                </div>
                                 ${state.parsedQuestions.length > 1 ? `
                                     <button onclick="deleteQuestion(${state.currentEditQuestion})" class="btn btn-ghost btn-sm" style="color:var(--error)">
-                                        🗑️ Delete
+                                        <span style="font-size:1.125rem">🗑️</span> Delete
                                     </button>
                                 ` : ''}
                             </div>
                             
                             <!-- Question Text -->
                             <div class="editor-section">
-                                <label class="input-label">Question Text</label>
+                                <label class="editor-section-label">
+                                    <span>📝</span> Question Text
+                                </label>
                                 <textarea 
                                     class="input" 
                                     rows="3" 
-                                    placeholder="Enter your question..."
+                                    placeholder="Enter your question here..."
                                     oninput="updateQuestionField('question', this.value)"
+                                    style="font-size:1rem"
                                 >${escapeHtml(q.question)}</textarea>
                             </div>
                             
                             <!-- Question Type -->
                             <div class="editor-section">
-                                <label class="input-label">Question Type</label>
-                                <div class="tabs">
+                                <label class="editor-section-label">
+                                    <span>🎯</span> Question Type
+                                </label>
+                                <div class="tabs-container">
                                     <button 
-                                        class="tab ${q.type === 'choice' ? 'active' : ''}" 
+                                        class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
                                         onclick="updateQuestionType('choice')"
                                     >
-                                        Single/Multiple Choice
+                                        <span style="font-size:1rem">✓</span> Multiple Choice
                                     </button>
                                     <button 
-                                        class="tab ${q.type === 'ordering' ? 'active' : ''}" 
+                                        class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
                                         onclick="updateQuestionType('ordering')"
                                     >
-                                        Ordering
+                                        <span style="font-size:1rem">↕</span> Ordering
                                     </button>
                                 </div>
                             </div>
                             
                             <!-- Options -->
                             <div class="editor-section">
-                                <div class="flex justify-between items-center" style="margin-bottom:0.5rem">
-                                    <label class="input-label">Answer Options</label>
-                                    <button onclick="addOption()" class="btn btn-ghost btn-sm">+ Add Option</button>
+                                <div class="flex justify-between items-center" style="margin-bottom:1rem">
+                                    <label class="editor-section-label" style="margin-bottom:0">
+                                        <span>📋</span> Answer Options
+                                    </label>
+                                    <button onclick="addOption()" class="btn btn-ghost btn-sm">
+                                        <span style="font-size:1rem">+</span> Add Option
+                                    </button>
                                 </div>
-                               ${q.type === 'ordering' ? `
-                                    <p class="text-sm text-muted" style="margin-bottom:1rem">
-                                        💡 Drag to reorder. The order shown here is the correct answer.
-                                    </p>
+                                
+                                ${q.type === 'ordering' ? `
+                                    <div class="editor-section-hint">
+                                        <span class="editor-section-hint-icon">💡</span>
+                                        <span>Drag options to set the correct order. The sequence shown here is the answer.</span>
+                                    </div>
                                     ${q.options.map((opt, i) => `
                                         <div 
-                                            class="draggable-item option-editor" 
+                                            class="option-editor" 
                                             draggable="true"
                                             ondragstart="handleEditorDragStart(event, ${i})"
                                             ondragover="handleEditorDragOver(event)"
@@ -1442,27 +1465,27 @@ function renderVisualEditor() {
                                             ondragend="handleEditorDragEnd(event)"
                                             style="cursor:move"
                                         >
-                                            <span class="drag-handle">☰</span>
-                                            <span style="font-weight:600;min-width:24px">${i + 1}.</span>
+                                            <span class="drag-handle">⋮⋮</span>
+                                            <span class="option-label">${i + 1}</span>
                                             <input 
                                                 type="text" 
                                                 class="input" 
                                                 value="${escapeHtml(opt)}"
                                                 placeholder="Option ${i + 1}"
-                                                style="flex:1"
                                                 oninput="updateOption(${i}, this.value)"
                                             >
                                             ${q.options.length > 2 ? `
-                                                <button onclick="event.stopPropagation(); removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
-                                                    ✕
+                                                <button onclick="event.stopPropagation(); removeOption(${i})" class="option-remove-btn">
+                                                    <span style="font-size:1.125rem">✕</span>
                                                 </button>
                                             ` : ''}
                                         </div>
                                     `).join('')}
                                 ` : `
-                                    <p class="text-sm text-muted" style="margin-bottom:1rem">
-                                        Check the box(es) to mark correct answer(s). Multiple checks = "Select all that apply"
-                                    </p>
+                                    <div class="editor-section-hint">
+                                        <span class="editor-section-hint-icon">💡</span>
+                                        <span>Check one or more boxes to mark correct answers. Multiple selections create "select all that apply" questions.</span>
+                                    </div>
                                     ${q.options.map((opt, i) => `
                                         <div class="option-editor">
                                             <input 
@@ -1471,7 +1494,7 @@ function renderVisualEditor() {
                                                 ${q.correct.includes(i) ? 'checked' : ''}
                                                 onchange="toggleCorrectOption(${i})"
                                             >
-                                            <span style="font-weight:600;min-width:24px">${String.fromCharCode(65 + i)}.</span>
+                                            <span class="option-label">${String.fromCharCode(65 + i)}</span>
                                             <input 
                                                 type="text" 
                                                 class="input" 
@@ -1480,8 +1503,8 @@ function renderVisualEditor() {
                                                 oninput="updateOption(${i}, this.value)"
                                             >
                                             ${q.options.length > 2 ? `
-                                                <button onclick="removeOption(${i})" class="btn btn-icon btn-sm btn-ghost" style="color:var(--error)">
-                                                    ✕
+                                                <button onclick="removeOption(${i})" class="option-remove-btn">
+                                                    <span style="font-size:1.125rem">✕</span>
                                                 </button>
                                             ` : ''}
                                         </div>
@@ -1491,60 +1514,74 @@ function renderVisualEditor() {
                             
                             <!-- Image Section -->
                             <div class="editor-section">
-                                <label class="input-label">Image (Optional)</label>
+                                <label class="editor-section-label">
+                                    <span>🖼️</span> Image (Optional)
+                                </label>
                                 ${q.image ? `
                                     <div class="image-preview-container">
                                         <img src="${q.image}" alt="Question image">
-                                        <button 
-                                            onclick="removeImage()" 
-                                            class="image-preview-remove"
-                                        >
-                                            ✕ Remove
-                                        </button>
+                                        <div class="image-preview-overlay">
+                                            <button onclick="removeImage()" class="image-preview-remove">
+                                                <span>✕</span> Remove Image
+                                            </button>
+                                        </div>
                                     </div>
-                                ` : ''}
-                                <button onclick="handleImageUpload()" class="btn btn-ghost btn-sm">
-                                    🖼️ ${q.image ? 'Change' : 'Upload'} Image
-                                </button>
+                                ` : `
+                                    <div class="upload-area" onclick="handleImageUpload()">
+                                        <div class="upload-icon">🖼️</div>
+                                        <p class="font-semibold" style="margin-bottom:0.25rem">Upload an image</p>
+                                        <p class="text-sm text-muted">Click to browse • Max 5MB</p>
+                                    </div>
+                                `}
                             </div>
                             
                             <!-- Code Block -->
                             <div class="editor-section">
-                                <label class="input-label">Code Block (Optional)</label>
+                                <label class="editor-section-label">
+                                    <span>💻</span> Code Block (Optional)
+                                </label>
                                 ${(q.code !== null && q.code !== undefined) ? `
-                                    <textarea 
-                                        class="input" 
-                                        rows="8" 
-                                        placeholder="Enter code..."
-                                        style="font-family:monospace;font-size:0.875rem"
-                                        oninput="updateQuestionField('code', this.value)"
-                                    >${escapeHtml(q.code)}</textarea>
-                                    <button onclick="updateQuestionField('code', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
-                                        ✕ Remove Code
+                                    <div class="code-editor-container">
+                                        <div class="code-editor-header">
+                                            <div class="code-editor-dot" style="background:#ef4444"></div>
+                                            <div class="code-editor-dot" style="background:#f59e0b"></div>
+                                            <div class="code-editor-dot" style="background:#22c55e"></div>
+                                            <span class="code-editor-label">CODE</span>
+                                        </div>
+                                        <textarea 
+                                            class="code-editor-textarea" 
+                                            placeholder="Enter code here..."
+                                            oninput="updateQuestionField('code', this.value)"
+                                        >${escapeHtml(q.code)}</textarea>
+                                    </div>
+                                    <button onclick="updateQuestionField('code', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
+                                        <span>✕</span> Remove Code Block
                                     </button>
                                 ` : `
                                     <button onclick="updateQuestionField('code', '');render()" class="btn btn-ghost btn-sm">
-                                        💻 Add Code Block
+                                        <span style="font-size:1rem">+</span> Add Code Block
                                     </button>
                                 `}
                             </div>
                             
                             <!-- Explanation -->
-                            <div class="editor-section" style="border-bottom:none">
-                                <label class="input-label">Explanation (Optional)</label>
+                            <div class="editor-section" style="border:none;margin-bottom:0">
+                                <label class="editor-section-label">
+                                    <span>💡</span> Explanation (Optional)
+                                </label>
                                 ${(q.explanation !== null && q.explanation !== undefined) ? `
                                     <textarea 
                                         class="input" 
                                         rows="3" 
-                                        placeholder="Explain the correct answer..."
+                                        placeholder="Explain why this is the correct answer..."
                                         oninput="updateQuestionField('explanation', this.value)"
                                     >${escapeHtml(q.explanation)}</textarea>
-                                    <button onclick="updateQuestionField('explanation', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
-                                        ✕ Remove Explanation
+                                    <button onclick="updateQuestionField('explanation', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
+                                        <span>✕</span> Remove Explanation
                                     </button>
                                 ` : `
                                     <button onclick="updateQuestionField('explanation', '');render()" class="btn btn-ghost btn-sm">
-                                        💡 Add Explanation
+                                        <span style="font-size:1rem">+</span> Add Explanation
                                     </button>
                                 `}
                             </div>
