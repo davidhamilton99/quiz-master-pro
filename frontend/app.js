@@ -1421,46 +1421,6 @@ function renderVisualEditor() {
                                 </div>
                             </div>
                             
-                            <!-- Image Section -->
-                            <div class="editor-section">
-                                <label class="input-label">Image (Optional)</label>
-                                ${q.image ? `
-                                    <div class="image-preview-container">
-                                        <img src="${q.image}" alt="Question image">
-                                        <button 
-                                            onclick="removeImage()" 
-                                            class="image-preview-remove"
-                                        >
-                                            ✕ Remove
-                                        </button>
-                                    </div>
-                                ` : ''}
-                                <button onclick="handleImageUpload()" class="btn btn-ghost btn-sm">
-                                    🖼️ ${q.image ? 'Change' : 'Upload'} Image
-                                </button>
-                            </div>
-                            
-                            <!-- Code Block -->
-                            <div class="editor-section">
-                                <label class="input-label">Code Block (Optional)</label>
-                                ${(q.code !== null && q.code !== undefined) ? `
-                                    <textarea 
-                                        class="input" 
-                                        rows="8" 
-                                        placeholder="Enter code..."
-                                        style="font-family:monospace;font-size:0.875rem"
-                                        oninput="updateQuestionField('code', this.value)"
-                                    >${escapeHtml(q.code)}</textarea>
-                                    <button onclick="updateQuestionField('code', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
-                                        ✕ Remove Code
-                                    </button>
-                                ` : `
-                                    <button onclick="updateQuestionField('code', '');render()" class="btn btn-ghost btn-sm">
-                                        💻 Add Code Block
-                                    </button>
-                                `}
-                            </div>
-                            
                             <!-- Options -->
                             <div class="editor-section">
                                 <div class="flex justify-between items-center" style="margin-bottom:0.5rem">
@@ -1526,6 +1486,46 @@ function renderVisualEditor() {
                                             ` : ''}
                                         </div>
                                     `).join('')}
+                                `}
+                            </div>
+                            
+                            <!-- Image Section -->
+                            <div class="editor-section">
+                                <label class="input-label">Image (Optional)</label>
+                                ${q.image ? `
+                                    <div class="image-preview-container">
+                                        <img src="${q.image}" alt="Question image">
+                                        <button 
+                                            onclick="removeImage()" 
+                                            class="image-preview-remove"
+                                        >
+                                            ✕ Remove
+                                        </button>
+                                    </div>
+                                ` : ''}
+                                <button onclick="handleImageUpload()" class="btn btn-ghost btn-sm">
+                                    🖼️ ${q.image ? 'Change' : 'Upload'} Image
+                                </button>
+                            </div>
+                            
+                            <!-- Code Block -->
+                            <div class="editor-section">
+                                <label class="input-label">Code Block (Optional)</label>
+                                ${(q.code !== null && q.code !== undefined) ? `
+                                    <textarea 
+                                        class="input" 
+                                        rows="8" 
+                                        placeholder="Enter code..."
+                                        style="font-family:monospace;font-size:0.875rem"
+                                        oninput="updateQuestionField('code', this.value)"
+                                    >${escapeHtml(q.code)}</textarea>
+                                    <button onclick="updateQuestionField('code', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
+                                        ✕ Remove Code
+                                    </button>
+                                ` : `
+                                    <button onclick="updateQuestionField('code', '');render()" class="btn btn-ghost btn-sm">
+                                        💻 Add Code Block
+                                    </button>
                                 `}
                             </div>
                             
