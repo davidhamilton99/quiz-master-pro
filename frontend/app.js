@@ -1283,7 +1283,6 @@ function renderVisualEditor() {
                                     class="input" 
                                     rows="3" 
                                     placeholder="Enter your question..."
-                                    oninput="updateQuestionField('question', this.value)"
                                 >${escapeHtml(q.question)}</textarea>
                             </div>
                             
@@ -1334,7 +1333,6 @@ function renderVisualEditor() {
                                         rows="8" 
                                         placeholder="Enter code..."
                                         style="font-family:monospace;font-size:0.875rem"
-                                        oninput="updateQuestionField('code', this.value)"
                                     >${escapeHtml(q.code)}</textarea>
                                     <button onclick="updateQuestionField('code', null)" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
                                         ✕ Remove Code
@@ -1373,7 +1371,6 @@ function renderVisualEditor() {
                 type="text" 
                 class="input" 
                 value="${escapeHtml(opt)}"
-                oninput="updateOption(${i}, this.value)"
                 placeholder="Option ${i + 1}"
                 style="flex:1"
             >
@@ -1401,7 +1398,6 @@ function renderVisualEditor() {
                                                 type="text" 
                                                 class="input" 
                                                 value="${escapeHtml(opt)}"
-                                                oninput="updateOption(${i}, this.value)"
                                                 placeholder="Option ${String.fromCharCode(65 + i)}"
                                             >
                                             ${q.options.length > 2 ? `
@@ -1422,7 +1418,6 @@ function renderVisualEditor() {
                                         class="input" 
                                         rows="3" 
                                         placeholder="Explain the correct answer..."
-                                        oninput="updateQuestionField('explanation', this.value)"
                                     >${escapeHtml(q.explanation)}</textarea>
                                     <button onclick="updateQuestionField('explanation', null)" class="btn btn-ghost btn-sm" style="margin-top:0.5rem">
                                         ✕ Remove Explanation
@@ -1656,7 +1651,46 @@ function renderVisualEditor() {
             if (di) { di.value = state.quizData; di.addEventListener('input', e => state.quizData = e.target.value); }
         }, 0);
     }
-    
+    // Visual Editor binding
+    if (state.view === 'create' && state.visualEditorMode && state.isAuthenticated) {
+        setTimeout(() => {
+            // Re-bind all input events to prevent re-rendering while typing
+            const questionInput = document.querySelector('textarea[placeholder="Enter your question..."]');
+            if (questionInput) {
+                questionInput.addEventListener('input', (e) => {
+                    const q = state.parsedQuestions[state.currentEditQuestion];
+                    q.question = e.target.value;
+                });
+            }
+            
+            // Code textarea
+            const codeInput = document.querySelector('textarea[placeholder="Enter code..."]');
+            if (codeInput) {
+                codeInput.addEventListener('input', (e) => {
+                    const q = state.parsedQuestions[state.currentEditQuestion];
+                    q.code = e.target.value;
+                });
+            }
+            
+            // Explanation textarea
+            const explanationInput = document.querySelector('textarea[placeholder="Explain the correct answer..."]');
+            if (explanationInput) {
+                explanationInput.addEventListener('input', (e) => {
+                    const q = state.parsedQuestions[state.currentEditQuestion];
+                    q.explanation = e.target.value;
+                });
+            }
+            
+            // Option inputs
+            const optionInputs = document.querySelectorAll('.option-editor input[type="text"]');
+            optionInputs.forEach((input, index) => {
+                input.addEventListener('input', (e) => {
+                    const q = state.parsedQuestions[state.currentEditQuestion];
+                    q.options[index] = e.target.value;
+                });
+            });
+        }, 0);
+    }
     // Combine all library view event bindings
     if (state.view === 'library') {
         setTimeout(() => {
