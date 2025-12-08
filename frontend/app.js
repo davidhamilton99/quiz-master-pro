@@ -737,39 +737,36 @@ function toggleFlag() {
     } 
 }
         function handleDragEnd(e) { e.target.classList.remove('dragging'); draggedIndex = null; }
-        
-        async function saveQuiz() {
-    const title = state.quizTitle.trim();
-    const data = state.quizData.trim();
-    
-    if (!title) { 
-        showToast('Please enter a title', 'warning'); 
-        return; 
-    }
-    if (!data) { 
-        showToast('Please enter questions', 'warning'); 
-        return; 
-    }
+       
+        function fixEscapedContent(questions) {
+    return questions.map(q => {
+        if (q.code && typeof q.code === 'string') {
+            q.code = q.code.replace(/\\\\n/g, '\n');
+        }
+        if (q.explanation && typeof q.explanation === 'string') {
+            q.explanation = q.explanation.replace(/\\\\n/g, '\n');
+        }
+        return q;
+    });
+}
+
+        // FIX 3: Add debugging to your saveQuiz function
+// Temporarily add this to see if code blocks are being saved correctly:
+async function saveQuiz() {
+    // ... existing validation code ...
     
     try {
-        const qs = parseQuizData(data);
-        if (qs.length === 0) { 
-            showToast('Could not parse any questions. Check format.', 'error'); 
-            return; 
-        }
+        const qs = parseQuizData(state.quizData);
         
-        // Validate each question
-        const invalid = qs.find((q, i) => {
-            if (q.type === 'choice' && q.correct.length === 0) return true;
-            if (q.type === 'ordering' && q.correct.length !== q.options.length) return true;
-            if (q.options.length < 2) return true;
-            return false;
+        // DEBUG: Check if code blocks are preserved after parsing
+        console.log('Questions being saved:', qs);
+        qs.forEach((q, i) => {
+            if (q.code) {
+                console.log(`✅ Question ${i + 1} code block:`, q.code);
+            } else {
+                console.log(`❌ Question ${i + 1} no code block`);
+            }
         });
-        
-        if (invalid) {
-            showToast('Some questions are invalid (need correct answers & 2+ options)', 'error');
-            return;
-        }
         
         const payload = { 
             title: state.quizTitle, 
@@ -779,68 +776,135 @@ function toggleFlag() {
             is_public: false 
         };
         
-        if (state.editingQuizId) { 
-            await apiCall(`/quizzes/${state.editingQuizId}`, { 
-                method: 'PUT', 
-                body: JSON.stringify(payload) 
-            }); 
-            showToast('Quiz updated!', 'success'); 
-        } else { 
-            await apiCall('/quizzes', { 
-                method: 'POST', 
-                body: JSON.stringify(payload) 
-            }); 
-            showToast('Quiz created!', 'success'); 
-        }
+        // DEBUG: Log the payload being sent to API
+        console.log('Payload being sent to API:', JSON.stringify(payload, null, 2));
         
-        state.quizTitle = ''; 
-        state.quizData = ''; 
-        state.quizCategory = ''; 
-        state.editingQuizId = null; 
-        state.view = 'library'; 
-        await loadQuizzes(); 
-        render();
-    } catch (e) { 
-        showToast('Failed to save quiz', 'error'); 
+        // ... rest of your saveQuiz function ...
+    } catch (e) {
+        // ... error handling ...
     }
 }
-        async function editQuiz(id) {
-            try {
-                const d = await apiCall(`/quizzes/${id}`); const qd = d.quiz || d;
-                const txt = qd.questions.map((q, i) => {
-                    let t = `${i + 1}. ${q.type === 'ordering' ? '[order] ' : ''}${q.question}\n`;
-                    if (q.code) t += `[code]\n${q.code}\n[/code]\n`;
-                    if (q.image) t += `[image: ${q.image}]\n`;
-                    if (q.type === 'ordering') q.options.forEach((o, j) => t += `${q.correct[j] + 1}) ${o}\n`);
-                    else q.options.forEach((o, j) => t += `${String.fromCharCode(65 + j)}. ${o}${q.correct.includes(j) ? ' *' : ''}\n`);
-                    if (q.explanation) t += `[explanation: ${q.explanation}]\n`;
-                    return t;
-                }).join('\n\n');
-                state.quizTitle = qd.title; state.quizData = txt; state.quizCategory = qd.description || ''; state.editingQuizId = id; state.view = 'create'; render();
-            } catch (e) { showToast('Failed to load', 'error'); }
-        }
+   async function editQuiz(id) {
+    try {
+        const d = await apiCall(`/quizzes/${id}`); 
+        const qd = d.quiz || d;
         
-        function parseQuizData(data) {
-            const lines = data.split('\n'), questions = [];
-            let i = 0;
-            while (i < lines.length) {
-                let line = lines[i].trim();
-                if (line.match(/^\d+\./)) {
-                    const isOrder = line.includes('[order]');
-                    const qText = line.replace(/^\d+\./, '').replace('[order]', '').trim();
-                    let q = { question: qText, type: isOrder ? 'ordering' : 'choice', options: [], correct: [], image: null, explanation: null, code: null };
-                    i++;
-                    if (i < lines.length && lines[i].trim() === '[code]') { i++; let cl = []; while (i < lines.length && lines[i].trim() !== '[/code]') { cl.push(lines[i]); i++; } if (i < lines.length) { q.code = cl.join('\n'); i++; } }
-                    if (i < lines.length && lines[i].trim().match(/^\[image:\s*(.+?)\]/i)) { q.image = lines[i].trim().match(/^\[image:\s*(.+?)\]/i)[1]; i++; }
-                    if (isOrder) { while (i < lines.length && lines[i].match(/^\d+\)/)) { const n = parseInt(lines[i].match(/^(\d+)\)/)[1]); q.options.push(lines[i].replace(/^\d+\)/, '').trim()); q.correct.push(n - 1); i++; } }
-                    else { while (i < lines.length && lines[i].match(/^[A-Z]\./)) { const ot = lines[i].substring(2).trim(), ha = ot.endsWith('*'); q.options.push(ha ? ot.slice(0, -1).trim() : ot); if (ha) q.correct.push(q.options.length - 1); i++; } }
-                    if (i < lines.length && lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)) { q.explanation = lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)[1]; i++; }
-                    questions.push(q);
-                } else i++;
+        console.log('Loading quiz for editing:', qd); // Debug log
+        
+        const txt = qd.questions.map((q, i) => {
+            let t = `${i + 1}. ${q.type === 'ordering' ? '[order] ' : ''}${q.question}\n`;
+            
+            // CRITICAL FIX: Ensure code blocks are properly preserved
+            if (q.code !== undefined && q.code !== null && q.code !== '') {
+                // Make sure we're handling the code exactly as stored
+                const codeContent = String(q.code);
+                t += `[code]\n${codeContent}\n[/code]\n`;
+                console.log(`Added code block for Q${i + 1}:`, codeContent);
             }
-            return questions;
-        }
+            
+            if (q.image !== undefined && q.image !== null && q.image !== '') {
+                t += `[image: ${q.image}]\n`;
+            }
+            
+            if (q.type === 'ordering') {
+                q.options.forEach((o, j) => t += `${q.correct[j] + 1}) ${o}\n`);
+            } else {
+                q.options.forEach((o, j) => t += `${String.fromCharCode(65 + j)}. ${o}${q.correct.includes(j) ? ' *' : ''}\n`);
+            }
+            
+            if (q.explanation !== undefined && q.explanation !== null && q.explanation !== '') {
+                t += `[explanation: ${q.explanation}]\n`;
+            }
+            
+            return t;
+        }).join('\n\n');
         
+        console.log('Generated edit text:', txt); // Debug log
+        
+        state.quizTitle = qd.title; 
+        state.quizData = txt; 
+        state.quizCategory = qd.description || ''; 
+        state.editingQuizId = id; 
+        state.view = 'create'; 
+        render();
+    } catch (e) { 
+        console.error('Edit quiz error:', e);
+        showToast('Failed to load', 'error'); 
+    }
+}
+        
+        // FIX 2: Also check if your parseQuizData function properly handles code blocks
+// Add this improved version if needed:
+function parseQuizData(data) {
+    const lines = data.split('\n'), questions = [];
+    let i = 0;
+    while (i < lines.length) {
+        let line = lines[i].trim();
+        if (line.match(/^\d+\./)) {
+            const isOrder = line.includes('[order]');
+            const qText = line.replace(/^\d+\./, '').replace('[order]', '').trim();
+            let q = { 
+                question: qText, 
+                type: isOrder ? 'ordering' : 'choice', 
+                options: [], 
+                correct: [], 
+                image: null, 
+                explanation: null, 
+                code: null 
+            };
+            i++;
+            
+            // IMPROVED CODE BLOCK PARSING
+            if (i < lines.length && lines[i].trim() === '[code]') { 
+                i++; 
+                let codeLines = []; 
+                // Collect all lines until [/code]
+                while (i < lines.length && lines[i].trim() !== '[/code]') { 
+                    codeLines.push(lines[i]); 
+                    i++; 
+                } 
+                // Join with newlines exactly as they appear
+                if (codeLines.length > 0) { 
+                    q.code = codeLines.join('\n'); 
+                }
+                // Skip the [/code] line
+                if (i < lines.length && lines[i].trim() === '[/code]') {
+                    i++;
+                }
+            }
+            
+            // Rest of parsing remains the same...
+            if (i < lines.length && lines[i].trim().match(/^\[image:\s*(.+?)\]/i)) { 
+                q.image = lines[i].trim().match(/^\[image:\s*(.+?)\]/i)[1]; 
+                i++; 
+            }
+            
+            if (isOrder) { 
+                while (i < lines.length && lines[i].match(/^\d+\)/)) { 
+                    const n = parseInt(lines[i].match(/^(\d+)\)/)[1]); 
+                    q.options.push(lines[i].replace(/^\d+\)/, '').trim()); 
+                    q.correct.push(n - 1); 
+                    i++; 
+                } 
+            } else { 
+                while (i < lines.length && lines[i].match(/^[A-Z]\./)) { 
+                    const ot = lines[i].substring(2).trim(), ha = ot.endsWith('*'); 
+                    q.options.push(ha ? ot.slice(0, -1).trim() : ot); 
+                    if (ha) q.correct.push(q.options.length - 1); 
+                    i++; 
+                } 
+            }
+            
+            if (i < lines.length && lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)) { 
+                q.explanation = lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)[1]; 
+                i++; 
+            }
+            
+            questions.push(q);
+        } else i++;
+    }
+    return questions;
+}
         function exportQuizzes() { const d = state.quizzes.map(q => ({ title: q.title, description: q.description, questions: q.questions, color: q.color })); const b = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `quiz-export-${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(u); showToast('Exported!', 'success'); }
         
         function showImportModal() {
