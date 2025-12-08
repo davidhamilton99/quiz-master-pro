@@ -753,35 +753,75 @@ function toggleFlag() {
         // FIX 3: Add debugging to your saveQuiz function
 // Temporarily add this to see if code blocks are being saved correctly:
 async function saveQuiz() {
-    // ... existing validation code ...
+    if (!state.quizTitle.trim()) {
+        showToast('Enter a title', 'warning');
+        return;
+    }
+    
+    if (!state.quizData.trim()) {
+        showToast('Enter at least one question', 'warning');
+        return;
+    }
     
     try {
+        showLoading();
         const qs = parseQuizData(state.quizData);
         
-        // DEBUG: Check if code blocks are preserved after parsing
-        console.log('Questions being saved:', qs);
-        qs.forEach((q, i) => {
-            if (q.code) {
-                console.log(`✅ Question ${i + 1} code block:`, q.code);
-            } else {
-                console.log(`❌ Question ${i + 1} no code block`);
-            }
-        });
+        if (qs.length === 0) {
+            hideLoading();
+            showToast('No valid questions found', 'warning');
+            return;
+        }
         
-        const payload = { 
-            title: state.quizTitle, 
-            questions: qs, 
-            description: state.quizCategory || '', 
-            color: getRandomColor(), 
-            is_public: false 
+        // Validate that all questions have correct answers
+        const invalidQuestions = qs.filter(q => 
+            (q.type === 'choice' && q.correct.length === 0) ||
+            (q.type === 'ordering' && q.correct.length === 0) ||
+            q.options.length < 2
+        );
+        
+        if (invalidQuestions.length > 0) {
+            hideLoading();
+            showToast('Some questions are missing correct answers or options', 'error');
+            return;
+        }
+        
+        const payload = {
+            title: state.quizTitle,
+            questions: qs,
+            description: state.quizCategory || '',
+            color: getRandomColor(),
+            is_public: false
         };
         
-        // DEBUG: Log the payload being sent to API
-        console.log('Payload being sent to API:', JSON.stringify(payload, null, 2));
+        if (state.editingQuizId) {
+            // Update existing quiz
+            await apiCall(`/quizzes/${state.editingQuizId}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            showToast('Quiz updated!', 'success');
+        } else {
+            // Create new quiz
+            await apiCall('/quizzes', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            showToast('Quiz created!', 'success');
+        }
         
-        // ... rest of your saveQuiz function ...
+        await loadQuizzes();
+        state.view = 'library';
+        state.editingQuizId = null;
+        state.quizTitle = '';
+        state.quizData = '';
+        state.quizCategory = '';
+        hideLoading();
+        render();
     } catch (e) {
-        // ... error handling ...
+        hideLoading();
+        console.error('Save quiz error:', e);
+        showToast(e.message || 'Failed to save quiz', 'error');
     }
 }
    async function editQuiz(id) {
