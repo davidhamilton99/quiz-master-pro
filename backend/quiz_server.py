@@ -27,7 +27,7 @@ def serve_static(filename):
     return send_from_directory('static', filename)
 
 # Use environment variable or default to local path
-DATABASE = os.environ.get('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'quiz_master.db'))
+DATABASE = '/home/davidhamilton/quiz_master.db'
 
 # ============== Database Setup ==============
 
