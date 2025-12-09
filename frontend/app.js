@@ -1291,6 +1291,487 @@ console.log('   ✓ Study Statistics');
 console.log('   ✓ Keyboard Shortcuts (press ? for help)');
 console.log('   ✓ Export to Anki/CSV/Markdown');
 
+/* ============================================
+   PHASE 4: CISCO IOS COMMAND SIMULATION
+   - Terminal-style IOS interface
+   - Router/Switch mode simulation
+   - Command verification and auto-grading
+   - Perfect for CCNA prep!
+   ============================================ */
+
+const CiscoIOS = {
+    // Router modes
+    MODES: {
+        USER_EXEC: { prompt: '>', name: 'User EXEC', color: '#22c55e' },
+        PRIVILEGED_EXEC: { prompt: '#', name: 'Privileged EXEC', color: '#3b82f6' },
+        GLOBAL_CONFIG: { prompt: '(config)#', name: 'Global Config', color: '#f59e0b' },
+        INTERFACE_CONFIG: { prompt: '(config-if)#', name: 'Interface Config', color: '#ec4899' },
+        LINE_CONFIG: { prompt: '(config-line)#', name: 'Line Config', color: '#8b5cf6' },
+        ROUTER_CONFIG: { prompt: '(config-router)#', name: 'Router Config', color: '#ef4444' }
+    },
+    
+    // Current simulator state
+    state: {
+        hostname: 'Router',
+        mode: 'USER_EXEC',
+        currentInterface: null,
+        history: [],
+        output: []
+    },
+    
+    // Reset simulator
+    reset(hostname = 'Router') {
+        this.state = {
+            hostname: hostname,
+            mode: 'USER_EXEC',
+            currentInterface: null,
+            history: [],
+            output: []
+        };
+    },
+    
+    // Get current prompt
+    getPrompt() {
+        const mode = this.MODES[this.state.mode];
+        let prompt = this.state.hostname;
+        
+        if (this.state.mode === 'INTERFACE_CONFIG' && this.state.currentInterface) {
+            prompt += `(config-if)`;
+        } else if (this.state.mode !== 'USER_EXEC' && this.state.mode !== 'PRIVILEGED_EXEC') {
+            prompt += mode.prompt.replace('#', '');
+        }
+        
+        return prompt + (this.state.mode === 'USER_EXEC' ? '>' : '#');
+    },
+    
+    // Common IOS commands and their shortcuts
+    COMMANDS: {
+        // User EXEC mode
+        'enable': { mode: 'USER_EXEC', action: 'PRIVILEGED_EXEC', abbrev: ['en', 'ena', 'enab', 'enabl'] },
+        'ping': { mode: '*', output: (args) => `Pinging ${args[0] || '?'} with 32 bytes of data...` },
+        'traceroute': { mode: '*', abbrev: ['trace', 'tracer'] },
+        'show': { mode: '*', abbrev: ['sh', 'sho'] },
+        'exit': { mode: '*', action: 'EXIT' },
+        'end': { mode: '*', action: 'PRIVILEGED_EXEC', abbrev: ['en'] },
+        'disable': { mode: 'PRIVILEGED_EXEC', action: 'USER_EXEC', abbrev: ['dis', 'disa', 'disab', 'disabl'] },
+        
+        // Privileged EXEC mode
+        'configure terminal': { mode: 'PRIVILEGED_EXEC', action: 'GLOBAL_CONFIG', abbrev: ['conf t', 'config t', 'configure t'] },
+        'copy running-config startup-config': { mode: 'PRIVILEGED_EXEC', output: () => 'Building configuration...\n[OK]', abbrev: ['copy run start', 'wr', 'write'] },
+        'write memory': { mode: 'PRIVILEGED_EXEC', output: () => 'Building configuration...\n[OK]', abbrev: ['wr', 'wr mem'] },
+        'reload': { mode: 'PRIVILEGED_EXEC', output: () => 'System configuration has been modified. Save? [yes/no]: ' },
+        
+        // Global Config mode
+        'hostname': { mode: 'GLOBAL_CONFIG', action: 'SET_HOSTNAME' },
+        'interface': { mode: 'GLOBAL_CONFIG', action: 'INTERFACE_CONFIG', abbrev: ['int', 'inter'] },
+        'ip route': { mode: 'GLOBAL_CONFIG', output: () => '' },
+        'router ospf': { mode: 'GLOBAL_CONFIG', action: 'ROUTER_CONFIG', abbrev: ['router o'] },
+        'router eigrp': { mode: 'GLOBAL_CONFIG', action: 'ROUTER_CONFIG', abbrev: ['router e'] },
+        'router rip': { mode: 'GLOBAL_CONFIG', action: 'ROUTER_CONFIG' },
+        'line console': { mode: 'GLOBAL_CONFIG', action: 'LINE_CONFIG', abbrev: ['line con'] },
+        'line vty': { mode: 'GLOBAL_CONFIG', action: 'LINE_CONFIG' },
+        'enable secret': { mode: 'GLOBAL_CONFIG' },
+        'enable password': { mode: 'GLOBAL_CONFIG' },
+        'service password-encryption': { mode: 'GLOBAL_CONFIG', abbrev: ['serv pass'] },
+        'no ip domain-lookup': { mode: 'GLOBAL_CONFIG', abbrev: ['no ip domain-l', 'no ip dom lo'] },
+        'banner motd': { mode: 'GLOBAL_CONFIG' },
+        
+        // Interface Config mode
+        'ip address': { mode: 'INTERFACE_CONFIG', abbrev: ['ip add', 'ip addr'] },
+        'no shutdown': { mode: 'INTERFACE_CONFIG', output: () => '%LINK-5-CHANGED: Interface changed state to up\n%LINEPROTO-5-UPDOWN: Line protocol changed state to up', abbrev: ['no sh', 'no shut'] },
+        'shutdown': { mode: 'INTERFACE_CONFIG', output: () => '%LINK-5-CHANGED: Interface changed state to administratively down', abbrev: ['sh', 'shut'] },
+        'description': { mode: 'INTERFACE_CONFIG', abbrev: ['desc'] },
+        'duplex': { mode: 'INTERFACE_CONFIG' },
+        'speed': { mode: 'INTERFACE_CONFIG' },
+        'switchport mode access': { mode: 'INTERFACE_CONFIG', abbrev: ['sw mo ac'] },
+        'switchport mode trunk': { mode: 'INTERFACE_CONFIG', abbrev: ['sw mo tr'] },
+        'switchport access vlan': { mode: 'INTERFACE_CONFIG', abbrev: ['sw ac vl'] },
+        
+        // Line Config mode  
+        'password': { mode: 'LINE_CONFIG', abbrev: ['pass'] },
+        'login': { mode: 'LINE_CONFIG' },
+        'logging synchronous': { mode: 'LINE_CONFIG', abbrev: ['logg sync', 'logging sync'] },
+        'exec-timeout': { mode: 'LINE_CONFIG' },
+        
+        // Router Config mode
+        'network': { mode: 'ROUTER_CONFIG', abbrev: ['net', 'netw'] },
+        'passive-interface': { mode: 'ROUTER_CONFIG', abbrev: ['pass', 'passive'] },
+        'auto-summary': { mode: 'ROUTER_CONFIG' },
+        'no auto-summary': { mode: 'ROUTER_CONFIG' }
+    },
+    
+    // Show commands output
+    SHOW_OUTPUTS: {
+        'show running-config': () => `Building configuration...\n\nCurrent configuration : 1024 bytes\n!\nhostname ${CiscoIOS.state.hostname}\n!\ninterface GigabitEthernet0/0\n ip address 192.168.1.1 255.255.255.0\n no shutdown\n!\nend`,
+        'show ip interface brief': () => `Interface              IP-Address      OK? Method Status                Protocol\nGigabitEthernet0/0     192.168.1.1     YES manual up                    up\nGigabitEthernet0/1     unassigned      YES unset  administratively down down\nSerial0/0/0            10.0.0.1        YES manual up                    up`,
+        'show interfaces': () => `GigabitEthernet0/0 is up, line protocol is up\n  Hardware is iGbE, address is 0050.56ab.1234\n  Internet address is 192.168.1.1/24\n  MTU 1500 bytes, BW 1000000 Kbit/sec`,
+        'show ip route': () => `Codes: C - connected, S - static, R - RIP, O - OSPF\n\nGateway of last resort is not set\n\nC    192.168.1.0/24 is directly connected, GigabitEthernet0/0\nS    10.0.0.0/8 [1/0] via 192.168.1.254`,
+        'show version': () => `Cisco IOS Software, Version 15.4(3)M\nROM: System Bootstrap, Version 15.4(3)M\nRouter uptime is 2 hours, 15 minutes\nSystem image file is "flash:c2900-universalk9-mz.SPA.154-3.M.bin"`,
+        'show vlan brief': () => `VLAN Name                             Status    Ports\n---- -------------------------------- --------- -------------------------------\n1    default                          active    Fa0/1, Fa0/2, Fa0/3\n10   SALES                            active    Fa0/10, Fa0/11\n20   ENGINEERING                      active    Fa0/20, Fa0/21`,
+        'show mac address-table': () => `          Mac Address Table\n-------------------------------------------\nVlan    Mac Address       Type        Ports\n----    -----------       --------    -----\n   1    0050.56ab.1234    DYNAMIC     Fa0/1\n  10    0050.56ab.5678    DYNAMIC     Fa0/10`
+    },
+    
+    // Parse and execute command
+    execute(input) {
+        const cmd = input.trim().toLowerCase();
+        if (!cmd) return '';
+        
+        this.state.history.push(cmd);
+        
+        // Handle ? for help
+        if (cmd === '?') {
+            return this.getHelp();
+        }
+        
+        // Handle show commands
+        if (cmd.startsWith('show ') || cmd.startsWith('sh ')) {
+            return this.handleShow(cmd);
+        }
+        
+        // Find matching command
+        const match = this.findCommand(cmd);
+        
+        if (!match) {
+            return `% Invalid input detected at '^' marker.\n${cmd}\n^`;
+        }
+        
+        return this.executeCommand(match, cmd);
+    },
+    
+    findCommand(input) {
+        const inputParts = input.split(' ');
+        
+        for (const [fullCmd, config] of Object.entries(this.COMMANDS)) {
+            // Check exact match
+            if (input === fullCmd || input.startsWith(fullCmd + ' ')) {
+                return { cmd: fullCmd, config, args: input.slice(fullCmd.length).trim().split(' ').filter(x => x) };
+            }
+            
+            // Check abbreviations
+            if (config.abbrev) {
+                for (const abbrev of config.abbrev) {
+                    if (input === abbrev || input.startsWith(abbrev + ' ')) {
+                        return { cmd: fullCmd, config, args: input.slice(abbrev.length).trim().split(' ').filter(x => x) };
+                    }
+                }
+            }
+        }
+        
+        return null;
+    },
+    
+    executeCommand(match, input) {
+        const { cmd, config, args } = match;
+        
+        // Check mode
+        if (config.mode !== '*' && config.mode !== this.state.mode) {
+            return `% Invalid input detected - wrong mode`;
+        }
+        
+        // Handle actions
+        if (config.action) {
+            switch (config.action) {
+                case 'EXIT':
+                    if (this.state.mode === 'USER_EXEC') {
+                        return 'Connection closed.';
+                    } else if (this.state.mode === 'PRIVILEGED_EXEC') {
+                        this.state.mode = 'USER_EXEC';
+                    } else if (this.state.mode === 'GLOBAL_CONFIG') {
+                        this.state.mode = 'PRIVILEGED_EXEC';
+                    } else {
+                        this.state.mode = 'GLOBAL_CONFIG';
+                        this.state.currentInterface = null;
+                    }
+                    return '';
+                    
+                case 'SET_HOSTNAME':
+                    if (args[0]) {
+                        this.state.hostname = args[0];
+                    }
+                    return '';
+                    
+                case 'INTERFACE_CONFIG':
+                    this.state.mode = 'INTERFACE_CONFIG';
+                    this.state.currentInterface = args.join('');
+                    return '';
+                    
+                case 'LINE_CONFIG':
+                    this.state.mode = 'LINE_CONFIG';
+                    return '';
+                    
+                case 'ROUTER_CONFIG':
+                    this.state.mode = 'ROUTER_CONFIG';
+                    return '';
+                    
+                default:
+                    if (this.MODES[config.action]) {
+                        this.state.mode = config.action;
+                    }
+                    return '';
+            }
+        }
+        
+        // Handle output
+        if (config.output) {
+            return typeof config.output === 'function' ? config.output(args) : config.output;
+        }
+        
+        return '';
+    },
+    
+    handleShow(cmd) {
+        // Normalize show command
+        let normalized = cmd.replace(/^sh\s+/, 'show ').replace(/^sho\s+/, 'show ');
+        
+        // Handle abbreviations
+        normalized = normalized
+            .replace('show run', 'show running-config')
+            .replace('show ip int br', 'show ip interface brief')
+            .replace('show ip int brief', 'show ip interface brief')
+            .replace('show int', 'show interfaces')
+            .replace('show ver', 'show version')
+            .replace('show vl br', 'show vlan brief')
+            .replace('show vlan br', 'show vlan brief')
+            .replace('show mac add', 'show mac address-table');
+        
+        for (const [showCmd, outputFn] of Object.entries(this.SHOW_OUTPUTS)) {
+            if (normalized.startsWith(showCmd)) {
+                return outputFn();
+            }
+        }
+        
+        return `% Invalid show command`;
+    },
+    
+    getHelp() {
+        const modeCommands = {
+            'USER_EXEC': ['enable', 'ping', 'traceroute', 'show', 'exit'],
+            'PRIVILEGED_EXEC': ['configure terminal', 'copy running-config startup-config', 'disable', 'ping', 'reload', 'show', 'write memory'],
+            'GLOBAL_CONFIG': ['hostname', 'interface', 'ip route', 'router ospf', 'router eigrp', 'line console', 'line vty', 'enable secret', 'service password-encryption', 'no ip domain-lookup', 'banner motd', 'exit', 'end'],
+            'INTERFACE_CONFIG': ['ip address', 'no shutdown', 'shutdown', 'description', 'duplex', 'speed', 'switchport mode access', 'switchport mode trunk', 'exit', 'end'],
+            'LINE_CONFIG': ['password', 'login', 'logging synchronous', 'exec-timeout', 'exit', 'end'],
+            'ROUTER_CONFIG': ['network', 'passive-interface', 'no auto-summary', 'exit', 'end']
+        };
+        
+        const cmds = modeCommands[this.state.mode] || [];
+        return `Available commands in ${this.MODES[this.state.mode].name} mode:\n\n${cmds.map(c => `  ${c}`).join('\n')}`;
+    },
+    
+    // Validate if user's command is correct for a question
+    validateCommand(userInput, expectedCommand, options = {}) {
+        const userCmd = userInput.trim().toLowerCase();
+        const expected = expectedCommand.trim().toLowerCase();
+        
+        // Exact match
+        if (userCmd === expected) {
+            return { correct: true, message: 'Correct!' };
+        }
+        
+        // Check if user used valid abbreviation
+        const userMatch = this.findCommand(userCmd);
+        const expectedMatch = this.findCommand(expected);
+        
+        if (userMatch && expectedMatch && userMatch.cmd === expectedMatch.cmd) {
+            // Same command, check args
+            const userArgs = userMatch.args.join(' ');
+            const expectedArgs = expectedMatch.args.join(' ');
+            
+            if (userArgs === expectedArgs || options.ignoreArgs) {
+                return { correct: true, message: 'Correct! (using abbreviation)' };
+            }
+        }
+        
+        // Partial credit for correct command, wrong args
+        if (userMatch && expectedMatch && userMatch.cmd === expectedMatch.cmd) {
+            return { correct: false, partial: true, message: `Correct command, but check your arguments.\nExpected: ${expected}` };
+        }
+        
+        return { correct: false, message: `Incorrect.\nExpected: ${expected}\nYour answer: ${userInput}` };
+    }
+};
+
+// Render Cisco IOS terminal interface
+function renderIOSTerminal(question, questionIndex) {
+    const hostname = question.hostname || 'Router';
+    const startMode = question.startMode || 'USER_EXEC';
+    const mode = CiscoIOS.MODES[startMode];
+    
+    // Reset simulator for this question
+    CiscoIOS.reset(hostname);
+    CiscoIOS.state.mode = startMode;
+    
+    const prompt = CiscoIOS.getPrompt();
+    
+    return `
+        <div class="ios-terminal-container">
+            <div class="ios-terminal">
+                <div class="ios-terminal-header">
+                    <div class="ios-terminal-dots">
+                        <span class="ios-dot red"></span>
+                        <span class="ios-dot yellow"></span>
+                        <span class="ios-dot green"></span>
+                    </div>
+                    <span class="ios-terminal-title">🖥️ Cisco IOS - ${escapeHtml(hostname)}</span>
+                    <span class="ios-mode-badge" style="background:${mode.color}">${mode.name}</span>
+                </div>
+                <div class="ios-terminal-body" id="ios-output-${questionIndex}">
+                    ${question.initialOutput ? `<pre class="ios-output">${escapeHtml(question.initialOutput)}</pre>` : ''}
+                    <div class="ios-prompt-line">
+                        <span class="ios-prompt">${escapeHtml(prompt)}</span>
+                        <input 
+                            type="text" 
+                            class="ios-input" 
+                            id="ios-input-${questionIndex}"
+                            placeholder="Enter command..."
+                            autocomplete="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            onkeydown="handleIOSInput(event, ${questionIndex})"
+                        >
+                    </div>
+                </div>
+            </div>
+            <div class="ios-help-text">
+                <span>💡 Type <code>?</code> for help</span>
+                <span>Press <kbd>Enter</kbd> to execute</span>
+            </div>
+            <div id="ios-result-${questionIndex}" class="ios-result-container"></div>
+        </div>
+    `;
+}
+
+// Handle IOS terminal input
+function handleIOSInput(event, questionIndex) {
+    if (event.key !== 'Enter') return;
+    
+    const input = event.target;
+    const command = input.value;
+    const outputDiv = document.getElementById(`ios-output-${questionIndex}`);
+    const question = state.currentQuiz.questions[questionIndex];
+    
+    // Add command to output
+    const commandLine = document.createElement('div');
+    commandLine.className = 'ios-command-line';
+    commandLine.innerHTML = `<span class="ios-prompt">${escapeHtml(CiscoIOS.getPrompt())}</span><span>${escapeHtml(command)}</span>`;
+    
+    // Insert before the prompt line
+    const promptLine = outputDiv.querySelector('.ios-prompt-line');
+    outputDiv.insertBefore(commandLine, promptLine);
+    
+    // Execute command and show output
+    const output = CiscoIOS.execute(command);
+    if (output) {
+        const outputLine = document.createElement('pre');
+        outputLine.className = 'ios-output';
+        outputLine.textContent = output;
+        outputDiv.insertBefore(outputLine, promptLine);
+    }
+    
+    // Update prompt
+    promptLine.querySelector('.ios-prompt').textContent = CiscoIOS.getPrompt();
+    
+    // Clear input
+    input.value = '';
+    
+    // Scroll to bottom
+    outputDiv.scrollTop = outputDiv.scrollHeight;
+    
+    // Check if this is an answer submission
+    if (question.expectedCommand) {
+        checkIOSAnswer(questionIndex, command);
+    }
+}
+
+// Check IOS command answer
+function checkIOSAnswer(questionIndex, userCommand) {
+    const question = state.currentQuiz.questions[questionIndex];
+    const resultDiv = document.getElementById(`ios-result-${questionIndex}`);
+    
+    // Support multiple correct answers
+    const expectedCommands = Array.isArray(question.expectedCommand) 
+        ? question.expectedCommand 
+        : [question.expectedCommand];
+    
+    let bestResult = { correct: false, message: '' };
+    
+    for (const expected of expectedCommands) {
+        const result = CiscoIOS.validateCommand(userCommand, expected, question.validateOptions || {});
+        if (result.correct) {
+            bestResult = result;
+            break;
+        }
+        if (result.partial && !bestResult.partial) {
+            bestResult = result;
+        }
+    }
+    
+    if (bestResult.correct) {
+        resultDiv.innerHTML = `
+            <div class="ios-result success">
+                <span class="ios-result-icon">✓</span>
+                <span>${bestResult.message}</span>
+            </div>
+        `;
+        // Record SRS if enabled
+        if (state.currentQuiz) {
+            recordSRSResult(state.currentQuiz.id, questionIndex, true);
+        }
+    } else if (bestResult.partial) {
+        resultDiv.innerHTML = `
+            <div class="ios-result partial">
+                <span class="ios-result-icon">⚠️</span>
+                <span>${escapeHtml(bestResult.message)}</span>
+            </div>
+        `;
+    }
+    // Don't show incorrect immediately - let user keep trying
+}
+
+// Submit IOS answer (for explicit submission)
+function submitIOSAnswer(questionIndex) {
+    const input = document.getElementById(`ios-input-${questionIndex}`);
+    const question = state.currentQuiz.questions[questionIndex];
+    const resultDiv = document.getElementById(`ios-result-${questionIndex}`);
+    
+    const userCommand = input.value.trim() || CiscoIOS.state.history[CiscoIOS.state.history.length - 1] || '';
+    
+    const expectedCommands = Array.isArray(question.expectedCommand) 
+        ? question.expectedCommand 
+        : [question.expectedCommand];
+    
+    let isCorrect = false;
+    for (const expected of expectedCommands) {
+        const result = CiscoIOS.validateCommand(userCommand, expected);
+        if (result.correct) {
+            isCorrect = true;
+            break;
+        }
+    }
+    
+    if (!isCorrect) {
+        resultDiv.innerHTML = `
+            <div class="ios-result error">
+                <span class="ios-result-icon">✗</span>
+                <div>
+                    <strong>Incorrect</strong><br>
+                    <span class="text-muted">Expected: <code>${escapeHtml(expectedCommands[0])}</code></span>
+                    ${question.explanation ? `<br><span class="text-muted">${escapeHtml(question.explanation)}</span>` : ''}
+                </div>
+            </div>
+        `;
+        recordSRSResult(state.currentQuiz.id, questionIndex, false);
+    }
+    
+    state.submitted = true;
+    render();
+}
+
+console.log('🚀 Phase 4: Cisco IOS Simulation loaded!');
+console.log('   ✓ Terminal interface');
+console.log('   ✓ Router/Switch modes');
+console.log('   ✓ Command abbreviations');
+console.log('   ✓ Auto-grading');
+
         /* ============================================
    QUICK WIN FEATURES - ADD TO BEGINNING OF app.js
    (After the API_URL and state declarations)
@@ -4072,7 +4553,7 @@ C. 120
 </div><div><h2 style="font-size:1rem;margin-bottom:2px">${escapeHtml(state.currentQuiz.title)}</h2><p class="text-xs text-muted">${state.studyMode ? '📖 Study' : '🎯 Quiz'}</p></div></div><div class="flex items-center gap-sm">${state.timerEnabled ? `<div class="badge" style="font-family:monospace;font-size:1rem;padding:0.5rem 1rem">⏱️ <span id="timer">${Math.floor(state.timeRemaining / 60)}:${(state.timeRemaining % 60).toString().padStart(2, '0')}</span></div>` : ''}${state.studyMode && state.streak > 0 ? `<div class="streak-badge">🔥 ${state.streak}</div>` : ''}<button onclick="toggleFlag()" class="btn btn-icon ${flagged ? 'btn-accent' : 'btn-ghost'}">${flagged ? '🚩' : '⚑'}</button></div></div></div></header>
             <div class="quiz-progress-section"><div class="container"><div class="flex justify-between items-center" style="margin-bottom:0.5rem"><span class="text-sm text-muted">Question ${state.currentQuestionIndex + 1} of ${state.currentQuiz.questions.length}</span><span class="text-sm font-semibold" style="color:var(--accent)">${Math.round(prog)}%</span></div><div class="progress-bar"><div class="progress-fill" style="width:${prog}%"></div></div></div></div>
             <div class="quiz-content"><div class="container-narrow">${state.studyMode && state.showAnswer ? `<div class="feedback-banner ${isCorrect ? 'correct' : 'incorrect'}" style="margin-bottom:1.5rem"><span style="font-size:1.25rem">${isCorrect ? '✓' : '✗'}</span><span>${isCorrect ? 'Correct!' : 'Incorrect'}</span>${isCorrect && state.streak > 1 ? `<span class="streak-badge" style="margin-left:auto">🔥 ${state.streak}</span>` : ''}</div>` : ''}
-            <div class="card" style="padding:2rem;margin-bottom:1.5rem"><div class="flex items-start gap-md" style="margin-bottom:2rem"><div class="question-number">${state.currentQuestionIndex + 1}</div><h2 class="question-text">${escapeHtml(q.question)}</h2></div>${q.code ? renderExecutableCodeBlock(q, state.currentQuestionIndex) : ''}${q.image ? `<img src="${escapeHtml(q.image)}" alt="Question image" style="max-width:100%;max-height:300px;border-radius:var(--radius-md);margin-bottom:1.5rem">` : ''}${q.correct.length > 1 && q.type === 'choice' ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}<div class="flex flex-col gap-sm">${optHTML}</div>${state.studyMode && !state.showAnswer && (q.correct.length > 1 || q.type === 'ordering') ? `<button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>` : ''}${state.studyMode && state.showAnswer && q.explanation ? `<div class="explanation-box" style="margin-top:1.5rem"><p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p><p>${escapeHtml(q.explanation)}</p></div>` : ''}</div></div></div>
+            <div class="card" style="padding:2rem;margin-bottom:1.5rem"><div class="flex items-start gap-md" style="margin-bottom:2rem"><div class="question-number">${state.currentQuestionIndex + 1}</div><h2 class="question-text">${escapeHtml(q.question)}</h2>${q.type === 'ios' ? '<span class="question-type-ios">Cisco IOS</span>' : ''}</div>${q.type === 'ios' ? renderIOSTerminal(q, state.currentQuestionIndex) : ''}${q.code && q.type !== 'ios' ? renderExecutableCodeBlock(q, state.currentQuestionIndex) : ''}${q.image ? `<img src="${escapeHtml(q.image)}" alt="Question image" style="max-width:100%;max-height:300px;border-radius:var(--radius-md);margin-bottom:1.5rem">` : ''}${q.correct.length > 1 && q.type === 'choice' ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}${q.type !== 'ios' ? `<div class="flex flex-col gap-sm">${optHTML}</div>` : ''}${q.type === 'ios' ? `<button onclick="submitIOSAnswer(${state.currentQuestionIndex})" class="btn btn-accent" style="margin-top:1rem;width:100%">Submit Answer</button>` : ''}${state.studyMode && !state.showAnswer && (q.correct.length > 1 || q.type === 'ordering') ? `<button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>` : ''}${state.studyMode && state.showAnswer && q.explanation ? `<div class="explanation-box" style="margin-top:1.5rem"><p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p><p>${escapeHtml(q.explanation)}</p></div>` : ''}</div></div></div>
             <footer class="quiz-footer"><div class="container"><div class="flex justify-between items-center gap-md"><button onclick="prevQuestion()" class="btn btn-ghost" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>← Prev</button><div class="flex gap-xs">${Array.from({length: Math.min(state.currentQuiz.questions.length, 10)}, (_, i) => { const idx = state.currentQuiz.questions.length <= 10 ? i : Math.max(0, Math.min(state.currentQuestionIndex - 4, state.currentQuiz.questions.length - 10)) + i; const cur = idx === state.currentQuestionIndex, ans = state.answers[idx] != null, fl = state.flaggedQuestions.has(idx); return `<button onclick="state.currentQuestionIndex=${idx};state.showAnswer=false;render()" class="btn btn-icon btn-sm" style="width:32px;height:32px;font-size:0.75rem;background:${cur ? 'var(--accent)' : ans ? 'var(--cream)' : 'transparent'};color:${cur ? 'white' : 'var(--ink)'};border:${fl ? '2px solid var(--accent)' : '1px solid var(--cream)'}">${idx + 1}</button>`; }).join('')}</div>${state.currentQuestionIndex === state.currentQuiz.questions.length - 1 ? `<button onclick="submitQuiz()" class="btn btn-accent">Submit</button>` : `<button onclick="nextQuestion()" class="btn btn-primary">Next →</button>`}</div></div></footer></div>`;
         }
         function saveAndExitQuiz() {

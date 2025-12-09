@@ -1936,3 +1936,213 @@
 .dark .export-option {
     border-color: var(--cream);
 }
+
+/* ============================================
+   PHASE 4: CISCO IOS TERMINAL STYLES
+   ============================================ */
+
+.ios-terminal-container {
+    margin: 1.5rem 0;
+}
+
+.ios-terminal {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid #1a1a2e;
+}
+
+.ios-terminal-header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.ios-terminal-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.ios-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.ios-dot.red { background: #ff5f56; }
+.ios-dot.yellow { background: #ffbd2e; }
+.ios-dot.green { background: #27ca40; }
+
+.ios-terminal-title {
+    color: #a0aec0;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.ios-mode-badge {
+    margin-left: auto;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ios-terminal-body {
+    background: #0d1117;
+    padding: 1rem;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+.ios-output {
+    color: #e6edf3;
+    margin: 0;
+    padding: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ios-command-line {
+    color: #e6edf3;
+    display: flex;
+    gap: 0;
+    margin-bottom: 0.25rem;
+}
+
+.ios-prompt {
+    color: #58a6ff;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-right: 0.5rem;
+}
+
+.ios-prompt-line {
+    display: flex;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.ios-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #7ee787;
+    font-family: inherit;
+    font-size: inherit;
+    caret-color: #7ee787;
+}
+
+.ios-input::placeholder {
+    color: #484f58;
+}
+
+.ios-help-text {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--paper-warm);
+    border: 1px solid var(--cream);
+    border-top: none;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+}
+
+.ios-help-text code {
+    background: var(--cream);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+}
+
+.ios-help-text kbd {
+    background: var(--cream);
+    border: 1px solid var(--ink-muted);
+    border-radius: var(--radius-sm);
+    padding: 0.125rem 0.5rem;
+    font-family: inherit;
+    font-size: 0.7rem;
+    box-shadow: 0 2px 0 var(--ink-muted);
+}
+
+.ios-result-container {
+    margin-top: 1rem;
+}
+
+.ios-result {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: var(--radius-md);
+}
+
+.ios-result.success {
+    background: var(--success-light);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.ios-result.partial {
+    background: var(--accent-glow);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+.ios-result.error {
+    background: var(--error-light);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.ios-result-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.ios-result code {
+    background: rgba(0,0,0,0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+}
+
+/* Dark mode adjustments */
+.dark .ios-terminal {
+    border-color: #30363d;
+}
+
+.dark .ios-help-text {
+    background: var(--paper-warm);
+    border-color: var(--cream);
+}
+
+/* IOS Question type badge */
+.question-type-ios {
+    background: linear-gradient(135deg, #0078d4 0%, #00bcf2 100%);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.question-type-ios::before {
+    content: '🖥️';
+}
