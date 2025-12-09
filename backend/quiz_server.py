@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Quiz Master Pro - Backend Server
+Quiz Master Pro - Backend Server (Phase 1: Code Execution)
 SQLite database with user authentication and quiz storage
+Now with support for executable code questions!
 """
 from flask import send_from_directory
 from flask import Flask, request, jsonify
@@ -14,14 +15,19 @@ import os
 from datetime import datetime, timedelta
 from functools import wraps
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 CORS(app, origins=['*'])
 
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
 
-DATABASE = '/home/davidhamilton/quiz-master-pro/backend/quiz_master.db'
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
+
+# Use environment variable or default to local path
+DATABASE = os.environ.get('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'quiz_master.db'))
 
 # ============== Database Setup ==============
 

@@ -21,6 +21,1257 @@ const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
         function getRandomColor() { return ['#d97706','#059669','#0284c7','#7c3aed','#db2777','#dc2626'][Math.floor(Math.random() * 6)]; }
         function shuffleArray(arr) { const s = [...arr]; for (let i = s.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [s[i], s[j]] = [s[j], s[i]]; } return s; }
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+/* ============================================
+   PHASE 2: ADVANCED CODE EXECUTION
+   - Monaco Editor (VS Code in browser)
+   - Editable "Fix the Bug" questions
+   - Multi-language: Python, JavaScript, HTML/CSS
+   - Test-driven questions with auto-grading
+   ============================================ */
+
+// Runtime state
+let pyodideReady = false;
+let pyodide = null;
+let monacoLoaded = false;
+const codeOutputs = {};
+const editedCode = {}; // Store user's edited code per question
+
+// ========== PYODIDE (PYTHON) ==========
+async function initPyodide() {
+    if (pyodide) return pyodide;
+    
+    console.log('🐍 Initializing Pyodide...');
+    
+    try {
+        pyodide = await loadPyodide({
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
+        });
+        pyodideReady = true;
+        console.log('✅ Pyodide ready!');
+        return pyodide;
+    } catch (err) {
+        console.error('❌ Pyodide init failed:', err);
+        throw err;
+    }
+}
+
+// ========== MONACO EDITOR ==========
+async function loadMonaco() {
+    if (monacoLoaded) return;
+    
+    return new Promise((resolve, reject) => {
+        if (window.monaco) {
+            monacoLoaded = true;
+            resolve();
+            return;
+        }
+        
+        // Load Monaco loader
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
+        script.onload = () => {
+            require.config({ 
+                paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }
+            });
+            require(['vs/editor/editor.main'], () => {
+                monacoLoaded = true;
+                console.log('✅ Monaco Editor loaded!');
+                resolve();
+            });
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+const monacoEditors = {};
+
+async function initMonacoEditor(questionIndex, containerId, code, language = 'python') {
+    await loadMonaco();
+    
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+    
+    // Destroy existing editor if any
+    if (monacoEditors[questionIndex]) {
+        monacoEditors[questionIndex].dispose();
+    }
+    
+    const languageMap = {
+        'python': 'python',
+        'javascript': 'javascript',
+        'js': 'javascript',
+        'html': 'html',
+        'css': 'css',
+        'sql': 'sql',
+        'json': 'json'
+    };
+    
+    const editor = monaco.editor.create(container, {
+        value: code,
+        language: languageMap[language] || 'python',
+        theme: state.darkMode ? 'vs-dark' : 'vs',
+        minimap: { enabled: false },
+        fontSize: 14,
+        lineNumbers: 'on',
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        padding: { top: 12, bottom: 12 },
+        wordWrap: 'on',
+        tabSize: 4,
+        insertSpaces: true,
+        folding: false,
+        lineNumbersMinChars: 3,
+        renderLineHighlight: 'line',
+        scrollbar: {
+            vertical: 'auto',
+            horizontal: 'auto',
+            verticalScrollbarSize: 10,
+            horizontalScrollbarSize: 10
+        }
+    });
+    
+    // Save edited code on change
+    editor.onDidChangeModelContent(() => {
+        editedCode[questionIndex] = editor.getValue();
+    });
+    
+    monacoEditors[questionIndex] = editor;
+    return editor;
+}
+
+function getEditedCode(questionIndex) {
+    if (monacoEditors[questionIndex]) {
+        return monacoEditors[questionIndex].getValue();
+    }
+    return editedCode[questionIndex] || state.currentQuiz.questions[questionIndex].code;
+}
+
+function resetCode(questionIndex) {
+    const question = state.currentQuiz.questions[questionIndex];
+    const originalCode = question.starterCode || question.code;
+    
+    if (monacoEditors[questionIndex]) {
+        monacoEditors[questionIndex].setValue(originalCode);
+    }
+    editedCode[questionIndex] = originalCode;
+    
+    // Clear output
+    const outputDiv = document.getElementById(`code-output-${questionIndex}`);
+    if (outputDiv) outputDiv.innerHTML = '';
+    
+    showToast('Code reset to original', 'info');
+}
+
+// ========== MULTI-LANGUAGE EXECUTION ==========
+async function runCode(questionIndex) {
+    const question = state.currentQuiz.questions[questionIndex];
+    const language = (question.language || 'python').toLowerCase();
+    const code = question.editable ? getEditedCode(questionIndex) : question.code;
+    
+    const outputDiv = document.getElementById(`code-output-${questionIndex}`);
+    const runBtn = document.getElementById(`run-btn-${questionIndex}`);
+    
+    if (!outputDiv) return;
+    
+    // Disable button
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<span class="spinner-small"></span> Running...';
+    }
+    
+    try {
+        let result;
+        
+        switch (language) {
+            case 'python':
+                result = await executePython(code, questionIndex);
+                break;
+            case 'javascript':
+            case 'js':
+                result = executeJavaScript(code);
+                break;
+            case 'html':
+            case 'html/css':
+                result = { type: 'html', content: code };
+                break;
+            default:
+                result = { type: 'error', output: `Unsupported language: ${language}` };
+        }
+        
+        renderCodeOutput(outputDiv, result, question);
+        
+        // If test cases exist, run them
+        if (question.testCases && question.testCases.length > 0) {
+            await runTestCases(questionIndex, code, language);
+        }
+        
+    } catch (err) {
+        outputDiv.innerHTML = `
+            <div class="code-output-error">
+                <div class="code-output-header">
+                    <span class="code-output-icon">✗</span>
+                    <span>Error</span>
+                </div>
+                <pre class="code-output-pre">${escapeHtml(err.message)}</pre>
+            </div>
+        `;
+    } finally {
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '▶️ Run Code';
+        }
+    }
+}
+
+async function executePython(code, questionIndex) {
+    if (!pyodide) {
+        await initPyodide();
+    }
+    
+    codeOutputs[questionIndex] = '';
+    
+    pyodide.setStdout({ 
+        batched: (text) => {
+            codeOutputs[questionIndex] = (codeOutputs[questionIndex] || '') + text;
+        }
+    });
+    
+    pyodide.setStderr({
+        batched: (text) => {
+            codeOutputs[questionIndex] = (codeOutputs[questionIndex] || '') + text;
+        }
+    });
+    
+    const startTime = performance.now();
+    await pyodide.runPythonAsync(code);
+    const execTime = Math.round(performance.now() - startTime);
+    
+    return {
+        type: 'success',
+        output: codeOutputs[questionIndex] || '(no output)',
+        execTime
+    };
+}
+
+function executeJavaScript(code) {
+    const startTime = performance.now();
+    let output = '';
+    
+    // Create sandbox with custom console
+    const originalLog = console.log;
+    const logs = [];
+    
+    try {
+        console.log = (...args) => {
+            logs.push(args.map(a => 
+                typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)
+            ).join(' '));
+        };
+        
+        // Execute in sandbox
+        const result = new Function(code)();
+        
+        if (result !== undefined) {
+            logs.push(`→ ${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}`);
+        }
+        
+        output = logs.join('\n') || '(no output)';
+        const execTime = Math.round(performance.now() - startTime);
+        
+        return { type: 'success', output, execTime };
+        
+    } catch (err) {
+        return { type: 'error', output: err.message };
+    } finally {
+        console.log = originalLog;
+    }
+}
+
+function renderCodeOutput(container, result, question) {
+    if (result.type === 'html') {
+        // HTML preview
+        container.innerHTML = `
+            <div class="code-output-html">
+                <div class="code-output-header">
+                    <span class="code-output-icon">🌐</span>
+                    <span>Preview</span>
+                </div>
+                <div class="html-preview-frame">
+                    <iframe 
+                        srcdoc="${escapeHtml(result.content)}"
+                        sandbox="allow-scripts"
+                        style="width:100%;height:200px;border:none;background:white;border-radius:0 0 var(--radius-md) var(--radius-md);"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+    } else if (result.type === 'success') {
+        container.innerHTML = `
+            <div class="code-output-success">
+                <div class="code-output-header">
+                    <span class="code-output-icon">✓</span>
+                    <span>Output</span>
+                    ${result.execTime ? `<span class="code-output-time">${result.execTime}ms</span>` : ''}
+                </div>
+                <pre class="code-output-pre">${escapeHtml(result.output)}</pre>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="code-output-error">
+                <div class="code-output-header">
+                    <span class="code-output-icon">✗</span>
+                    <span>Error</span>
+                </div>
+                <pre class="code-output-pre">${escapeHtml(result.output)}</pre>
+            </div>
+        `;
+    }
+}
+
+// ========== TEST-DRIVEN QUESTIONS ==========
+async function runTestCases(questionIndex, code, language) {
+    const question = state.currentQuiz.questions[questionIndex];
+    const testCases = question.testCases;
+    
+    if (!testCases || testCases.length === 0) return;
+    
+    const testOutputDiv = document.getElementById(`test-output-${questionIndex}`);
+    if (!testOutputDiv) return;
+    
+    testOutputDiv.innerHTML = `
+        <div class="code-running">
+            <span class="spinner-small"></span>
+            <span>Running ${testCases.length} test cases...</span>
+        </div>
+    `;
+    
+    const results = [];
+    
+    for (const testCase of testCases) {
+        try {
+            let passed = false;
+            let actual = '';
+            
+            if (language === 'python') {
+                // Run Python test
+                const testCode = `${code}\n\n# Test\n${testCase.test}`;
+                codeOutputs[questionIndex] = '';
+                await pyodide.runPythonAsync(testCode);
+                actual = codeOutputs[questionIndex].trim();
+                passed = actual === testCase.expected.trim();
+            } else if (language === 'javascript' || language === 'js') {
+                // Run JS test
+                const logs = [];
+                const originalLog = console.log;
+                console.log = (...args) => logs.push(args.join(' '));
+                
+                try {
+                    new Function(code + '\n' + testCase.test)();
+                    actual = logs.join('\n').trim();
+                    passed = actual === testCase.expected.trim();
+                } finally {
+                    console.log = originalLog;
+                }
+            }
+            
+            results.push({
+                input: testCase.input || testCase.test,
+                expected: testCase.expected,
+                actual,
+                passed
+            });
+            
+        } catch (err) {
+            results.push({
+                input: testCase.input || testCase.test,
+                expected: testCase.expected,
+                actual: err.message,
+                passed: false,
+                error: true
+            });
+        }
+    }
+    
+    const passedCount = results.filter(r => r.passed).length;
+    const allPassed = passedCount === results.length;
+    
+    testOutputDiv.innerHTML = `
+        <div class="test-results ${allPassed ? 'all-passed' : 'some-failed'}">
+            <div class="test-results-header">
+                <span class="test-results-icon">${allPassed ? '🎉' : '⚠️'}</span>
+                <span class="test-results-summary">
+                    ${passedCount}/${results.length} tests passed
+                </span>
+            </div>
+            <div class="test-results-list">
+                ${results.map((r, i) => `
+                    <div class="test-case ${r.passed ? 'passed' : 'failed'}">
+                        <div class="test-case-header">
+                            <span class="test-case-icon">${r.passed ? '✓' : '✗'}</span>
+                            <span>Test ${i + 1}</span>
+                        </div>
+                        <div class="test-case-details">
+                            <div class="test-case-row">
+                                <span class="test-case-label">Input:</span>
+                                <code>${escapeHtml(r.input)}</code>
+                            </div>
+                            <div class="test-case-row">
+                                <span class="test-case-label">Expected:</span>
+                                <code>${escapeHtml(r.expected)}</code>
+                            </div>
+                            <div class="test-case-row ${r.passed ? '' : 'error'}">
+                                <span class="test-case-label">${r.error ? 'Error:' : 'Got:'}</span>
+                                <code>${escapeHtml(r.actual)}</code>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    // Auto-mark correct if all tests pass (for editable questions)
+    if (allPassed && question.editable && question.autoGrade) {
+        // This could auto-select the correct answer or mark as complete
+        showToast('All tests passed! 🎉', 'success');
+    }
+}
+
+// ========== RENDER CODE BLOCK ==========
+function renderExecutableCodeBlock(question, questionIndex) {
+    if (!question.code) return '';
+    
+    const language = question.language || 'python';
+    const isExecutable = question.executable === true;
+    const isEditable = question.editable === true;
+    const hasTests = question.testCases && question.testCases.length > 0;
+    
+    // For editable questions, use Monaco editor
+    if (isEditable && isExecutable) {
+        const editorId = `monaco-editor-${questionIndex}`;
+        
+        // Initialize Monaco after render
+        setTimeout(() => {
+            const code = editedCode[questionIndex] || question.starterCode || question.code;
+            initMonacoEditor(questionIndex, editorId, code, language);
+        }, 100);
+        
+        return `
+            <div class="code-block-container editable">
+                <div class="code-block">
+                    <div class="code-header">
+                        <div class="code-dots">
+                            <div class="code-dot red"></div>
+                            <div class="code-dot yellow"></div>
+                            <div class="code-dot green"></div>
+                        </div>
+                        <span class="code-language">${language}</span>
+                        <span class="badge badge-accent" style="margin-left:0.5rem">Editable</span>
+                        <div style="margin-left:auto;display:flex;gap:0.5rem">
+                            <button 
+                                onclick="resetCode(${questionIndex}); event.stopPropagation();" 
+                                class="btn btn-sm btn-ghost code-reset-btn">
+                                ↺ Reset
+                            </button>
+                            <button 
+                                id="run-btn-${questionIndex}"
+                                onclick="runCode(${questionIndex}); event.stopPropagation();" 
+                                class="btn btn-sm btn-accent code-run-btn">
+                                ▶️ Run Code
+                            </button>
+                        </div>
+                    </div>
+                    <div id="${editorId}" class="monaco-editor-container" style="height:250px"></div>
+                </div>
+                <div id="code-output-${questionIndex}" class="code-output-container"></div>
+                ${hasTests ? `<div id="test-output-${questionIndex}" class="test-output-container"></div>` : ''}
+            </div>
+        `;
+    }
+    
+    // Read-only executable code
+    return `
+        <div class="code-block-container">
+            <div class="code-block">
+                <div class="code-header">
+                    <div class="code-dots">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    <span class="code-language">${language}</span>
+                    ${isExecutable ? `
+                        <button 
+                            id="run-btn-${questionIndex}"
+                            onclick="runCode(${questionIndex}); event.stopPropagation();" 
+                            class="btn btn-sm btn-accent code-run-btn">
+                            ▶️ Run Code
+                        </button>
+                    ` : ''}
+                </div>
+                <pre class="code-body"><code>${escapeHtml(question.code)}</code></pre>
+            </div>
+            ${isExecutable ? `
+                <div id="code-output-${questionIndex}" class="code-output-container"></div>
+                ${hasTests ? `<div id="test-output-${questionIndex}" class="test-output-container"></div>` : ''}
+            ` : ''}
+        </div>
+    `;
+}
+
+// Cleanup editors when leaving quiz
+function cleanupMonacoEditors() {
+    Object.keys(monacoEditors).forEach(key => {
+        if (monacoEditors[key]) {
+            monacoEditors[key].dispose();
+            delete monacoEditors[key];
+        }
+    });
+}
+
+console.log('🚀 Phase 2: Advanced Code Execution loaded!');
+console.log('   ✓ Monaco Editor (editable code)');
+console.log('   ✓ Multi-language: Python, JavaScript, HTML/CSS');
+console.log('   ✓ Test-driven questions');
+
+/* ============================================
+   PHASE 3: SPACED REPETITION & STUDY ANALYTICS
+   - SM-2 Algorithm for optimal review scheduling
+   - Study statistics and streaks
+   - Keyboard shortcuts for power users
+   - Confidence-based learning
+   - Export to Anki
+   ============================================ */
+
+// ========== SM-2 SPACED REPETITION ALGORITHM ==========
+// Based on SuperMemo 2 algorithm - the gold standard for flashcards
+
+const SRS = {
+    // Get or initialize SRS data for a quiz
+    getData(quizId) {
+        const key = `srs-${quizId}`;
+        try {
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : {};
+        } catch {
+            return {};
+        }
+    },
+    
+    saveData(quizId, data) {
+        const key = `srs-${quizId}`;
+        localStorage.setItem(key, JSON.stringify(data));
+    },
+    
+    // Initialize a question's SRS data
+    initQuestion(quizId, questionIndex) {
+        const data = this.getData(quizId);
+        if (!data[questionIndex]) {
+            data[questionIndex] = {
+                easeFactor: 2.5, // Starting ease factor
+                interval: 0,     // Days until next review
+                repetitions: 0,  // Number of successful reviews
+                nextReview: Date.now(), // When to review next
+                lastReview: null,
+                history: []      // Review history for analytics
+            };
+            this.saveData(quizId, data);
+        }
+        return data[questionIndex];
+    },
+    
+    // Process a review with quality rating (0-5)
+    // 0-2: Incorrect (reset), 3: Correct with difficulty, 4: Correct, 5: Easy
+    review(quizId, questionIndex, quality) {
+        const data = this.getData(quizId);
+        const card = data[questionIndex] || this.initQuestion(quizId, questionIndex);
+        
+        // Record history
+        card.history.push({
+            date: Date.now(),
+            quality,
+            interval: card.interval
+        });
+        
+        card.lastReview = Date.now();
+        
+        if (quality < 3) {
+            // Failed - reset
+            card.repetitions = 0;
+            card.interval = 0;
+        } else {
+            // Passed
+            if (card.repetitions === 0) {
+                card.interval = 1;
+            } else if (card.repetitions === 1) {
+                card.interval = 6;
+            } else {
+                card.interval = Math.round(card.interval * card.easeFactor);
+            }
+            card.repetitions++;
+        }
+        
+        // Update ease factor
+        card.easeFactor = Math.max(1.3, 
+            card.easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+        );
+        
+        // Calculate next review date
+        card.nextReview = Date.now() + (card.interval * 24 * 60 * 60 * 1000);
+        
+        data[questionIndex] = card;
+        this.saveData(quizId, data);
+        
+        return card;
+    },
+    
+    // Get questions due for review
+    getDueQuestions(quizId, questions) {
+        const data = this.getData(quizId);
+        const now = Date.now();
+        const due = [];
+        
+        questions.forEach((q, i) => {
+            const card = data[i];
+            if (!card || card.nextReview <= now) {
+                due.push({
+                    index: i,
+                    question: q,
+                    overdue: card ? Math.floor((now - card.nextReview) / (24*60*60*1000)) : 0
+                });
+            }
+        });
+        
+        // Sort by most overdue first
+        due.sort((a, b) => b.overdue - a.overdue);
+        return due;
+    },
+    
+    // Get mastery level (0-5 stars)
+    getMastery(quizId, questionIndex) {
+        const data = this.getData(quizId);
+        const card = data[questionIndex];
+        if (!card) return 0;
+        
+        if (card.interval >= 30) return 5;
+        if (card.interval >= 14) return 4;
+        if (card.interval >= 7) return 3;
+        if (card.interval >= 3) return 2;
+        if (card.repetitions >= 1) return 1;
+        return 0;
+    },
+    
+    // Get overall quiz mastery percentage
+    getQuizMastery(quizId, totalQuestions) {
+        const data = this.getData(quizId);
+        let totalMastery = 0;
+        
+        for (let i = 0; i < totalQuestions; i++) {
+            totalMastery += this.getMastery(quizId, i);
+        }
+        
+        return Math.round((totalMastery / (totalQuestions * 5)) * 100);
+    }
+};
+
+// ========== STUDY STATISTICS ==========
+const StudyStats = {
+    getStats() {
+        try {
+            const data = localStorage.getItem('study-stats');
+            return data ? JSON.parse(data) : this.initStats();
+        } catch {
+            return this.initStats();
+        }
+    },
+    
+    initStats() {
+        return {
+            totalReviews: 0,
+            correctAnswers: 0,
+            totalStudyTime: 0, // in seconds
+            streak: 0,
+            longestStreak: 0,
+            lastStudyDate: null,
+            dailyActivity: {}, // date -> count
+            quizStats: {}      // quizId -> stats
+        };
+    },
+    
+    saveStats(stats) {
+        localStorage.setItem('study-stats', JSON.stringify(stats));
+    },
+    
+    recordAnswer(quizId, correct, timeSpent) {
+        const stats = this.getStats();
+        const today = new Date().toISOString().split('T')[0];
+        
+        stats.totalReviews++;
+        if (correct) stats.correctAnswers++;
+        stats.totalStudyTime += timeSpent;
+        
+        // Update daily activity
+        stats.dailyActivity[today] = (stats.dailyActivity[today] || 0) + 1;
+        
+        // Update streak
+        const lastDate = stats.lastStudyDate;
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        
+        if (lastDate === today) {
+            // Same day, streak continues
+        } else if (lastDate === yesterday) {
+            // Consecutive day
+            stats.streak++;
+            stats.longestStreak = Math.max(stats.longestStreak, stats.streak);
+        } else if (lastDate !== today) {
+            // Streak broken or first day
+            stats.streak = 1;
+        }
+        stats.lastStudyDate = today;
+        
+        // Update quiz-specific stats
+        if (!stats.quizStats[quizId]) {
+            stats.quizStats[quizId] = { reviews: 0, correct: 0, time: 0 };
+        }
+        stats.quizStats[quizId].reviews++;
+        if (correct) stats.quizStats[quizId].correct++;
+        stats.quizStats[quizId].time += timeSpent;
+        
+        this.saveStats(stats);
+        return stats;
+    },
+    
+    getAccuracy() {
+        const stats = this.getStats();
+        if (stats.totalReviews === 0) return 0;
+        return Math.round((stats.correctAnswers / stats.totalReviews) * 100);
+    },
+    
+    getStreak() {
+        const stats = this.getStats();
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        
+        // Check if streak is still active
+        if (stats.lastStudyDate !== today && stats.lastStudyDate !== yesterday) {
+            return 0;
+        }
+        return stats.streak;
+    },
+    
+    getHeatMapData(weeks = 12) {
+        const stats = this.getStats();
+        const data = [];
+        const today = new Date();
+        
+        for (let i = weeks * 7 - 1; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            const count = stats.dailyActivity[dateStr] || 0;
+            
+            let level = 0;
+            if (count >= 50) level = 4;
+            else if (count >= 25) level = 3;
+            else if (count >= 10) level = 2;
+            else if (count >= 1) level = 1;
+            
+            data.push({ date: dateStr, count, level });
+        }
+        
+        return data;
+    }
+};
+
+// ========== KEYBOARD SHORTCUTS ==========
+const KeyboardShortcuts = {
+    enabled: true,
+    
+    init() {
+        document.addEventListener('keydown', (e) => {
+            if (!this.enabled) return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.metaKey || e.ctrlKey) return;
+            
+            this.handleKey(e);
+        });
+    },
+    
+    handleKey(e) {
+        const key = e.key.toLowerCase();
+        
+        // Quiz mode shortcuts
+        if (state.view === 'quiz' && state.currentQuiz) {
+            switch (key) {
+                case '1': case '2': case '3': case '4': case '5':
+                    e.preventDefault();
+                    this.selectOption(parseInt(key) - 1);
+                    break;
+                case 'a': case 'b': case 'c': case 'd': case 'e':
+                    e.preventDefault();
+                    this.selectOption('abcde'.indexOf(key));
+                    break;
+                case ' ': // Space
+                case 'enter':
+                    e.preventDefault();
+                    this.submitOrNext();
+                    break;
+                case 'r':
+                    e.preventDefault();
+                    this.runCode();
+                    break;
+                case 's':
+                    e.preventDefault();
+                    this.skipQuestion();
+                    break;
+                case 'h':
+                    e.preventDefault();
+                    this.showHint();
+                    break;
+                case '?':
+                    e.preventDefault();
+                    this.showShortcutsModal();
+                    break;
+            }
+        }
+        
+        // Global shortcuts
+        switch (key) {
+            case 'escape':
+                this.closeModals();
+                break;
+        }
+    },
+    
+    selectOption(index) {
+        const question = state.currentQuiz?.questions[state.currentQuestion];
+        if (!question || state.submitted) return;
+        
+        const options = document.querySelectorAll('.option-btn, .option-label');
+        if (options[index]) {
+            options[index].click();
+        }
+    },
+    
+    submitOrNext() {
+        if (state.submitted) {
+            // Go to next question
+            const nextBtn = document.querySelector('[onclick*="nextQuestion"]');
+            if (nextBtn) nextBtn.click();
+        } else if (state.selectedOptions?.length > 0) {
+            // Submit answer
+            const submitBtn = document.querySelector('[onclick*="submitAnswer"]');
+            if (submitBtn) submitBtn.click();
+        }
+    },
+    
+    runCode() {
+        const runBtn = document.querySelector('.code-run-btn');
+        if (runBtn) runBtn.click();
+    },
+    
+    skipQuestion() {
+        if (typeof nextQuestion === 'function') {
+            nextQuestion();
+        }
+    },
+    
+    showHint() {
+        const hintBtn = document.querySelector('[onclick*="showHint"]');
+        if (hintBtn) hintBtn.click();
+    },
+    
+    closeModals() {
+        const modal = document.querySelector('.modal-overlay');
+        if (modal) modal.remove();
+    },
+    
+    showShortcutsModal() {
+        const m = document.createElement('div');
+        m.innerHTML = `
+            <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
+                <div class="modal keyboard-shortcuts-modal">
+                    <div class="modal-header">
+                        <h2>⌨️ Keyboard Shortcuts</h2>
+                        <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="shortcut-row">
+                            <span>Select option</span>
+                            <div class="shortcut-keys">
+                                <span class="keyboard-hint">1</span>
+                                <span class="keyboard-hint">2</span>
+                                <span class="keyboard-hint">3</span>
+                                <span>or</span>
+                                <span class="keyboard-hint">A</span>
+                                <span class="keyboard-hint">B</span>
+                                <span class="keyboard-hint">C</span>
+                            </div>
+                        </div>
+                        <div class="shortcut-row">
+                            <span>Submit / Next</span>
+                            <div class="shortcut-keys">
+                                <span class="keyboard-hint">Space</span>
+                                <span>or</span>
+                                <span class="keyboard-hint">Enter</span>
+                            </div>
+                        </div>
+                        <div class="shortcut-row">
+                            <span>Run code</span>
+                            <span class="keyboard-hint">R</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <span>Skip question</span>
+                            <span class="keyboard-hint">S</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <span>Show hint</span>
+                            <span class="keyboard-hint">H</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <span>Close modal</span>
+                            <span class="keyboard-hint">Esc</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <span>Show shortcuts</span>
+                            <span class="keyboard-hint">?</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(m.firstElementChild);
+    }
+};
+
+// Initialize keyboard shortcuts
+KeyboardShortcuts.init();
+
+// ========== EXPORT FUNCTIONALITY ==========
+const ExportManager = {
+    toAnki(quiz) {
+        // Anki import format: front\tback
+        let output = '';
+        
+        quiz.questions.forEach(q => {
+            const front = q.question + (q.code ? '\n```\n' + q.code + '\n```' : '');
+            let back = '';
+            
+            if (q.type === 'choice' && q.options) {
+                back = q.options.filter((_, i) => q.correct.includes(i)).join(', ');
+            } else if (q.type === 'text') {
+                back = Array.isArray(q.correct) ? q.correct[0] : q.correct;
+            }
+            
+            if (q.explanation) {
+                back += '\n\n' + q.explanation;
+            }
+            
+            output += front.replace(/\t/g, '  ').replace(/\n/g, '<br>') + '\t' + 
+                     back.replace(/\t/g, '  ').replace(/\n/g, '<br>') + '\n';
+        });
+        
+        return output;
+    },
+    
+    toCSV(quiz) {
+        let csv = 'Question,Type,Options,Correct Answer,Explanation\n';
+        
+        quiz.questions.forEach(q => {
+            const question = '"' + q.question.replace(/"/g, '""') + '"';
+            const type = q.type;
+            const options = q.options ? '"' + q.options.join('; ').replace(/"/g, '""') + '"' : '';
+            const correct = q.options ? 
+                '"' + q.options.filter((_, i) => q.correct.includes(i)).join('; ').replace(/"/g, '""') + '"' :
+                '"' + (Array.isArray(q.correct) ? q.correct[0] : q.correct) + '"';
+            const explanation = q.explanation ? '"' + q.explanation.replace(/"/g, '""') + '"' : '';
+            
+            csv += `${question},${type},${options},${correct},${explanation}\n`;
+        });
+        
+        return csv;
+    },
+    
+    toMarkdown(quiz) {
+        let md = `# ${quiz.title}\n\n`;
+        if (quiz.description) md += `*${quiz.description}*\n\n`;
+        md += '---\n\n';
+        
+        quiz.questions.forEach((q, i) => {
+            md += `## Question ${i + 1}\n\n`;
+            md += q.question + '\n\n';
+            
+            if (q.code) {
+                md += '```' + (q.language || 'python') + '\n' + q.code + '\n```\n\n';
+            }
+            
+            if (q.options) {
+                q.options.forEach((opt, j) => {
+                    const isCorrect = q.correct.includes(j);
+                    md += `${isCorrect ? '✓' : '○'} ${String.fromCharCode(65 + j)}. ${opt}\n`;
+                });
+            }
+            
+            if (q.explanation) {
+                md += `\n> **Explanation:** ${q.explanation}\n`;
+            }
+            
+            md += '\n---\n\n';
+        });
+        
+        return md;
+    },
+    
+    download(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+    
+    showExportModal(quiz) {
+        const m = document.createElement('div');
+        m.innerHTML = `
+            <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2>📤 Export Quiz</h2>
+                        <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted" style="margin-bottom:1rem">Choose export format for "${escapeHtml(quiz.title)}"</p>
+                        <div class="export-options">
+                            <div class="export-option" onclick="ExportManager.exportAs('anki', ${quiz.id})">
+                                <div class="icon">📚</div>
+                                <div class="label">Anki</div>
+                                <div class="desc">Import to Anki app</div>
+                            </div>
+                            <div class="export-option" onclick="ExportManager.exportAs('csv', ${quiz.id})">
+                                <div class="icon">📊</div>
+                                <div class="label">CSV</div>
+                                <div class="desc">Excel/Sheets</div>
+                            </div>
+                            <div class="export-option" onclick="ExportManager.exportAs('markdown', ${quiz.id})">
+                                <div class="icon">📝</div>
+                                <div class="label">Markdown</div>
+                                <div class="desc">Notion/Obsidian</div>
+                            </div>
+                            <div class="export-option" onclick="ExportManager.exportAs('json', ${quiz.id})">
+                                <div class="icon">🔧</div>
+                                <div class="label">JSON</div>
+                                <div class="desc">Re-import later</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(m.firstElementChild);
+    },
+    
+    async exportAs(format, quizId) {
+        const quiz = state.quizzes.find(q => q.id === quizId);
+        if (!quiz) return;
+        
+        const safeName = quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        
+        switch (format) {
+            case 'anki':
+                this.download(this.toAnki(quiz), `${safeName}_anki.txt`, 'text/plain');
+                break;
+            case 'csv':
+                this.download(this.toCSV(quiz), `${safeName}.csv`, 'text/csv');
+                break;
+            case 'markdown':
+                this.download(this.toMarkdown(quiz), `${safeName}.md`, 'text/markdown');
+                break;
+            case 'json':
+                this.download(JSON.stringify([quiz], null, 2), `${safeName}.json`, 'application/json');
+                break;
+        }
+        
+        document.querySelector('.modal-overlay')?.remove();
+        showToast(`Exported as ${format.toUpperCase()}`, 'success');
+    }
+};
+
+// ========== RENDER HELPERS FOR PHASE 3 ==========
+
+function renderStatsCard(value, label, trend = null) {
+    return `
+        <div class="stat-card">
+            <div class="stat-value">${value}</div>
+            <div class="stat-label">${label}</div>
+            ${trend ? `<div class="stat-trend ${trend > 0 ? 'up' : 'down'}">${trend > 0 ? '↑' : '↓'} ${Math.abs(trend)}%</div>` : ''}
+        </div>
+    `;
+}
+
+function renderStreakDisplay() {
+    const streak = StudyStats.getStreak();
+    if (streak === 0) return '';
+    
+    return `
+        <div class="streak-display">
+            <span class="streak-flame">🔥</span>
+            <span class="streak-count">${streak}</span>
+            <span class="streak-label">day${streak !== 1 ? 's' : ''}</span>
+        </div>
+    `;
+}
+
+function renderMasteryStars(quizId, questionIndex) {
+    const mastery = SRS.getMastery(quizId, questionIndex);
+    let stars = '';
+    for (let i = 0; i < 5; i++) {
+        stars += `<span class="mastery-star ${i < mastery ? 'filled' : ''}">★</span>`;
+    }
+    return `<div class="mastery-stars" title="${mastery}/5 mastery">${stars}</div>`;
+}
+
+function renderProgressRing(percentage, label = 'Mastery') {
+    const circumference = 2 * Math.PI * 52;
+    const offset = circumference - (percentage / 100) * circumference;
+    
+    return `
+        <div class="progress-ring">
+            <svg width="120" height="120">
+                <circle class="progress-ring-bg" cx="60" cy="60" r="52"></circle>
+                <circle class="progress-ring-fill" cx="60" cy="60" r="52"
+                    stroke-dasharray="${circumference}"
+                    stroke-dashoffset="${offset}"></circle>
+            </svg>
+            <div class="progress-ring-text">
+                <div class="progress-ring-value">${percentage}%</div>
+                <div class="progress-ring-label">${label}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderHeatMap() {
+    const data = StudyStats.getHeatMapData(12);
+    const days = data.map(d => 
+        `<div class="heat-map-day level-${d.level}" title="${d.date}: ${d.count} reviews"></div>`
+    ).join('');
+    
+    return `<div class="heat-map">${days}</div>`;
+}
+
+function renderDueBanner() {
+    if (!state.quizzes || state.quizzes.length === 0) return '';
+    
+    let totalDue = 0;
+    state.quizzes.forEach(quiz => {
+        const due = SRS.getDueQuestions(quiz.id, quiz.questions || []);
+        totalDue += due.length;
+    });
+    
+    if (totalDue === 0) return '';
+    
+    return `
+        <div class="srs-banner">
+            <div class="srs-banner-content">
+                <span class="srs-banner-icon">📖</span>
+                <div class="srs-banner-text">
+                    <h3>${totalDue} card${totalDue !== 1 ? 's' : ''} due for review</h3>
+                    <p>Keep your streak alive! Study now for optimal retention.</p>
+                </div>
+            </div>
+            <button class="btn btn-accent" onclick="startSRSReview()">Start Review</button>
+        </div>
+    `;
+}
+
+// Start SRS review mode
+function startSRSReview() {
+    // Find quiz with most due cards
+    let maxDue = 0;
+    let targetQuiz = null;
+    
+    state.quizzes.forEach(quiz => {
+        const due = SRS.getDueQuestions(quiz.id, quiz.questions || []);
+        if (due.length > maxDue) {
+            maxDue = due.length;
+            targetQuiz = quiz;
+        }
+    });
+    
+    if (targetQuiz) {
+        state.currentQuiz = targetQuiz;
+        state.srsMode = true;
+        state.view = 'quiz';
+        state.currentQuestion = 0;
+        state.score = 0;
+        state.submitted = false;
+        state.selectedOptions = [];
+        state.questionStartTime = Date.now();
+        render();
+    }
+}
+
+// Record SRS result after answering
+function recordSRSResult(quizId, questionIndex, correct) {
+    // Convert correct/incorrect to SM-2 quality
+    // For simplicity: correct = 4, incorrect = 1
+    const quality = correct ? 4 : 1;
+    SRS.review(quizId, questionIndex, quality);
+    
+    // Record stats
+    const timeSpent = Math.round((Date.now() - (state.questionStartTime || Date.now())) / 1000);
+    StudyStats.recordAnswer(quizId, correct, timeSpent);
+}
+
+// Confidence button handler
+function selectConfidence(quality) {
+    if (!state.currentQuiz || state.currentQuestion === undefined) return;
+    
+    SRS.review(state.currentQuiz.id, state.currentQuestion, quality);
+    
+    const timeSpent = Math.round((Date.now() - (state.questionStartTime || Date.now())) / 1000);
+    StudyStats.recordAnswer(state.currentQuiz.id, quality >= 3, timeSpent);
+    
+    // Move to next question
+    nextQuestion();
+}
+
+function renderConfidenceButtons() {
+    return `
+        <div class="confidence-buttons">
+            <button class="confidence-btn" onclick="selectConfidence(1)">
+                <span class="emoji">😵</span>
+                <span class="label">Again</span>
+            </button>
+            <button class="confidence-btn" onclick="selectConfidence(3)">
+                <span class="emoji">😐</span>
+                <span class="label">Hard</span>
+            </button>
+            <button class="confidence-btn" onclick="selectConfidence(4)">
+                <span class="emoji">🙂</span>
+                <span class="label">Good</span>
+            </button>
+            <button class="confidence-btn" onclick="selectConfidence(5)">
+                <span class="emoji">😎</span>
+                <span class="label">Easy</span>
+            </button>
+        </div>
+    `;
+}
+
+console.log('🚀 Phase 3: Spaced Repetition & Analytics loaded!');
+console.log('   ✓ SM-2 Algorithm');
+console.log('   ✓ Study Statistics');
+console.log('   ✓ Keyboard Shortcuts (press ? for help)');
+console.log('   ✓ Export to Anki/CSV/Markdown');
+
         /* ============================================
    QUICK WIN FEATURES - ADD TO BEGINNING OF app.js
    (After the API_URL and state declarations)
@@ -1309,7 +2560,71 @@ function updateEditorContent() {
                             oninput="updateQuestionField('code', this.value)"
                         >${escapeHtml(q.code)}</textarea>
                     </div>
-                    <button onclick="updateQuestionField('code', null);updateEditorContent()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
+                    <!-- Phase 2: Code Execution Options -->
+                    <div class="code-options-panel" style="margin-top:0.75rem;padding:1rem;background:var(--accent-glow);border-radius:var(--radius-md);border:1px solid var(--accent)">
+                        <!-- Enable Execution -->
+                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-bottom:1rem">
+                            <input 
+                                type="checkbox" 
+                                ${q.executable ? 'checked' : ''}
+                                onchange="updateQuestionField('executable', this.checked);if(this.checked && !state.parsedQuestions[state.currentEditQuestion].language){updateQuestionField('language','python')};updateEditorContent()"
+                                style="width:18px;height:18px;accent-color:var(--accent)"
+                            >
+                            <div>
+                                <span style="font-weight:600;color:var(--accent)">▶️ Enable Code Execution</span>
+                                <p class="text-xs text-muted" style="margin-top:2px">Students can run this code in their browser</p>
+                            </div>
+                        </label>
+                        
+                        ${q.executable ? `
+                        <!-- Language Selector -->
+                        <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+                            <div style="flex:1;min-width:150px">
+                                <label class="text-xs text-muted" style="display:block;margin-bottom:0.25rem">Language</label>
+                                <select 
+                                    class="input" 
+                                    style="padding:0.5rem"
+                                    onchange="updateQuestionField('language', this.value);updateEditorContent()"
+                                >
+                                    <option value="python" ${(q.language || 'python') === 'python' ? 'selected' : ''}>🐍 Python</option>
+                                    <option value="javascript" ${q.language === 'javascript' ? 'selected' : ''}>⚡ JavaScript</option>
+                                    <option value="html" ${q.language === 'html' ? 'selected' : ''}>🌐 HTML/CSS</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Editable Toggle -->
+                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-bottom:0.5rem">
+                            <input 
+                                type="checkbox" 
+                                ${q.editable ? 'checked' : ''}
+                                onchange="updateQuestionField('editable', this.checked);updateEditorContent()"
+                                style="width:18px;height:18px;accent-color:var(--success)"
+                            >
+                            <div>
+                                <span style="font-weight:600;color:var(--success)">✏️ Editable Code (Fix the Bug)</span>
+                                <p class="text-xs text-muted" style="margin-top:2px">Students can modify the code to fix errors</p>
+                            </div>
+                        </label>
+                        
+                        ${q.editable ? `
+                        <!-- Starter Code (for editable questions) -->
+                        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--cream)">
+                            <label class="text-xs text-muted" style="display:block;margin-bottom:0.5rem">
+                                Starter Code (what students see initially, leave blank to use main code)
+                            </label>
+                            <textarea 
+                                class="input code-editor-textarea" 
+                                rows="4"
+                                placeholder="# Buggy code for students to fix..."
+                                oninput="updateQuestionField('starterCode', this.value)"
+                                style="font-family:'JetBrains Mono',monospace;font-size:0.875rem"
+                            >${escapeHtml(q.starterCode || '')}</textarea>
+                        </div>
+                        ` : ''}
+                        ` : ''}
+                    </div>
+                    <button onclick="updateQuestionField('code', null);updateQuestionField('executable', false);updateQuestionField('editable', false);updateEditorContent()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
                         <span>✕</span> Remove Code Block
                     </button>
                 ` : `
@@ -1794,7 +3109,71 @@ function renderVisualEditor() {
                                             oninput="updateQuestionField('code', this.value)"
                                         >${escapeHtml(q.code)}</textarea>
                                     </div>
-                                    <button onclick="updateQuestionField('code', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
+                                    <!-- Phase 2: Code Execution Options -->
+                                    <div class="code-options-panel" style="margin-top:0.75rem;padding:1rem;background:var(--accent-glow);border-radius:var(--radius-md);border:1px solid var(--accent)">
+                                        <!-- Enable Execution -->
+                                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-bottom:1rem">
+                                            <input 
+                                                type="checkbox" 
+                                                ${q.executable ? 'checked' : ''}
+                                                onchange="updateQuestionField('executable', this.checked);if(this.checked && !state.parsedQuestions[state.currentEditQuestion].language){updateQuestionField('language','python')};render()"
+                                                style="width:18px;height:18px;accent-color:var(--accent)"
+                                            >
+                                            <div>
+                                                <span style="font-weight:600;color:var(--accent)">▶️ Enable Code Execution</span>
+                                                <p class="text-xs text-muted" style="margin-top:2px">Students can run this code in their browser</p>
+                                            </div>
+                                        </label>
+                                        
+                                        ${q.executable ? `
+                                        <!-- Language Selector -->
+                                        <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+                                            <div style="flex:1;min-width:150px">
+                                                <label class="text-xs text-muted" style="display:block;margin-bottom:0.25rem">Language</label>
+                                                <select 
+                                                    class="input" 
+                                                    style="padding:0.5rem"
+                                                    onchange="updateQuestionField('language', this.value);render()"
+                                                >
+                                                    <option value="python" ${(q.language || 'python') === 'python' ? 'selected' : ''}>🐍 Python</option>
+                                                    <option value="javascript" ${q.language === 'javascript' ? 'selected' : ''}>⚡ JavaScript</option>
+                                                    <option value="html" ${q.language === 'html' ? 'selected' : ''}>🌐 HTML/CSS</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Editable Toggle -->
+                                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-bottom:0.5rem">
+                                            <input 
+                                                type="checkbox" 
+                                                ${q.editable ? 'checked' : ''}
+                                                onchange="updateQuestionField('editable', this.checked);render()"
+                                                style="width:18px;height:18px;accent-color:var(--success)"
+                                            >
+                                            <div>
+                                                <span style="font-weight:600;color:var(--success)">✏️ Editable Code (Fix the Bug)</span>
+                                                <p class="text-xs text-muted" style="margin-top:2px">Students can modify the code to fix errors</p>
+                                            </div>
+                                        </label>
+                                        
+                                        ${q.editable ? `
+                                        <!-- Starter Code -->
+                                        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--cream)">
+                                            <label class="text-xs text-muted" style="display:block;margin-bottom:0.5rem">
+                                                Starter Code (what students see initially, leave blank to use main code)
+                                            </label>
+                                            <textarea 
+                                                class="input code-editor-textarea" 
+                                                rows="4"
+                                                placeholder="# Buggy code for students to fix..."
+                                                oninput="updateQuestionField('starterCode', this.value)"
+                                                style="font-family:'JetBrains Mono',monospace;font-size:0.875rem"
+                                            >${escapeHtml(q.starterCode || '')}</textarea>
+                                        </div>
+                                        ` : ''}
+                                        ` : ''}
+                                    </div>
+                                    <button onclick="updateQuestionField('code', null);updateQuestionField('executable', false);updateQuestionField('editable', false);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
                                         <span>✕</span> Remove Code Block
                                     </button>
                                 ` : `
@@ -2018,6 +3397,7 @@ function renderVisualEditor() {
     <div class="dropdown-menu">
         <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
         <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); ExportManager.showExportModal(state.quizzes.find(x=>x.id===${q.id}))">📤 Export</button>
         ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
         <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
     </div>
@@ -2026,6 +3406,8 @@ function renderVisualEditor() {
                     <div class="quiz-card-stats">
                         <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
                         ${qs ? `<div class="quiz-card-stat"><span>🏆</span><span>${qs.best}%</span></div>` : `<div class="quiz-card-stat"><span>✨</span><span>New</span></div>`}
+                        ${SRS.getDueQuestions(q.id, q.questions || []).length > 0 ? `<span class="due-badge">${SRS.getDueQuestions(q.id, q.questions || []).length} due</span>` : ''}
+                    </div>
                     </div>
                 </div>
             `;
@@ -2390,16 +3772,21 @@ function discardProgress(quizId) {
                 
                 <main style="padding:2rem 0 4rem">
                     <div class="container">
-                        <div style="margin-bottom:2rem">
-                            <h1 style="margin-bottom:0.25rem">Welcome back${state.user?.username ? ', ' + state.user.username : ''}</h1>
-                            <p class="text-muted">Ready to study?</p>
+                        <div style="margin-bottom:2rem;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
+                            <div>
+                                <h1 style="margin-bottom:0.25rem">Welcome back${state.user?.username ? ', ' + state.user.username : ''}</h1>
+                                <p class="text-muted">Ready to study?</p>
+                            </div>
+                            ${renderStreakDisplay()}
                         </div>
+                        
+                        ${renderDueBanner()}
                         
                         <div class="grid grid-4 gap-md" style="margin-bottom:2rem">
                             <div class="stat-card"><div class="stat-value">${stats.totalQuizzes}</div><div class="stat-label">Quizzes</div></div>
                             <div class="stat-card"><div class="stat-value">${stats.totalQuestions}</div><div class="stat-label">Questions</div></div>
-                            <div class="stat-card"><div class="stat-value">${stats.totalAttempts}</div><div class="stat-label">Attempts</div></div>
-                            <div class="stat-card accent"><div class="stat-value">${stats.avgScore}%</div><div class="stat-label">Avg Score</div></div>
+                            <div class="stat-card"><div class="stat-value">${StudyStats.getStats().totalReviews}</div><div class="stat-label">Reviews</div></div>
+                            <div class="stat-card accent"><div class="stat-value">${StudyStats.getAccuracy() || stats.avgScore}%</div><div class="stat-label">Accuracy</div></div>
                         </div>
                         
                         ${state.folders.length > 0 ? `
@@ -2503,6 +3890,7 @@ function discardProgress(quizId) {
     <div class="dropdown-menu">
         <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
         <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); ExportManager.showExportModal(state.quizzes.find(x=>x.id===${q.id}))">📤 Export</button>
         ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
         <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
     </div>
@@ -2511,6 +3899,7 @@ function discardProgress(quizId) {
                                             <div class="quiz-card-stats">
                                                 <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
                                                 ${qs ? `<div class="quiz-card-stat"><span>🏆</span><span>${qs.best}%</span></div>` : `<div class="quiz-card-stat"><span>✨</span><span>New</span></div>`}
+                                                ${SRS.getDueQuestions(q.id, q.questions || []).length > 0 ? `<span class="due-badge">${SRS.getDueQuestions(q.id, q.questions || []).length} due</span>` : ''}
                                             </div>
                                         </div>
                                     `;
@@ -2664,7 +4053,7 @@ C. 120
 </div><div><h2 style="font-size:1rem;margin-bottom:2px">${escapeHtml(state.currentQuiz.title)}</h2><p class="text-xs text-muted">${state.studyMode ? '📖 Study' : '🎯 Quiz'}</p></div></div><div class="flex items-center gap-sm">${state.timerEnabled ? `<div class="badge" style="font-family:monospace;font-size:1rem;padding:0.5rem 1rem">⏱️ <span id="timer">${Math.floor(state.timeRemaining / 60)}:${(state.timeRemaining % 60).toString().padStart(2, '0')}</span></div>` : ''}${state.studyMode && state.streak > 0 ? `<div class="streak-badge">🔥 ${state.streak}</div>` : ''}<button onclick="toggleFlag()" class="btn btn-icon ${flagged ? 'btn-accent' : 'btn-ghost'}">${flagged ? '🚩' : '⚑'}</button></div></div></div></header>
             <div class="quiz-progress-section"><div class="container"><div class="flex justify-between items-center" style="margin-bottom:0.5rem"><span class="text-sm text-muted">Question ${state.currentQuestionIndex + 1} of ${state.currentQuiz.questions.length}</span><span class="text-sm font-semibold" style="color:var(--accent)">${Math.round(prog)}%</span></div><div class="progress-bar"><div class="progress-fill" style="width:${prog}%"></div></div></div></div>
             <div class="quiz-content"><div class="container-narrow">${state.studyMode && state.showAnswer ? `<div class="feedback-banner ${isCorrect ? 'correct' : 'incorrect'}" style="margin-bottom:1.5rem"><span style="font-size:1.25rem">${isCorrect ? '✓' : '✗'}</span><span>${isCorrect ? 'Correct!' : 'Incorrect'}</span>${isCorrect && state.streak > 1 ? `<span class="streak-badge" style="margin-left:auto">🔥 ${state.streak}</span>` : ''}</div>` : ''}
-            <div class="card" style="padding:2rem;margin-bottom:1.5rem"><div class="flex items-start gap-md" style="margin-bottom:2rem"><div class="question-number">${state.currentQuestionIndex + 1}</div><h2 class="question-text">${escapeHtml(q.question)}</h2></div>${q.code ? `<div class="code-block" style="margin-bottom:1.5rem"><div class="code-header"><div class="code-dot" style="background:#ef4444"></div><div class="code-dot" style="background:#f59e0b"></div><div class="code-dot" style="background:#22c55e"></div><span class="text-xs" style="margin-left:0.5rem;opacity:0.7">Code</span></div><div class="code-body">${escapeHtml(q.code)}</div></div>` : ''}${q.image ? `<img src="${escapeHtml(q.image)}" alt="Question image" style="max-width:100%;max-height:300px;border-radius:var(--radius-md);margin-bottom:1.5rem">` : ''}${q.correct.length > 1 && q.type === 'choice' ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}<div class="flex flex-col gap-sm">${optHTML}</div>${state.studyMode && !state.showAnswer && (q.correct.length > 1 || q.type === 'ordering') ? `<button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>` : ''}${state.studyMode && state.showAnswer && q.explanation ? `<div class="explanation-box" style="margin-top:1.5rem"><p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p><p>${escapeHtml(q.explanation)}</p></div>` : ''}</div></div></div>
+            <div class="card" style="padding:2rem;margin-bottom:1.5rem"><div class="flex items-start gap-md" style="margin-bottom:2rem"><div class="question-number">${state.currentQuestionIndex + 1}</div><h2 class="question-text">${escapeHtml(q.question)}</h2></div>${q.code ? renderExecutableCodeBlock(q, state.currentQuestionIndex) : ''}${q.image ? `<img src="${escapeHtml(q.image)}" alt="Question image" style="max-width:100%;max-height:300px;border-radius:var(--radius-md);margin-bottom:1.5rem">` : ''}${q.correct.length > 1 && q.type === 'choice' ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}<div class="flex flex-col gap-sm">${optHTML}</div>${state.studyMode && !state.showAnswer && (q.correct.length > 1 || q.type === 'ordering') ? `<button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>` : ''}${state.studyMode && state.showAnswer && q.explanation ? `<div class="explanation-box" style="margin-top:1.5rem"><p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p><p>${escapeHtml(q.explanation)}</p></div>` : ''}</div></div></div>
             <footer class="quiz-footer"><div class="container"><div class="flex justify-between items-center gap-md"><button onclick="prevQuestion()" class="btn btn-ghost" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>← Prev</button><div class="flex gap-xs">${Array.from({length: Math.min(state.currentQuiz.questions.length, 10)}, (_, i) => { const idx = state.currentQuiz.questions.length <= 10 ? i : Math.max(0, Math.min(state.currentQuestionIndex - 4, state.currentQuiz.questions.length - 10)) + i; const cur = idx === state.currentQuestionIndex, ans = state.answers[idx] != null, fl = state.flaggedQuestions.has(idx); return `<button onclick="state.currentQuestionIndex=${idx};state.showAnswer=false;render()" class="btn btn-icon btn-sm" style="width:32px;height:32px;font-size:0.75rem;background:${cur ? 'var(--accent)' : ans ? 'var(--cream)' : 'transparent'};color:${cur ? 'white' : 'var(--ink)'};border:${fl ? '2px solid var(--accent)' : '1px solid var(--cream)'}">${idx + 1}</button>`; }).join('')}</div>${state.currentQuestionIndex === state.currentQuiz.questions.length - 1 ? `<button onclick="submitQuiz()" class="btn btn-accent">Submit</button>` : `<button onclick="nextQuestion()" class="btn btn-primary">Next →</button>`}</div></div></footer></div>`;
         }
         function saveAndExitQuiz() {
