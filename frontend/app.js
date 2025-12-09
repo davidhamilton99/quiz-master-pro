@@ -1116,16 +1116,21 @@ function renderStatsCard(value, label, trend = null) {
 }
 
 function renderStreakDisplay() {
-    const streak = StudyStats.getStreak();
-    if (streak === 0) return '';
-    
-    return `
-        <div class="streak-display">
-            <span class="streak-flame">🔥</span>
-            <span class="streak-count">${streak}</span>
-            <span class="streak-label">day${streak !== 1 ? 's' : ''}</span>
-        </div>
-    `;
+    try {
+        const streak = StudyStats.getStreak();
+        if (streak === 0) return '';
+        
+        return `
+            <div class="streak-display">
+                <span class="streak-flame">🔥</span>
+                <span class="streak-count">${streak}</span>
+                <span class="streak-label">day${streak !== 1 ? 's' : ''}</span>
+            </div>
+        `;
+    } catch(e) {
+        console.warn('Streak display error:', e);
+        return '';
+    }
 }
 
 function renderMasteryStars(quizId, questionIndex) {
@@ -1166,29 +1171,43 @@ function renderHeatMap() {
     return `<div class="heat-map">${days}</div>`;
 }
 
+// Safe helper to get due count (prevents errors from crashing the UI)
+function getDueCount(quizId, questions) {
+    try {
+        return SRS.getDueQuestions(quizId, questions || []).length;
+    } catch(e) {
+        console.warn('SRS error:', e);
+        return 0;
+    }
+}
+
 function renderDueBanner() {
-    if (!state.quizzes || state.quizzes.length === 0) return '';
-    
-    let totalDue = 0;
-    state.quizzes.forEach(quiz => {
-        const due = SRS.getDueQuestions(quiz.id, quiz.questions || []);
-        totalDue += due.length;
-    });
-    
-    if (totalDue === 0) return '';
-    
-    return `
-        <div class="srs-banner">
-            <div class="srs-banner-content">
-                <span class="srs-banner-icon">📖</span>
-                <div class="srs-banner-text">
-                    <h3>${totalDue} card${totalDue !== 1 ? 's' : ''} due for review</h3>
-                    <p>Keep your streak alive! Study now for optimal retention.</p>
+    try {
+        if (!state.quizzes || state.quizzes.length === 0) return '';
+        
+        let totalDue = 0;
+        state.quizzes.forEach(quiz => {
+            totalDue += getDueCount(quiz.id, quiz.questions);
+        });
+        
+        if (totalDue === 0) return '';
+        
+        return `
+            <div class="srs-banner">
+                <div class="srs-banner-content">
+                    <span class="srs-banner-icon">📖</span>
+                    <div class="srs-banner-text">
+                        <h3>${totalDue} card${totalDue !== 1 ? 's' : ''} due for review</h3>
+                        <p>Keep your streak alive! Study now for optimal retention.</p>
+                    </div>
                 </div>
+                <button class="btn btn-accent" onclick="startSRSReview()">Start Review</button>
             </div>
-            <button class="btn btn-accent" onclick="startSRSReview()">Start Review</button>
-        </div>
-    `;
+        `;
+    } catch(e) {
+        console.warn('Due banner error:', e);
+        return '';
+    }
 }
 
 // Start SRS review mode
@@ -3406,7 +3425,7 @@ function renderVisualEditor() {
                     <div class="quiz-card-stats">
                         <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
                         ${qs ? `<div class="quiz-card-stat"><span>🏆</span><span>${qs.best}%</span></div>` : `<div class="quiz-card-stat"><span>✨</span><span>New</span></div>`}
-                        ${SRS.getDueQuestions(q.id, q.questions || []).length > 0 ? `<span class="due-badge">${SRS.getDueQuestions(q.id, q.questions || []).length} due</span>` : ''}
+                        ${getDueCount(q.id, q.questions) > 0 ? `<span class="due-badge">${getDueCount(q.id, q.questions)} due</span>` : ''}
                     </div>
                     </div>
                 </div>
@@ -3785,8 +3804,8 @@ function discardProgress(quizId) {
                         <div class="grid grid-4 gap-md" style="margin-bottom:2rem">
                             <div class="stat-card"><div class="stat-value">${stats.totalQuizzes}</div><div class="stat-label">Quizzes</div></div>
                             <div class="stat-card"><div class="stat-value">${stats.totalQuestions}</div><div class="stat-label">Questions</div></div>
-                            <div class="stat-card"><div class="stat-value">${StudyStats.getStats().totalReviews}</div><div class="stat-label">Reviews</div></div>
-                            <div class="stat-card accent"><div class="stat-value">${StudyStats.getAccuracy() || stats.avgScore}%</div><div class="stat-label">Accuracy</div></div>
+                            <div class="stat-card"><div class="stat-value">${(() => { try { return StudyStats.getStats().totalReviews || 0; } catch(e) { return 0; } })()}</div><div class="stat-label">Reviews</div></div>
+                            <div class="stat-card accent"><div class="stat-value">${(() => { try { return StudyStats.getAccuracy() || stats.avgScore; } catch(e) { return stats.avgScore; } })()}%</div><div class="stat-label">Accuracy</div></div>
                         </div>
                         
                         ${state.folders.length > 0 ? `
@@ -3899,7 +3918,7 @@ function discardProgress(quizId) {
                                             <div class="quiz-card-stats">
                                                 <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
                                                 ${qs ? `<div class="quiz-card-stat"><span>🏆</span><span>${qs.best}%</span></div>` : `<div class="quiz-card-stat"><span>✨</span><span>New</span></div>`}
-                                                ${SRS.getDueQuestions(q.id, q.questions || []).length > 0 ? `<span class="due-badge">${SRS.getDueQuestions(q.id, q.questions || []).length} due</span>` : ''}
+                                                ${getDueCount(q.id, q.questions) > 0 ? `<span class="due-badge">${getDueCount(q.id, q.questions)} due</span>` : ''}
                                             </div>
                                         </div>
                                     `;
