@@ -4529,6 +4529,7 @@ C. 120
         
         function renderQuiz() {
             const q = state.currentQuiz.questions[state.currentQuestionIndex];
+            console.log('Question type:', q.type, 'Full question:', q); // DEBUG
             const prog = ((state.currentQuestionIndex + 1) / state.currentQuiz.questions.length) * 100;
             const flagged = state.flaggedQuestions.has(state.currentQuestionIndex);
             const ua = state.answers[state.currentQuestionIndex] || [];
