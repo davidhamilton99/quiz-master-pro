@@ -2687,15 +2687,22 @@ function parseQuizData(data) {
         let line = lines[i].trim();
         if (line.match(/^\d+\./)) {
             const isOrder = line.includes('[order]');
-            const qText = line.replace(/^\d+\./, '').replace('[order]', '').trim();
+            const isIOS = line.includes('[ios]');
+            const qText = line.replace(/^\d+\./, '').replace('[order]', '').replace('[ios]', '').trim();
             let q = { 
                 question: qText, 
-                type: isOrder ? 'ordering' : 'choice', 
+                type: isIOS ? 'ios' : (isOrder ? 'ordering' : 'choice'), 
                 options: [], 
                 correct: [], 
                 image: null, 
                 explanation: null, 
-                code: null 
+                code: null,
+                // IOS-specific fields
+                hostname: null,
+                startMode: null,
+                expectedCommand: null,
+                initialOutput: null,
+                validateOptions: {}
             };
             i++;
             
@@ -2718,12 +2725,47 @@ function parseQuizData(data) {
                 }
             }
             
-            // Rest of parsing remains the same...
+            // Parse image
             if (i < lines.length && lines[i].trim().match(/^\[image:\s*(.+?)\]/i)) { 
                 q.image = lines[i].trim().match(/^\[image:\s*(.+?)\]/i)[1]; 
                 i++; 
             }
             
+            // Parse IOS-specific metadata
+            if (q.type === 'ios') {
+                while (i < lines.length && lines[i].trim().match(/^\[ios-(hostname|mode|command|output):\s*(.+?)\]/i)) {
+                    const match = lines[i].trim().match(/^\[ios-(hostname|mode|command|output):\s*(.+?)\]/i);
+                    const field = match[1];
+                    const value = match[2];
+                    
+                    if (field === 'hostname') {
+                        q.hostname = value;
+                    } else if (field === 'mode') {
+                        q.startMode = value;
+                    } else if (field === 'command') {
+                        // Support multiple expected commands
+                        if (!q.expectedCommand) {
+                            q.expectedCommand = [];
+                        }
+                        if (Array.isArray(q.expectedCommand)) {
+                            q.expectedCommand.push(value);
+                        } else {
+                            q.expectedCommand = [q.expectedCommand, value];
+                        }
+                    } else if (field === 'output') {
+                        q.initialOutput = value.replace(/\\n/g, '\n');
+                    }
+                    
+                    i++;
+                }
+                
+                // Flatten single command arrays
+                if (Array.isArray(q.expectedCommand) && q.expectedCommand.length === 1) {
+                    q.expectedCommand = q.expectedCommand[0];
+                }
+            }
+            
+            // Parse options for choice/ordering questions
             if (isOrder) { 
                 while (i < lines.length && lines[i].match(/^\d+\)/)) { 
                     const n = parseInt(lines[i].match(/^(\d+)\)/)[1]); 
@@ -2731,7 +2773,7 @@ function parseQuizData(data) {
                     q.correct.push(n - 1); 
                     i++; 
                 } 
-            } else { 
+            } else if (!isIOS) { 
                 while (i < lines.length && lines[i].match(/^[A-Z]\./)) { 
                     const ot = lines[i].substring(2).trim(), ha = ot.endsWith('*'); 
                     q.options.push(ha ? ot.slice(0, -1).trim() : ot); 
@@ -2740,6 +2782,7 @@ function parseQuizData(data) {
                 } 
             }
             
+            // Parse explanation
             if (i < lines.length && lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)) { 
                 q.explanation = lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)[1]; 
                 i++; 
