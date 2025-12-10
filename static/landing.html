@@ -402,9 +402,27 @@
             margin: 0 auto;
             width: 100%;
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 4rem;
+            /* FIX: Better proportions - text gets more space */
+            grid-template-columns: minmax(400px, 1.1fr) minmax(350px, 0.9fr);
+            gap: clamp(2rem, 5vw, 5rem);
             align-items: center;
+        }
+        
+        /* FIX: Extra large screens - constrain max width better */
+        @media (min-width: 1600px) {
+            .hero-inner {
+                max-width: 1500px;
+                grid-template-columns: 1fr 1fr;
+                gap: 6rem;
+            }
+        }
+        
+        /* FIX: Large desktop - balanced layout */
+        @media (min-width: 1200px) and (max-width: 1599px) {
+            .hero-inner {
+                grid-template-columns: 1.15fr 0.85fr;
+                gap: 4rem;
+            }
         }
         
         .hero-content {
@@ -1426,8 +1444,8 @@
             </div>
             
             <div class="nav-cta">
-                <a href="/app" class="btn btn-ghost">Sign In</a>
-                <a href="/app" class="btn btn-primary">Get Started</a>
+                <a href="/static/index.html" class="btn btn-ghost">Sign In</a>
+                <a href="/static/index.html" class="btn btn-primary">Get Started</a>
                 <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">
                     <span></span>
                     <span></span>
@@ -1465,7 +1483,7 @@
                 </p>
                 
                 <div class="hero-cta">
-                    <a href="/app" class="btn btn-primary btn-lg">
+                    <a href="/static/index.html" class="btn btn-primary btn-lg">
                         Start Learning Free
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
@@ -1683,7 +1701,7 @@
             <h2 class="cta-title">Ready to study smarter?</h2>
             <p class="cta-desc">Join thousands of students using Quiz Master Pro to ace their exams. It's free to start.</p>
             <div class="cta-buttons">
-                <a href="/app" class="btn btn-primary btn-lg">
+                <a href="/static/index.html" class="btn btn-primary btn-lg">
                     Get Started Free
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>
