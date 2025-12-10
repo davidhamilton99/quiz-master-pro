@@ -4928,48 +4928,113 @@ function bindEvents() {
     }
     
     if (state.view === 'quiz' && state.timerEnabled) updateTimerDisplay();
+    
+    // ADD THIS: Initialize swipe navigation for quiz view
+    if (state.view === 'quiz') {
+        setTimeout(() => initSwipeNavigation(), 0);
+    }
 }
-        function saveQuizProgress() {
-    if (!state.currentQuiz) return;
+// Add this after the bindEvents() function in app.js
+
+// Mobile swipe navigation for quiz
+let touchStartX = 0;
+let touchEndX = 0;
+let touchStartY = 0;
+let touchEndY = 0;
+
+function initSwipeNavigation() {
+    if (state.view !== 'quiz') return;
     
-    const progress = {
-        quizId: state.currentQuiz.id,
-        quizTitle: state.currentQuiz.title,
-        questions: state.currentQuiz.questions,
-        currentQuestionIndex: state.currentQuestionIndex,
-        answers: state.answers,
-        studyMode: state.studyMode,
-        showAnswer: state.showAnswer,
-        flaggedQuestions: Array.from(state.flaggedQuestions),
-        timerEnabled: state.timerEnabled,
-        timerMinutes: state.timerMinutes,
-        timeRemaining: state.timeRemaining || 0,
-        startTime: state.startTime || Date.now(),
-        streak: state.streak || 0,
-        maxStreak: state.maxStreak || 0,
-        savedAt: Date.now()
-    };
+    const quizContent = document.querySelector('.quiz-content');
+    if (!quizContent) return;
     
-    try {
-        const stored = localStorage.getItem('quiz-progress-all');
-        const allProgress = stored ? JSON.parse(stored) : {};
-        
-        allProgress[state.currentQuiz.id] = progress;
-        
-        // Clean up old progress (older than 7 days)
-        Object.keys(allProgress).forEach(qid => {
-            const daysSinceStart = (Date.now() - (allProgress[qid].startTime || Date.now())) / (1000 * 60 * 60 * 24);
-            if (daysSinceStart > 7) {
-                delete allProgress[qid];
-            }
-        });
-        
-        localStorage.setItem('quiz-progress-all', JSON.stringify(allProgress));
-    } catch (e) {
-        console.error('Failed to save quiz progress:', e);
+    // Remove existing listeners to prevent duplicates
+    quizContent.removeEventListener('touchstart', handleTouchStart);
+    quizContent.removeEventListener('touchend', handleTouchEnd);
+    
+    quizContent.addEventListener('touchstart', handleTouchStart, { passive: true });
+    quizContent.addEventListener('touchend', handleTouchEnd, { passive: true });
+}
+
+function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}
+
+function handleTouchEnd(e) {
+    // Don't trigger if touching interactive elements
+    if (e.target.closest('.option-btn') || 
+        e.target.closest('.btn') || 
+        e.target.closest('input') || 
+        e.target.closest('textarea') ||
+        e.target.closest('.draggable-item')) {
+        return;
+    }
+    
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+    
+    // Only trigger if horizontal swipe is stronger than vertical
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        handleSwipe(deltaX);
     }
 }
 
+function handleSwipe(deltaX) {
+    const minSwipeDistance = 50; // Minimum distance for swipe
+    
+    if (Math.abs(deltaX) < minSwipeDistance) return;
+    
+    if (deltaX > 0) {
+        // Swipe right - go to previous question
+        if (state.currentQuestionIndex > 0) {
+            prevQuestion();
+            
+            // Visual feedback
+            showSwipeFeedback('← Previous');
+        }
+    } else {
+        // Swipe left - go to next question
+        if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
+            nextQuestion();
+            
+            // Visual feedback
+            showSwipeFeedback('Next →');
+        } else {
+            // Last question - show submit hint
+            showSwipeFeedback('Swipe up to submit', 2000);
+        }
+    }
+}
+
+function showSwipeFeedback(text, duration = 1000) {
+    const feedback = document.createElement('div');
+    feedback.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: var(--radius-lg);
+        font-size: 1rem;
+        font-weight: 600;
+        z-index: 1000;
+        pointer-events: none;
+        animation: fadeIn 0.2s ease;
+    `;
+    feedback.textContent = text;
+    document.body.appendChild(feedback);
+    
+    setTimeout(() => {
+        feedback.style.animation = 'fadeOut 0.2s ease';
+        setTimeout(() => feedback.remove(), 200);
+    }, duration);
+}
 
 function loadQuizProgress(quizId = null) {
     try {
