@@ -15,16 +15,17 @@ import os
 from datetime import datetime, timedelta
 from functools import wraps
 
-app = Flask(__name__, static_folder='static')
-CORS(app, origins=['*'])
+# At the top where Flask is created:
+app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
+
+# Update the serve_static route:
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
 
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index.html')
-
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('static', filename)
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'index.html')
 
 # Use environment variable or default to local path
 DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
