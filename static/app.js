@@ -1798,6 +1798,7 @@ console.log('   ✓ Auto-grading');
 const firebaseConfig = {
   apiKey: "AIzaSyAvS-w3oh_7xr9wXCbTxQlQYVHC2nqvxv8",
   authDomain: "quiz-master-pro-multiplayer.firebaseapp.com",
+  databaseURL: "https://quiz-master-pro-multiplayer-default-rtdb.firebaseio.com",
   projectId: "quiz-master-pro-multiplayer",
   storageBucket: "quiz-master-pro-multiplayer.firebasestorage.app",
   messagingSenderId: "49110905012",
