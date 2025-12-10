@@ -1795,14 +1795,14 @@ console.log('   ✓ Auto-grading');
    ============================================ */
 
 // Firebase configuration - You'll need to replace with your own
-const firebaseConfig = {
-  apiKey: "AIzaSyAvS-w3oh_7xr9wXCbTxQlQYVHC2nqvxv8",
-  authDomain: "quiz-master-pro-multiplayer.firebaseapp.com",
-  databaseURL: "https://quiz-master-pro-multiplayer-default-rtdb.firebaseio.com",
-  projectId: "quiz-master-pro-multiplayer",
-  storageBucket: "quiz-master-pro-multiplayer.firebasestorage.app",
-  messagingSenderId: "49110905012",
-  appId: "1:49110905012:web:1c97f78d6fe289b2c627e1"
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    authDomain: "quiz-master-pro-multiplayer.firebaseapp.com",
+    databaseURL: "https://quiz-master-pro-multiplayer-default-rtdb.firebaseio.com",
+    projectId: "quiz-master-pro-multiplayer",
+    storageBucket: "quiz-master-pro-multiplayer.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
 };
 
 // Initialize Firebase (will be called when needed)
@@ -1811,55 +1811,22 @@ let firebaseDB = null;
 let sessionRef = null;
 let sessionListener = null;
 
-async function initFirebase() {
+function initFirebase() {
     if (firebaseApp) return true;
     
     try {
-        console.log('🔍 Checking Firebase availability...');
-        
-        // Wait for Firebase to load (max 5 seconds)
-        let attempts = 0;
-        while (typeof firebase === 'undefined' && attempts < 50) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-        
+        // Check if Firebase is loaded
         if (typeof firebase === 'undefined') {
-            console.error('❌ Firebase SDK never loaded');
-            showToast('Firebase SDK failed to load', 'error');
+            console.warn('Firebase SDK not loaded');
             return false;
         }
         
-        console.log('✅ Firebase SDK loaded');
-        console.log('📝 Firebase config:', firebaseConfig);
-        
-        // Check if already initialized
-        if (firebase.apps.length > 0) {
-            firebaseApp = firebase.apps[0];
-            firebaseDB = firebase.database();
-            console.log('✅ Using existing Firebase app');
-            return true;
-        }
-        
-        // Initialize Firebase
-        console.log('🚀 Initializing Firebase...');
-        firebaseApp = firebase.initializeApp(firebaseConfig);
-        console.log('✅ Firebase app initialized');
-        
+        firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
         firebaseDB = firebase.database();
-        console.log('✅ Database reference obtained');
-        console.log('🎉 Firebase fully initialized!');
-        
+        console.log('✅ Firebase initialized');
         return true;
     } catch (err) {
-        console.error('❌ Firebase initialization failed:', err);
-        console.error('Error details:', {
-            name: err.name,
-            message: err.message,
-            code: err.code,
-            stack: err.stack
-        });
-        showToast('Firebase error: ' + err.message, 'error');
+        console.error('Firebase init error:', err);
         return false;
     }
 }
@@ -2631,14 +2598,7 @@ function getPlayerColor(index) {
 }
 
 // Show modal to create/join multiplayer
-// Replace your incomplete showMultiplayerModal function with this:
-async function showMultiplayerModal() {
-    // Try to initialize Firebase first
-    const initialized = await initFirebase();
-    if (!initialized) {
-        return; // Error already shown by initFirebase
-    }
-    
+function showMultiplayerModal() {
     const m = document.createElement('div');
     m.innerHTML = `
         <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
@@ -2648,69 +2608,34 @@ async function showMultiplayerModal() {
                     <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted" style="margin-bottom:2rem">
-                        Quiz with friends in real-time!
-                    </p>
-                    
-                    <div class="mp-options">
-                        <div class="mp-option-card" onclick="this.closest('.modal-overlay').remove();showMultiplayerQuizSelect()">
-                            <div class="mp-option-icon" style="background:var(--accent);color:white">
-                                <span style="font-size:2rem">🎯</span>
-                            </div>
-                            <div style="flex:1">
-                                <h3 style="margin-bottom:0.25rem">Host a Game</h3>
-                                <p class="text-sm text-muted">Create a session and invite friends</p>
-                            </div>
-                            <span style="font-size:1.5rem;color:var(--cream)">→</span>
-                        </div>
+                    <div class="mp-modal-options">
+                        <button onclick="this.closest('.modal-overlay').remove();showMultiplayerQuizSelect()" class="mp-modal-option">
+                            <span class="mp-modal-icon">🎯</span>
+                            <span class="mp-modal-title">Host a Game</span>
+                            <span class="mp-modal-desc">Create a session and invite friends</span>
+                        </button>
                         
-                        <div class="mp-option-card" onclick="event.stopPropagation()">
-                            <div class="mp-option-icon" style="background:var(--success);color:white">
-                                <span style="font-size:2rem">🔗</span>
-                            </div>
-                            <div style="flex:1">
-                                <h3 style="margin-bottom:0.5rem">Join a Game</h3>
-                                <div class="flex gap-sm">
-                                    <input 
-                                        type="text" 
-                                        id="mp-join-code" 
-                                        class="input" 
-                                        placeholder="Enter 6-digit code"
-                                        maxlength="6"
-                                        style="text-transform:uppercase;font-family:monospace;font-size:1.25rem;letter-spacing:0.1em;padding:0.75rem"
-                                        oninput="this.value=this.value.toUpperCase()"
-                                    >
-                                    <button onclick="joinMultiplayerGame()" class="btn btn-success" style="padding:0 1.5rem">
-                                        Join
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <button onclick="this.closest('.modal-overlay').querySelector('.mp-join-section').style.display='block';this.style.display='none'" class="mp-modal-option">
+                            <span class="mp-modal-icon">🔗</span>
+                            <span class="mp-modal-title">Join a Game</span>
+                            <span class="mp-modal-desc">Enter a session code</span>
+                        </button>
                     </div>
                     
-                    <div class="card" style="padding:1rem;background:var(--cream);margin-top:1.5rem">
-                        <p class="text-sm" style="margin-bottom:0.5rem">
-                            <strong>How it works:</strong>
-                        </p>
-                        <ul class="text-sm text-muted" style="padding-left:1.25rem;line-height:1.8">
-                            <li>Host creates a game and shares the code</li>
-                            <li>Friends join using the code</li>
-                            <li>Answer questions in real-time</li>
-                            <li>Compete for the highest score!</li>
-                        </ul>
+                    <div class="mp-join-section" style="display:none;margin-top:1.5rem">
+                        <label class="input-label">Enter Session Code</label>
+                        <input type="text" id="mp-join-code" class="input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:0.25rem">
+                        <button onclick="joinMultiplayerGame()" class="btn btn-accent" style="width:100%;margin-top:1rem">
+                            Join Game
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     `;
     document.body.appendChild(m.firstElementChild);
-    
-    // Focus on join code input after modal appears
-    setTimeout(() => {
-        const input = document.getElementById('mp-join-code');
-        if (input) input.focus();
-    }, 100);
 }
+
 // Show quiz selection for hosting
 function showMultiplayerQuizSelect() {
     const m = document.createElement('div');
@@ -5265,7 +5190,7 @@ function discardProgress(quizId) {
                             </a>
                             <div class="flex items-center gap-sm">
                                 <button onclick="toggleDarkMode()" class="btn btn-icon btn-ghost">${state.darkMode ? '☀️' : '🌙'}</button>
-                                <button onclick="(async()=>await showMultiplayerModal())()" class="btn btn-ghost btn-sm">🎮 Multiplayer</button>
+                                <button onclick="showMultiplayerModal()" class="btn btn-ghost btn-sm">🎮 Multiplayer</button>
                                 <button onclick="showQuizletImport()" class="btn btn-ghost btn-sm">Quizlet</button>
                                 <button onclick="state.view='create';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';render()" class="btn btn-accent">+ New Quiz</button>
                                 <div class="dropdown">
