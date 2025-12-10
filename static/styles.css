@@ -665,7 +665,7 @@ input[type="checkbox"] {
    ============================================ */
 
 .dropdown {
-    position: relative;
+    z-index: 2000 !important;
 }
 
 .dropdown-menu {
@@ -685,7 +685,7 @@ input[type="checkbox"] {
         opacity var(--transition-fast),
         visibility var(--transition-fast),
         transform var(--transition-fast);
-    z-index: var(--z-dropdown);
+    z-index: 2000 !important;
     pointer-events: none;
 }
 
