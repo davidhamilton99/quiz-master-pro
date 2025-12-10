@@ -4319,22 +4319,22 @@ function renderVisualEditor() {
         <nav class="navbar">
             <div class="container">
                 <div class="navbar-inner">
-                    <button onclick="state.visualEditorMode=false;saveCreationState();render()" class="btn btn-ghost">
-                        <span style="font-size:1.125rem">←</span> Back to Text
+                    <button onclick="state.visualEditorMode=false;state.view='create';clearCreationState();render()" class="btn btn-ghost">
+                        ← Back to Text
                     </button>
                     <div style="text-align:center">
                         <h2 style="font-size:1rem;font-weight:700;margin-bottom:2px">Visual Editor</h2>
                         <p class="text-xs text-muted">${state.quizTitle || 'Untitled Quiz'}</p>
                     </div>
                     <button onclick="saveFromVisualEditor()" class="btn btn-accent">
-                        <span style="font-size:1.125rem">💾</span> Save Quiz
+                        💾 Save Quiz
                     </button>
                 </div>
             </div>
         </nav>
         
         <main style="padding:2rem 0 4rem">
-            <div class="container">
+            <div class="container" style="max-width:1400px">
                 <div class="editor-container">
                     <!-- Question List Sidebar -->
                     <div class="editor-sidebar">
@@ -4347,13 +4347,25 @@ function renderVisualEditor() {
                         <div class="editor-question-list">
                             ${state.parsedQuestions.map((question, i) => {
                                 const qValid = question.question.trim() && question.options.length >= 2 && question.correct.length > 0;
+                                const displayText = question.question || 'Untitled question';
+                                let truncated = displayText;
+                                if (displayText.length > 40) {
+                                    truncated = displayText.substring(0, 40);
+                                    const lastSpace = truncated.lastIndexOf(' ');
+                                    if (lastSpace > 20) {
+                                        truncated = truncated.substring(0, lastSpace);
+                                    }
+                                    truncated += '...';
+                                }
+                                
                                 return `
                                     <button 
                                         onclick="switchQuestion(${i})"
                                         class="editor-question-list-item ${i === state.currentEditQuestion ? 'active' : ''}"
+                                        title="${escapeHtml(displayText)}"
                                     >
                                         <span class="question-number-badge">${i + 1}</span>
-                                        <span class="question-list-text">${escapeHtml(question.question || 'Untitled question')}</span>
+                                        <span class="question-list-text">${escapeHtml(truncated)}</span>
                                         <span class="question-validity-indicator">
                                             ${qValid ? '<span style="color:var(--success)">✓</span>' : '<span style="color:var(--error)">⚠</span>'}
                                         </span>
@@ -4364,271 +4376,215 @@ function renderVisualEditor() {
                     </div>
                     
                     <!-- Question Editor -->
-                    <div class="editor-main">
-                        <div class="editor-card">
-                            <div class="editor-card-header">
-                                <div>
-                                    <h2 class="editor-card-title">Question ${state.currentEditQuestion + 1}</h2>
-                                    <p class="text-sm text-muted">of ${state.parsedQuestions.length} total</p>
-                                </div>
-                                ${state.parsedQuestions.length > 1 ? `
-                                    <button onclick="deleteQuestion(${state.currentEditQuestion})" class="btn btn-ghost btn-sm" style="color:var(--error)">
-                                        <span style="font-size:1.125rem">🗑️</span> Delete
-                                    </button>
-                                ` : ''}
-                            </div>
-                            
-                            <!-- Question Text -->
-                            <div class="editor-section">
-                                <label class="editor-section-label">
-                                    <span>📝</span> Question Text
-                                </label>
-                                <textarea 
-                                    class="input" 
-                                    rows="3" 
-                                    placeholder="Enter your question here..."
-                                    oninput="updateQuestionField('question', this.value)"
-                                    style="font-size:1rem"
-                                >${escapeHtml(q.question)}</textarea>
-                            </div>
-                            
-                            <!-- Question Type -->
-                            <div class="editor-section">
-                                <label class="editor-section-label">
-                                    <span>🎯</span> Question Type
-                                </label>
-                                <div class="tabs-container">
-                                    <button 
-                                        class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
-                                        onclick="updateQuestionType('choice')"
-                                    >
-                                        <span style="font-size:1rem">✓</span> Multiple Choice
-                                    </button>
-                                    <button 
-                                        class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
-                                        onclick="updateQuestionType('ordering')"
-                                    >
-                                        <span style="font-size:1rem">↕</span> Ordering
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- Options -->
-                            <div class="editor-section">
-                                <div class="flex justify-between items-center" style="margin-bottom:1rem">
-                                    <label class="editor-section-label" style="margin-bottom:0">
-                                        <span>📋</span> Answer Options
-                                    </label>
-                                    <button onclick="addOption()" class="btn btn-ghost btn-sm">
-                                        <span style="font-size:1rem">+</span> Add Option
-                                    </button>
-                                </div>
-                                
-                                ${q.type === 'ordering' ? `
-                                    <div class="editor-section-hint">
-                                        <span class="editor-section-hint-icon">💡</span>
-                                        <span>Drag options to set the correct order. The sequence shown here is the answer.</span>
-                                    </div>
-                                    ${q.options.map((opt, i) => `
-                                        <div 
-                                            class="option-editor" 
-                                            draggable="true"
-                                            ondragstart="handleEditorDragStart(event, ${i})"
-                                            ondragover="handleEditorDragOver(event)"
-                                            ondragleave="handleEditorDragLeave(event)"
-                                            ondrop="handleEditorDrop(event, ${i})"
-                                            ondragend="handleEditorDragEnd(event)"
-                                            style="cursor:move"
-                                        >
-                                            <span class="drag-handle">⋮⋮</span>
-                                            <span class="option-label">${i + 1}</span>
-                                            <input 
-                                                type="text" 
-                                                class="input" 
-                                                value="${escapeHtml(opt)}"
-                                                placeholder="Option ${i + 1}"
-                                                oninput="updateOption(${i}, this.value)"
-                                            >
-                                            ${q.options.length > 2 ? `
-                                                <button onclick="event.stopPropagation(); removeOption(${i})" class="option-remove-btn">
-                                                    <span style="font-size:1.125rem">✕</span>
-                                                </button>
-                                            ` : ''}
-                                        </div>
-                                    `).join('')}
-                                ` : `
-                                    <div class="editor-section-hint">
-                                        <span class="editor-section-hint-icon">💡</span>
-                                        <span>Check one or more boxes to mark correct answers. Multiple selections create "select all that apply" questions.</span>
-                                    </div>
-                                    ${q.options.map((opt, i) => `
-                                        <div class="option-editor">
-                                            <input 
-                                                type="checkbox" 
-                                                class="option-checkbox"
-                                                ${q.correct.includes(i) ? 'checked' : ''}
-                                                onchange="toggleCorrectOption(${i})"
-                                            >
-                                            <span class="option-label">${String.fromCharCode(65 + i)}</span>
-                                            <input 
-                                                type="text" 
-                                                class="input" 
-                                                value="${escapeHtml(opt)}"
-                                                placeholder="Option ${String.fromCharCode(65 + i)}"
-                                                oninput="updateOption(${i}, this.value)"
-                                            >
-                                            ${q.options.length > 2 ? `
-                                                <button onclick="removeOption(${i})" class="option-remove-btn">
-                                                    <span style="font-size:1.125rem">✕</span>
-                                                </button>
-                                            ` : ''}
-                                        </div>
-                                    `).join('')}
-                                `}
-                            </div>
-                            
-                            <!-- Image Section -->
-                            <div class="editor-section">
-                                <label class="editor-section-label">
-                                    <span>🖼️</span> Image (Optional)
-                                </label>
-                                ${q.image ? `
-                                    <div class="image-preview-container">
-                                        <img src="${q.image}" alt="Question image">
-                                        <div class="image-preview-overlay">
-                                            <button onclick="removeImage()" class="image-preview-remove">
-                                                <span>✕</span> Remove Image
-                                            </button>
-                                        </div>
-                                    </div>
-                                ` : `
-                                    <div class="upload-area" onclick="handleImageUpload()">
-                                        <div class="upload-icon">🖼️</div>
-                                        <p class="font-semibold" style="margin-bottom:0.25rem">Upload an image</p>
-                                        <p class="text-sm text-muted">Click to browse • Max 5MB</p>
-                                    </div>
-                                `}
-                            </div>
-                            
-                            <!-- Code Block -->
-                            <div class="editor-section">
-                                <label class="editor-section-label">
-                                    <span>💻</span> Code Block (Optional)
-                                </label>
-                                ${(q.code !== null && q.code !== undefined) ? `
-                                    <div class="code-editor-container">
-                                        <div class="code-editor-header">
-                                            <div class="code-editor-dot" style="background:#ef4444"></div>
-                                            <div class="code-editor-dot" style="background:#f59e0b"></div>
-                                            <div class="code-editor-dot" style="background:#22c55e"></div>
-                                            <span class="code-editor-label">CODE</span>
-                                        </div>
-                                        <textarea 
-                                            class="code-editor-textarea" 
-                                            placeholder="Enter code here..."
-                                            oninput="updateQuestionField('code', this.value)"
-                                        >${escapeHtml(q.code)}</textarea>
-                                    </div>
-                                    <!-- Phase 2: Code Execution Options -->
-                                    <div class="code-options-panel" style="margin-top:0.75rem;padding:1rem;background:var(--accent-glow);border-radius:var(--radius-md);border:1px solid var(--accent)">
-                                        <!-- Enable Execution -->
-                                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-bottom:1rem">
-                                            <input 
-                                                type="checkbox" 
-                                                ${q.executable ? 'checked' : ''}
-                                                onchange="updateQuestionField('executable', this.checked);if(this.checked && !state.parsedQuestions[state.currentEditQuestion].language){updateQuestionField('language','python')};render()"
-                                                style="width:18px;height:18px;accent-color:var(--accent)"
-                                            >
-                                            <div>
-                                                <span style="font-weight:600;color:var(--accent)">▶️ Enable Code Execution</span>
-                                                <p class="text-xs text-muted" style="margin-top:2px">Students can run this code in their browser</p>
-                                            </div>
-                                        </label>
-                                        
-                                        ${q.executable ? `
-                                        <!-- Language Selector -->
-                                        <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
-                                            <div style="flex:1;min-width:150px">
-                                                <label class="text-xs text-muted" style="display:block;margin-bottom:0.25rem">Language</label>
-                                                <select 
-                                                    class="input" 
-                                                    style="padding:0.5rem"
-                                                    onchange="updateQuestionField('language', this.value);render()"
-                                                >
-                                                    <option value="python" ${(q.language || 'python') === 'python' ? 'selected' : ''}>🐍 Python</option>
-                                                    <option value="javascript" ${q.language === 'javascript' ? 'selected' : ''}>⚡ JavaScript</option>
-                                                    <option value="html" ${q.language === 'html' ? 'selected' : ''}>🌐 HTML/CSS</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Editable Toggle -->
-                                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-bottom:0.5rem">
-                                            <input 
-                                                type="checkbox" 
-                                                ${q.editable ? 'checked' : ''}
-                                                onchange="updateQuestionField('editable', this.checked);render()"
-                                                style="width:18px;height:18px;accent-color:var(--success)"
-                                            >
-                                            <div>
-                                                <span style="font-weight:600;color:var(--success)">✏️ Editable Code (Fix the Bug)</span>
-                                                <p class="text-xs text-muted" style="margin-top:2px">Students can modify the code to fix errors</p>
-                                            </div>
-                                        </label>
-                                        
-                                        ${q.editable ? `
-                                        <!-- Starter Code -->
-                                        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--cream)">
-                                            <label class="text-xs text-muted" style="display:block;margin-bottom:0.5rem">
-                                                Starter Code (what students see initially, leave blank to use main code)
-                                            </label>
-                                            <textarea 
-                                                class="input code-editor-textarea" 
-                                                rows="4"
-                                                placeholder="# Buggy code for students to fix..."
-                                                oninput="updateQuestionField('starterCode', this.value)"
-                                                style="font-family:'JetBrains Mono',monospace;font-size:0.875rem"
-                                            >${escapeHtml(q.starterCode || '')}</textarea>
-                                        </div>
-                                        ` : ''}
-                                        ` : ''}
-                                    </div>
-                                    <button onclick="updateQuestionField('code', null);updateQuestionField('executable', false);updateQuestionField('editable', false);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
-                                        <span>✕</span> Remove Code Block
-                                    </button>
-                                ` : `
-                                    <button onclick="updateQuestionField('code', '');render()" class="btn btn-ghost btn-sm">
-                                        <span style="font-size:1rem">+</span> Add Code Block
-                                    </button>
-                                `}
-                            </div>
-                            
-                            <!-- Explanation -->
-                            <div class="editor-section" style="border:none;margin-bottom:0">
-                                <label class="editor-section-label">
-                                    <span>💡</span> Explanation (Optional)
-                                </label>
-                                ${(q.explanation !== null && q.explanation !== undefined) ? `
-                                    <textarea 
-                                        class="input" 
-                                        rows="3" 
-                                        placeholder="Explain why this is the correct answer..."
-                                        oninput="updateQuestionField('explanation', this.value)"
-                                    >${escapeHtml(q.explanation)}</textarea>
-                                    <button onclick="updateQuestionField('explanation', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
-                                        <span>✕</span> Remove Explanation
-                                    </button>
-                                ` : `
-                                    <button onclick="updateQuestionField('explanation', '');render()" class="btn btn-ghost btn-sm">
-                                        <span style="font-size:1rem">+</span> Add Explanation
-                                    </button>
-                                `}
-                            </div>
-                        </div>
+                    <div class="editor-main" id="editor-main-content">
+                        ${renderEditorContent(q)}
                     </div>
                 </div>
             </div>
         </main>
+    `;
+}
+
+function renderEditorContent(q) {
+    const questionIndex = state.currentEditQuestion;
+    
+    return `
+        <div class="editor-card">
+            <div class="editor-card-header">
+                <div>
+                    <h2 class="editor-card-title">Question ${state.currentEditQuestion + 1}</h2>
+                    <p class="text-sm text-muted">of ${state.parsedQuestions.length} total</p>
+                </div>
+                ${state.parsedQuestions.length > 1 ? `
+                    <button onclick="deleteQuestion(${state.currentEditQuestion})" class="btn btn-ghost btn-sm" style="color:var(--error)">
+                        <span style="font-size:1.125rem">🗑️</span> Delete
+                    </button>
+                ` : ''}
+            </div>
+            
+            <!-- Question Text -->
+            <div class="editor-section">
+                <label class="editor-section-label">
+                    <span>📝</span> Question Text
+                </label>
+                <textarea 
+                    class="input" 
+                    rows="3" 
+                    placeholder="Enter your question here..."
+                    oninput="updateQuestionField('question', this.value)"
+                    style="font-size:1rem"
+                >${escapeHtml(q.question)}</textarea>
+            </div>
+            
+            <!-- Question Type -->
+            <div class="editor-section">
+                <label class="editor-section-label">
+                    <span>🎯</span> Question Type
+                </label>
+                <div class="tabs-container">
+                    <button 
+                        class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
+                        onclick="updateQuestionType('choice')"
+                    >
+                        <span style="font-size:1rem">✓</span> Multiple Choice
+                    </button>
+                    <button 
+                        class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
+                        onclick="updateQuestionType('ordering')"
+                    >
+                        <span style="font-size:1rem">↕</span> Ordering
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Options -->
+            <div class="editor-section">
+                <div class="flex justify-between items-center" style="margin-bottom:1rem">
+                    <label class="editor-section-label" style="margin-bottom:0">
+                        <span>📋</span> Answer Options
+                    </label>
+                    <button onclick="addOption()" class="btn btn-ghost btn-sm">
+                        <span style="font-size:1rem">+</span> Add Option
+                    </button>
+                </div>
+                
+                ${q.type === 'ordering' ? `
+                    <div class="editor-section-hint">
+                        <span class="editor-section-hint-icon">💡</span>
+                        <span>Drag options to set the correct order.</span>
+                    </div>
+                    ${q.options.map((opt, i) => `
+                        <div 
+                            class="option-editor" 
+                            draggable="true"
+                            ondragstart="handleEditorDragStart(event, ${i})"
+                            ondragover="handleEditorDragOver(event)"
+                            ondragleave="handleEditorDragLeave(event)"
+                            ondrop="handleEditorDrop(event, ${i})"
+                            ondragend="handleEditorDragEnd(event)"
+                            style="cursor:move"
+                        >
+                            <span class="drag-handle">⋮⋮</span>
+                            <span class="option-label">${i + 1}</span>
+                            <input 
+                                type="text" 
+                                class="input" 
+                                value="${escapeHtml(opt)}"
+                                placeholder="Option ${i + 1}"
+                                oninput="updateOption(${i}, this.value)"
+                            >
+                            ${q.options.length > 2 ? `
+                                <button onclick="event.stopPropagation(); removeOption(${i})" class="option-remove-btn">
+                                    <span style="font-size:1.125rem">✕</span>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                ` : `
+                    <div class="editor-section-hint">
+                        <span class="editor-section-hint-icon">💡</span>
+                        <span>Check boxes to mark correct answers.</span>
+                    </div>
+                    ${q.options.map((opt, i) => `
+                        <div class="option-editor">
+                            <input 
+                                type="checkbox" 
+                                class="option-checkbox"
+                                ${q.correct.includes(i) ? 'checked' : ''}
+                                onchange="toggleCorrectOption(${i})"
+                            >
+                            <span class="option-label">${String.fromCharCode(65 + i)}</span>
+                            <input 
+                                type="text" 
+                                class="input" 
+                                value="${escapeHtml(opt)}"
+                                placeholder="Option ${String.fromCharCode(65 + i)}"
+                                oninput="updateOption(${i}, this.value)"
+                            >
+                            ${q.options.length > 2 ? `
+                                <button onclick="removeOption(${i})" class="option-remove-btn">
+                                    <span style="font-size:1.125rem">✕</span>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                `}
+            </div>
+            
+            <!-- Image Section -->
+            <div class="editor-section">
+                <label class="editor-section-label">
+                    <span>🖼️</span> Image (Optional)
+                </label>
+                ${q.image ? `
+                    <div class="image-preview-container">
+                        <img src="${q.image}" alt="Question image">
+                        <div class="image-preview-overlay">
+                            <button onclick="removeImage()" class="image-preview-remove">
+                                <span>✕</span> Remove Image
+                            </button>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="upload-area" onclick="handleImageUpload()">
+                        <div class="upload-icon">🖼️</div>
+                        <p class="font-semibold" style="margin-bottom:0.25rem">Upload an image</p>
+                        <p class="text-sm text-muted">Click to browse • Max 5MB</p>
+                    </div>
+                `}
+            </div>
+            
+            <!-- Code Block -->
+            <div class="editor-section">
+                <label class="editor-section-label">
+                    <span>💻</span> Code Block (Optional)
+                </label>
+                ${(q.code !== null && q.code !== undefined) ? `
+                    <div class="code-editor-container">
+                        <div class="code-editor-header">
+                            <div class="code-editor-dot" style="background:#ef4444"></div>
+                            <div class="code-editor-dot" style="background:#f59e0b"></div>
+                            <div class="code-editor-dot" style="background:#22c55e"></div>
+                            <span class="code-editor-label">CODE</span>
+                        </div>
+                        <textarea 
+                            class="code-editor-textarea" 
+                            placeholder="Enter code here..."
+                            oninput="updateQuestionField('code', this.value)"
+                        >${escapeHtml(q.code)}</textarea>
+                    </div>
+                    <button onclick="updateQuestionField('code', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
+                        <span>✕</span> Remove Code Block
+                    </button>
+                ` : `
+                    <button onclick="updateQuestionField('code', '');render()" class="btn btn-ghost btn-sm">
+                        <span style="font-size:1rem">+</span> Add Code Block
+                    </button>
+                `}
+            </div>
+            
+            <!-- Explanation -->
+            <div class="editor-section" style="border:none;margin-bottom:0">
+                <label class="editor-section-label">
+                    <span>💡</span> Explanation (Optional)
+                </label>
+                ${(q.explanation !== null && q.explanation !== undefined) ? `
+                    <textarea 
+                        class="input" 
+                        rows="3" 
+                        placeholder="Explain why this is the correct answer..."
+                        oninput="updateQuestionField('explanation', this.value)"
+                    >${escapeHtml(q.explanation)}</textarea>
+                    <button onclick="updateQuestionField('explanation', null);render()" class="btn btn-ghost btn-sm" style="margin-top:0.75rem">
+                        <span>✕</span> Remove Explanation
+                    </button>
+                ` : `
+                    <button onclick="updateQuestionField('explanation', '');render()" class="btn btn-ghost btn-sm">
+                        <span style="font-size:1rem">+</span> Add Explanation
+                    </button>
+                `}
+            </div>
+        </div>
     `;
 }
         function showImportModal() {

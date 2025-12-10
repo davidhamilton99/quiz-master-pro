@@ -94,10 +94,7 @@
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Dark mode is default now */
-.dark {
-    /* Already dark by default */
-}
+
 
 html {
     scroll-behavior: smooth;
@@ -1559,7 +1556,389 @@ h1, h2, h3, h4 {
         gap: var(--space-sm);
     }
 }
+/* ============================================
+   VISUAL EDITOR STYLES
+   ============================================ */
 
+.editor-container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.editor-sidebar {
+    position: sticky;
+    top: 80px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+.editor-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.editor-sidebar-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.editor-question-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.editor-question-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: left;
+    width: 100%;
+}
+
+.editor-question-list-item:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-surface);
+}
+
+.editor-question-list-item.active {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+}
+
+.question-number-badge {
+    min-width: 24px;
+    height: 24px;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.editor-question-list-item.active .question-number-badge {
+    background: var(--accent);
+    color: white;
+}
+
+.question-list-text {
+    flex: 1;
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.question-validity-indicator {
+    font-size: 1rem;
+}
+
+.editor-main {
+    min-height: 500px;
+}
+
+.editor-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+}
+
+.editor-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.editor-card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.editor-section {
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.editor-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.editor-section-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.editor-section-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--info-light);
+    border: 1px solid var(--info);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.editor-section-hint-icon {
+    font-size: 1rem;
+}
+
+.tabs-container {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tab-button:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-surface);
+}
+
+.tab-button.active {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+}
+
+.option-editor {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.5rem;
+}
+
+.drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.option-editor:active .drag-handle {
+    cursor: grabbing;
+}
+
+.option-checkbox {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.option-label {
+    min-width: 28px;
+    height: 28px;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.option-editor .input {
+    flex: 1;
+}
+
+.option-remove-btn {
+    padding: 0.25rem;
+    background: transparent;
+    border: none;
+    color: var(--error);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity var(--transition-fast);
+}
+
+.option-remove-btn:hover {
+    opacity: 1;
+}
+
+.upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    background: var(--bg-tertiary);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.upload-area:hover {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.image-preview-container {
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.image-preview-container img {
+    width: 100%;
+    max-height: 300px;
+    object-fit: contain;
+    background: var(--bg-tertiary);
+}
+
+.image-preview-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.image-preview-container:hover .image-preview-overlay {
+    opacity: 1;
+}
+
+.image-preview-remove {
+    padding: 0.75rem 1.5rem;
+    background: var(--error);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.code-editor-container {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.code-editor-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.code-editor-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.code-editor-label {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.code-editor-textarea {
+    width: 100%;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 150px;
+}
+
+.code-editor-textarea:focus {
+    outline: none;
+}
+
+@media (max-width: 1024px) {
+    .editor-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .editor-sidebar {
+        position: relative;
+        top: 0;
+        max-height: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .editor-card {
+        padding: 1rem;
+    }
+    
+    .editor-section {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+    
+    .tabs-container {
+        flex-direction: column;
+    }
+}
 /* ============================================
    RESPONSIVE - SMALL MOBILE (max-width: 480px)
    ============================================ */
@@ -1714,6 +2093,7 @@ h1, h2, h3, h4 {
         max-height: 150px;
     }
 }
+
 
 /* ============================================
    ACCESSIBILITY - REDUCED MOTION
