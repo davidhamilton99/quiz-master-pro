@@ -1815,6 +1815,8 @@ async function initFirebase() {
     if (firebaseApp) return true;
     
     try {
+        console.log('🔍 Checking Firebase availability...');
+        
         // Wait for Firebase to load (max 5 seconds)
         let attempts = 0;
         while (typeof firebase === 'undefined' && attempts < 50) {
@@ -1823,27 +1825,41 @@ async function initFirebase() {
         }
         
         if (typeof firebase === 'undefined') {
-            console.warn('Firebase SDK not loaded after waiting');
-            showToast('Multiplayer service unavailable', 'error');
+            console.error('❌ Firebase SDK never loaded');
+            showToast('Firebase SDK failed to load', 'error');
             return false;
         }
+        
+        console.log('✅ Firebase SDK loaded');
+        console.log('📝 Firebase config:', firebaseConfig);
         
         // Check if already initialized
         if (firebase.apps.length > 0) {
             firebaseApp = firebase.apps[0];
             firebaseDB = firebase.database();
-            console.log('✅ Firebase already initialized');
+            console.log('✅ Using existing Firebase app');
             return true;
         }
         
         // Initialize Firebase
+        console.log('🚀 Initializing Firebase...');
         firebaseApp = firebase.initializeApp(firebaseConfig);
+        console.log('✅ Firebase app initialized');
+        
         firebaseDB = firebase.database();
-        console.log('✅ Firebase initialized');
+        console.log('✅ Database reference obtained');
+        console.log('🎉 Firebase fully initialized!');
+        
         return true;
     } catch (err) {
-        console.error('Firebase init error:', err);
-        showToast('Multiplayer setup failed: ' + err.message, 'error');
+        console.error('❌ Firebase initialization failed:', err);
+        console.error('Error details:', {
+            name: err.name,
+            message: err.message,
+            code: err.code,
+            stack: err.stack
+        });
+        showToast('Firebase error: ' + err.message, 'error');
         return false;
     }
 }
