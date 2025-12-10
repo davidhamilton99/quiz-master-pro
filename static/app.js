@@ -1817,15 +1817,26 @@ function initFirebase() {
         // Check if Firebase is loaded
         if (typeof firebase === 'undefined') {
             console.warn('Firebase SDK not loaded');
+            showToast('Firebase not loaded. Please refresh the page.', 'error');
             return false;
         }
         
-        firebaseApp = firebase.initializeApp(firebaseConfig); // ✅ Fixed: use firebaseConfig (lowercase)
+        // Check if already initialized
+        if (firebase.apps.length > 0) {
+            firebaseApp = firebase.apps[0];
+            firebaseDB = firebase.database();
+            console.log('✅ Firebase already initialized');
+            return true;
+        }
+        
+        // Initialize Firebase
+        firebaseApp = firebase.initializeApp(firebaseConfig);
         firebaseDB = firebase.database();
         console.log('✅ Firebase initialized');
         return true;
     } catch (err) {
         console.error('Firebase init error:', err);
+        showToast('Failed to connect to multiplayer service: ' + err.message, 'error');
         return false;
     }
 }
