@@ -4924,44 +4924,6 @@ function bindEvents() {
         }
     }
 }
-let touchStartX = 0;
-let touchEndX = 0;
-let touchStartY = 0;
-let touchEndY = 0;
-
-function handleTouchStart(e) {
-    touchStartX = e.changedTouches[0].screenX;
-    touchStartY = e.changedTouches[0].screenY;
-}
-
-function handleTouchEnd(e) {
-    touchEndX = e.changedTouches[0].screenX;
-    touchEndY = e.changedTouches[0].screenY;
-    handleSwipe();
-}
-
-function handleSwipe() {
-    const swipeThreshold = 50; // minimum distance for swipe
-    const horizontalDistance = Math.abs(touchEndX - touchStartX);
-    const verticalDistance = Math.abs(touchEndY - touchStartY);
-    
-    // Only trigger if horizontal swipe is dominant (not vertical scroll)
-    if (horizontalDistance > verticalDistance && horizontalDistance > swipeThreshold) {
-        if (touchEndX < touchStartX) {
-            // Swipe left - next question
-            if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
-                nextQuestion();
-            }
-        }
-        
-        if (touchEndX > touchStartX) {
-            // Swipe right - previous question
-            if (state.currentQuestionIndex > 0) {
-                prevQuestion();
-            }
-        }
-    }
-}
 
 function loadQuizProgress(quizId = null) {
     try {
