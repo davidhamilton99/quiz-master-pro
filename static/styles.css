@@ -187,6 +187,19 @@ h1, h2, h3, h4 {
 .gap-md { gap: var(--space-md); }
 .gap-lg { gap: var(--space-lg); }
 .grid { display: grid; }
+.grid.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+    overflow: visible;
+}
+.grid.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    overflow: visible;
+}
 
 /* ============================================
    BUTTONS
@@ -386,24 +399,24 @@ h1, h2, h3, h4 {
 
 .dropdown {
     position: relative;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .dropdown-menu {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    min-width: 220px; /* CHANGED: from 200px */
+    min-width: 240px;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: var(--space-sm);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8); /* CHANGED: stronger shadow */
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
     opacity: 0;
     visibility: hidden;
     transform: translateY(-8px);
     transition: all var(--transition-fast);
-    z-index: 10000; /* CHANGED: from 1000 to 9999 */
+    z-index: 9999;
     pointer-events: none;
 }
 
@@ -411,7 +424,7 @@ h1, h2, h3, h4 {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
-    pointer-events: auto; /* FIXED: allows clicks when open */
+    pointer-events: auto;
 }
 
 .dropdown-item {
@@ -655,7 +668,6 @@ h1, h2, h3, h4 {
    QUIZ CARDS
    ============================================ */
 
-/* 1. Fix quiz-card overflow */
 .quiz-card {
     position: relative;
     background: var(--bg-secondary);
@@ -664,7 +676,7 @@ h1, h2, h3, h4 {
     padding: var(--space-lg);
     cursor: pointer;
     transition: all var(--transition-base);
-    overflow: visible !important; /* FORCE visible */
+    overflow: visible;
 }
 
 .quiz-card::before {
@@ -678,8 +690,9 @@ h1, h2, h3, h4 {
     opacity: 0;
     transition: opacity var(--transition-fast);
 }
+
 .quiz-card-stats {
-   display: flex;
+    display: flex;
     align-items: center;
     gap: 1.25rem;
     margin-top: 1rem;
@@ -699,6 +712,7 @@ h1, h2, h3, h4 {
 .quiz-card-stat span:first-child {
     font-size: 1.125rem;
 }
+
 .quiz-card:hover {
     border-color: var(--border-hover);
     transform: translateY(-4px);
@@ -2314,20 +2328,20 @@ h1, h2, h3, h4 {
     .tabs-container {
         flex-direction: column;
     }
-    /* ADD THESE: */
+    /* Grid Layout Fixes */
     .grid.grid-4 {
         display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.25rem;
-    margin-bottom: 2.5rem;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 2.5rem;
     }
 
     .grid.grid-3 {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-    overflow: visible !important; /* CRITICAL */
-}
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        overflow: visible;
+    }
     .stat-value {
         font-size: 1.75rem;
     }

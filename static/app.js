@@ -4844,7 +4844,7 @@ function bindEvents() {
     }
     
     // IMPROVED LIBRARY VIEW EVENT BINDINGS
-       if (state.view === 'library') {
+     if (state.view === 'library') {
         setTimeout(() => {
             // Search input
             const searchInput = document.getElementById('quiz-search');
