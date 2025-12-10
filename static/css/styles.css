@@ -94,11 +94,6 @@
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Dark mode is default now */
-.dark {
-    /* Already dark by default */
-}
-
 html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
