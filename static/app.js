@@ -10,7 +10,20 @@ const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
             streak: 0, maxStreak: 0,
             darkMode: localStorage.getItem('darkMode') === 'true',
             showFormatHelp: false, quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null,
-            draggedQuizId: null
+            draggedQuizId: null,
+            // Phase 5: Multiplayer state
+            multiplayer: {
+                active: false,
+                isHost: false,
+                sessionId: null,
+                sessionCode: null,
+                players: {},
+                currentAnswers: {},
+                questionTimer: 60,
+                questionStartTime: null,
+                phase: 'lobby', // lobby, question, waiting, results, finished
+                revealed: false
+            }
         };
         
         if (state.darkMode) document.documentElement.classList.add('dark');
@@ -1771,6 +1784,908 @@ console.log('   ✓ Terminal interface');
 console.log('   ✓ Router/Switch modes');
 console.log('   ✓ Command abbreviations');
 console.log('   ✓ Auto-grading');
+
+/* ============================================
+   PHASE 5: MULTIPLAYER QUIZ MODE
+   - Real-time competitive quizzing with friends
+   - Firebase for instant synchronization
+   - Lobby system with join codes
+   - Live scoring and leaderboards
+   - 60-second timer per question
+   ============================================ */
+
+// Firebase configuration - You'll need to replace with your own
+const firebaseConfig = {
+  apiKey: "AIzaSyAvS-w3oh_7xr9wXCbTxQlQYVHC2nqvxv8",
+  authDomain: "quiz-master-pro-multiplayer.firebaseapp.com",
+  projectId: "quiz-master-pro-multiplayer",
+  storageBucket: "quiz-master-pro-multiplayer.firebasestorage.app",
+  messagingSenderId: "49110905012",
+  appId: "1:49110905012:web:1c97f78d6fe289b2c627e1"
+};
+
+// Initialize Firebase (will be called when needed)
+let firebaseApp = null;
+let firebaseDB = null;
+let sessionRef = null;
+let sessionListener = null;
+
+function initFirebase() {
+    if (firebaseApp) return true;
+    
+    try {
+        // Check if Firebase is loaded
+        if (typeof firebase === 'undefined') {
+            console.warn('Firebase SDK not loaded');
+            return false;
+        }
+        
+        firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+        firebaseDB = firebase.database();
+        console.log('✅ Firebase initialized');
+        return true;
+    } catch (err) {
+        console.error('Firebase init error:', err);
+        return false;
+    }
+}
+
+// ========== MULTIPLAYER SESSION MANAGEMENT ==========
+const Multiplayer = {
+    // Generate a 6-character session code
+    generateCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid confusing chars
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+        return code;
+    },
+    
+    // Create a new multiplayer session
+    async createSession(quizId, settings = {}) {
+        if (!initFirebase()) {
+            showToast('Multiplayer not available', 'error');
+            return null;
+        }
+        
+        const quiz = state.quizzes.find(q => q.id === quizId);
+        if (!quiz) {
+            showToast('Quiz not found', 'error');
+            return null;
+        }
+        
+        const sessionCode = this.generateCode();
+        const sessionId = `session_${Date.now()}_${sessionCode}`;
+        const playerId = `player_${state.user.id || Date.now()}`;
+        
+        const sessionData = {
+            id: sessionId,
+            code: sessionCode,
+            hostId: playerId,
+            quizId: quizId,
+            quizTitle: quiz.title,
+            questions: quiz.questions,
+            status: 'lobby', // lobby, playing, finished
+            currentQuestionIndex: 0,
+            questionStartedAt: null,
+            settings: {
+                timePerQuestion: settings.timePerQuestion || 60,
+                showExplanations: settings.showExplanations !== false
+            },
+            players: {
+                [playerId]: {
+                    id: playerId,
+                    name: state.user?.username || 'Host',
+                    score: 0,
+                    isHost: true,
+                    connected: true,
+                    answeredCurrent: false,
+                    currentAnswer: null,
+                    readyForNext: false,
+                    joinedAt: Date.now()
+                }
+            },
+            answers: {},
+            createdAt: Date.now()
+        };
+        
+        try {
+            await firebaseDB.ref(`sessions/${sessionCode}`).set(sessionData);
+            
+            // Update local state
+            state.multiplayer = {
+                active: true,
+                isHost: true,
+                sessionId: sessionId,
+                sessionCode: sessionCode,
+                playerId: playerId,
+                players: sessionData.players,
+                currentAnswers: {},
+                questionTimer: settings.timePerQuestion || 60,
+                questionStartTime: null,
+                phase: 'lobby',
+                revealed: false,
+                quiz: quiz
+            };
+            
+            // Listen for session changes
+            this.listenToSession(sessionCode);
+            
+            state.view = 'multiplayer-lobby';
+            render();
+            
+            showToast(`Session created! Code: ${sessionCode}`, 'success');
+            return sessionCode;
+            
+        } catch (err) {
+            console.error('Create session error:', err);
+            showToast('Failed to create session', 'error');
+            return null;
+        }
+    },
+    
+    // Join an existing session
+    async joinSession(code) {
+        if (!initFirebase()) {
+            showToast('Multiplayer not available', 'error');
+            return false;
+        }
+        
+        const sessionCode = code.toUpperCase().trim();
+        
+        try {
+            const snapshot = await firebaseDB.ref(`sessions/${sessionCode}`).once('value');
+            const session = snapshot.val();
+            
+            if (!session) {
+                showToast('Session not found', 'error');
+                return false;
+            }
+            
+            if (session.status !== 'lobby') {
+                showToast('Game already in progress', 'error');
+                return false;
+            }
+            
+            const playerCount = Object.keys(session.players || {}).length;
+            if (playerCount >= 8) {
+                showToast('Session is full (max 8 players)', 'error');
+                return false;
+            }
+            
+            const playerId = `player_${state.user?.id || Date.now()}`;
+            const playerData = {
+                id: playerId,
+                name: state.user?.username || `Player ${playerCount + 1}`,
+                score: 0,
+                isHost: false,
+                connected: true,
+                answeredCurrent: false,
+                currentAnswer: null,
+                readyForNext: false,
+                joinedAt: Date.now()
+            };
+            
+            await firebaseDB.ref(`sessions/${sessionCode}/players/${playerId}`).set(playerData);
+            
+            // Update local state
+            state.multiplayer = {
+                active: true,
+                isHost: false,
+                sessionId: session.id,
+                sessionCode: sessionCode,
+                playerId: playerId,
+                players: { ...session.players, [playerId]: playerData },
+                currentAnswers: {},
+                questionTimer: session.settings?.timePerQuestion || 60,
+                questionStartTime: null,
+                phase: 'lobby',
+                revealed: false,
+                quiz: { title: session.quizTitle, questions: session.questions }
+            };
+            
+            // Listen for session changes
+            this.listenToSession(sessionCode);
+            
+            state.view = 'multiplayer-lobby';
+            render();
+            
+            showToast('Joined session!', 'success');
+            return true;
+            
+        } catch (err) {
+            console.error('Join session error:', err);
+            showToast('Failed to join session', 'error');
+            return false;
+        }
+    },
+    
+    // Listen for real-time session updates
+    listenToSession(sessionCode) {
+        if (sessionListener) {
+            sessionListener.off();
+        }
+        
+        sessionRef = firebaseDB.ref(`sessions/${sessionCode}`);
+        sessionListener = sessionRef.on('value', (snapshot) => {
+            const session = snapshot.val();
+            if (!session) {
+                this.handleSessionEnded();
+                return;
+            }
+            
+            // Update local state from Firebase
+            state.multiplayer.players = session.players || {};
+            state.multiplayer.quiz = { title: session.quizTitle, questions: session.questions };
+            
+            if (session.status === 'playing') {
+                state.view = 'multiplayer-game';
+                state.currentQuestionIndex = session.currentQuestionIndex || 0;
+                state.multiplayer.questionStartTime = session.questionStartedAt;
+                state.multiplayer.revealed = session.revealed || false;
+                state.multiplayer.currentAnswers = session.answers?.[session.currentQuestionIndex] || {};
+                state.multiplayer.phase = session.revealed ? 'results' : 'question';
+                
+                // Start timer if we're the joining player and game just started
+                if (!state.multiplayer.timerInterval && !session.revealed) {
+                    this.startQuestionTimer();
+                }
+            } else if (session.status === 'finished') {
+                state.multiplayer.phase = 'finished';
+                state.view = 'multiplayer-game';
+            } else {
+                state.multiplayer.phase = 'lobby';
+            }
+            
+            render();
+        });
+        
+        // Handle disconnection
+        const playerRef = firebaseDB.ref(`sessions/${sessionCode}/players/${state.multiplayer.playerId}/connected`);
+        playerRef.onDisconnect().set(false);
+    },
+    
+    // Host starts the game
+    async startGame() {
+        if (!state.multiplayer.isHost) return;
+        
+        const playerCount = Object.keys(state.multiplayer.players).length;
+        if (playerCount < 2) {
+            showToast('Need at least 2 players', 'warning');
+            return;
+        }
+        
+        try {
+            await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).update({
+                status: 'playing',
+                currentQuestionIndex: 0,
+                questionStartedAt: Date.now(),
+                revealed: false
+            });
+            
+            // Start the question timer
+            this.startQuestionTimer();
+            
+        } catch (err) {
+            console.error('Start game error:', err);
+            showToast('Failed to start game', 'error');
+        }
+    },
+    
+    // Submit an answer
+    async submitAnswer(answerIndex) {
+        if (!state.multiplayer.active) return;
+        if (state.multiplayer.revealed) return;
+        
+        const playerId = state.multiplayer.playerId;
+        const questionIndex = state.currentQuestionIndex;
+        
+        try {
+            await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).update({
+                [`answers/${questionIndex}/${playerId}`]: answerIndex,
+                [`players/${playerId}/answeredCurrent`]: true,
+                [`players/${playerId}/currentAnswer`]: answerIndex
+            });
+            
+            state.multiplayer.currentAnswers[playerId] = answerIndex;
+            render();
+            
+        } catch (err) {
+            console.error('Submit answer error:', err);
+            showToast('Failed to submit answer', 'error');
+        }
+    },
+    
+    // Timer countdown
+    startQuestionTimer() {
+        if (state.multiplayer.timerInterval) {
+            clearInterval(state.multiplayer.timerInterval);
+        }
+        
+        state.multiplayer.timerInterval = setInterval(() => {
+            if (!state.multiplayer.questionStartTime) return;
+            
+            const elapsed = (Date.now() - state.multiplayer.questionStartTime) / 1000;
+            const remaining = state.multiplayer.questionTimer - elapsed;
+            
+            if (remaining <= 0) {
+                this.timeUp();
+            }
+            
+            // Update timer display
+            const timerEl = document.getElementById('mp-timer');
+            if (timerEl) {
+                timerEl.textContent = Math.max(0, Math.ceil(remaining));
+                if (remaining <= 10) {
+                    timerEl.classList.add('timer-warning');
+                }
+            }
+        }, 100);
+    },
+    
+    // Time's up - reveal answers
+    async timeUp() {
+        if (!state.multiplayer.isHost) return;
+        if (state.multiplayer.revealed) return;
+        
+        clearInterval(state.multiplayer.timerInterval);
+        
+        // Calculate scores
+        const question = state.multiplayer.quiz.questions[state.currentQuestionIndex];
+        const answers = state.multiplayer.currentAnswers;
+        const correctAnswer = question.correct[0];
+        
+        const scoreUpdates = {};
+        Object.entries(state.multiplayer.players).forEach(([playerId, player]) => {
+            const playerAnswer = answers[playerId];
+            let scoreChange = 0;
+            
+            if (playerAnswer === undefined || playerAnswer === null) {
+                scoreChange = -1; // Timeout penalty
+            } else if (playerAnswer === correctAnswer) {
+                scoreChange = 1; // Correct
+            } else {
+                scoreChange = -1; // Wrong
+            }
+            
+            scoreUpdates[`players/${playerId}/score`] = (player.score || 0) + scoreChange;
+            scoreUpdates[`players/${playerId}/answeredCurrent`] = false;
+            scoreUpdates[`players/${playerId}/readyForNext`] = false;
+        });
+        
+        scoreUpdates['revealed'] = true;
+        
+        try {
+            await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).update(scoreUpdates);
+        } catch (err) {
+            console.error('Score update error:', err);
+        }
+    },
+    
+    // Player ready for next question
+    async readyForNext() {
+        try {
+            await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}/players/${state.multiplayer.playerId}/readyForNext`).set(true);
+            
+            // If host and all ready, move to next question
+            if (state.multiplayer.isHost) {
+                const allReady = Object.values(state.multiplayer.players).every(p => p.readyForNext);
+                if (allReady) {
+                    this.nextQuestion();
+                }
+            }
+        } catch (err) {
+            console.error('Ready error:', err);
+        }
+    },
+    
+    // Move to next question (host only)
+    async nextQuestion() {
+        if (!state.multiplayer.isHost) return;
+        
+        const nextIndex = state.currentQuestionIndex + 1;
+        const totalQuestions = state.multiplayer.quiz.questions.length;
+        
+        if (nextIndex >= totalQuestions) {
+            // Game finished
+            await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).update({
+                status: 'finished'
+            });
+            return;
+        }
+        
+        // Reset for next question
+        const resetUpdates = {
+            currentQuestionIndex: nextIndex,
+            questionStartedAt: Date.now(),
+            revealed: false
+        };
+        
+        Object.keys(state.multiplayer.players).forEach(playerId => {
+            resetUpdates[`players/${playerId}/answeredCurrent`] = false;
+            resetUpdates[`players/${playerId}/currentAnswer`] = null;
+            resetUpdates[`players/${playerId}/readyForNext`] = false;
+        });
+        
+        try {
+            await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).update(resetUpdates);
+            this.startQuestionTimer();
+        } catch (err) {
+            console.error('Next question error:', err);
+        }
+    },
+    
+    // Leave session
+    async leaveSession() {
+        if (!state.multiplayer.active) return;
+        
+        clearInterval(state.multiplayer.timerInterval);
+        
+        if (sessionListener) {
+            sessionListener.off();
+            sessionListener = null;
+        }
+        
+        try {
+            if (state.multiplayer.isHost) {
+                // Host leaving ends the session
+                await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).remove();
+            } else {
+                // Player leaving just removes them
+                await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}/players/${state.multiplayer.playerId}`).remove();
+            }
+        } catch (err) {
+            console.error('Leave session error:', err);
+        }
+        
+        this.resetState();
+        state.view = 'library';
+        render();
+        showToast('Left session', 'info');
+    },
+    
+    // Handle session ended (host left or error)
+    handleSessionEnded() {
+        clearInterval(state.multiplayer.timerInterval);
+        
+        if (sessionListener) {
+            sessionListener.off();
+            sessionListener = null;
+        }
+        
+        this.resetState();
+        state.view = 'library';
+        render();
+        showToast('Session ended', 'info');
+    },
+    
+    // Reset multiplayer state
+    resetState() {
+        state.multiplayer = {
+            active: false,
+            isHost: false,
+            sessionId: null,
+            sessionCode: null,
+            playerId: null,
+            players: {},
+            currentAnswers: {},
+            questionTimer: 60,
+            questionStartTime: null,
+            phase: 'lobby',
+            revealed: false,
+            quiz: null,
+            timerInterval: null
+        };
+    }
+};
+
+// ========== MULTIPLAYER UI COMPONENTS ==========
+
+function renderMultiplayerLobby() {
+    const mp = state.multiplayer;
+    const players = Object.values(mp.players).sort((a, b) => a.joinedAt - b.joinedAt);
+    const playerCount = players.length;
+    
+    return `
+        <div class="mp-container">
+            <nav class="navbar">
+                <div class="container">
+                    <div class="navbar-inner">
+                        <button onclick="Multiplayer.leaveSession()" class="btn btn-ghost">← Leave</button>
+                        <div style="text-align:center">
+                            <h2 style="font-size:1rem;margin-bottom:2px">🎮 Multiplayer</h2>
+                            <p class="text-xs text-muted">${escapeHtml(mp.quiz?.title || 'Quiz')}</p>
+                        </div>
+                        <div></div>
+                    </div>
+                </div>
+            </nav>
+            
+            <main class="mp-lobby">
+                <div class="container-narrow">
+                    <div class="mp-code-card">
+                        <p class="text-sm text-muted" style="margin-bottom:0.5rem">Join Code</p>
+                        <div class="mp-code">${mp.sessionCode}</div>
+                        <button onclick="navigator.clipboard.writeText('${mp.sessionCode}');showToast('Code copied!','success')" class="btn btn-ghost btn-sm" style="margin-top:1rem">
+                            📋 Copy Code
+                        </button>
+                    </div>
+                    
+                    <div class="mp-players-card">
+                        <h3 style="margin-bottom:1rem">Players (${playerCount}/8)</h3>
+                        <div class="mp-players-list">
+                            ${players.map((p, i) => `
+                                <div class="mp-player ${p.id === mp.playerId ? 'is-you' : ''}">
+                                    <div class="mp-player-avatar" style="background:${getPlayerColor(i)}">${p.name.charAt(0).toUpperCase()}</div>
+                                    <span class="mp-player-name">${escapeHtml(p.name)}</span>
+                                    ${p.isHost ? '<span class="badge badge-accent">Host</span>' : ''}
+                                    ${p.id === mp.playerId ? '<span class="badge">You</span>' : ''}
+                                    ${!p.connected ? '<span class="badge badge-error">Disconnected</span>' : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="mp-settings-card">
+                        <h3 style="margin-bottom:1rem">Game Settings</h3>
+                        <div class="mp-setting">
+                            <span>⏱️ Time per question</span>
+                            <span class="font-semibold">${mp.questionTimer}s</span>
+                        </div>
+                        <div class="mp-setting">
+                            <span>📝 Questions</span>
+                            <span class="font-semibold">${mp.quiz?.questions?.length || 0}</span>
+                        </div>
+                        <div class="mp-setting">
+                            <span>📊 Scoring</span>
+                            <span class="font-semibold">+1 correct, -1 wrong</span>
+                        </div>
+                    </div>
+                    
+                    ${mp.isHost ? `
+                        <button onclick="Multiplayer.startGame()" class="btn btn-accent btn-lg mp-start-btn" ${playerCount < 2 ? 'disabled' : ''}>
+                            🚀 Start Game ${playerCount < 2 ? '(Need 2+ players)' : ''}
+                        </button>
+                    ` : `
+                        <div class="mp-waiting">
+                            <div class="mp-waiting-spinner"></div>
+                            <p>Waiting for host to start...</p>
+                        </div>
+                    `}
+                </div>
+            </main>
+        </div>
+    `;
+}
+
+function renderMultiplayerGame() {
+    const mp = state.multiplayer;
+    const question = mp.quiz?.questions?.[state.currentQuestionIndex];
+    if (!question) return renderMultiplayerLobby();
+    
+    const players = Object.values(mp.players).sort((a, b) => (b.score || 0) - (a.score || 0));
+    const myAnswer = mp.currentAnswers[mp.playerId];
+    const hasAnswered = myAnswer !== undefined && myAnswer !== null;
+    const answeredCount = Object.keys(mp.currentAnswers).length;
+    const totalPlayers = players.length;
+    
+    // Calculate time remaining
+    let timeRemaining = mp.questionTimer;
+    if (mp.questionStartTime) {
+        const elapsed = (Date.now() - mp.questionStartTime) / 1000;
+        timeRemaining = Math.max(0, Math.ceil(mp.questionTimer - elapsed));
+    }
+    
+    return `
+        <div class="mp-container">
+            <nav class="mp-game-header">
+                <div class="container">
+                    <div class="flex justify-between items-center" style="padding:1rem 0">
+                        <div>
+                            <p class="text-sm text-muted">Question ${state.currentQuestionIndex + 1}/${mp.quiz.questions.length}</p>
+                        </div>
+                        <div class="mp-timer ${timeRemaining <= 10 ? 'timer-warning' : ''}" id="mp-timer">
+                            ${timeRemaining}
+                        </div>
+                        <div class="mp-answered-count">
+                            ${answeredCount}/${totalPlayers} answered
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width:${((state.currentQuestionIndex + 1) / mp.quiz.questions.length) * 100}%"></div>
+                    </div>
+                </div>
+            </nav>
+            
+            <main class="mp-game-content">
+                <div class="container">
+                    <div class="mp-game-layout">
+                        <div class="mp-question-area">
+                            <div class="card" style="padding:2rem">
+                                <div class="flex items-start gap-md" style="margin-bottom:2rem">
+                                    <div class="question-number">${state.currentQuestionIndex + 1}</div>
+                                    <h2 class="question-text">${escapeHtml(question.question)}</h2>
+                                </div>
+                                
+                                ${question.code ? `
+                                    <div class="code-block" style="margin-bottom:1.5rem">
+                                        <div class="code-header">
+                                            <div class="code-dot" style="background:#ef4444"></div>
+                                            <div class="code-dot" style="background:#f59e0b"></div>
+                                            <div class="code-dot" style="background:#22c55e"></div>
+                                        </div>
+                                        <pre class="code-body"><code>${escapeHtml(question.code)}</code></pre>
+                                    </div>
+                                ` : ''}
+                                
+                                ${question.image ? `
+                                    <img src="${escapeHtml(question.image)}" alt="Question image" style="max-width:100%;max-height:200px;border-radius:var(--radius-md);margin-bottom:1.5rem">
+                                ` : ''}
+                                
+                                <div class="flex flex-col gap-sm">
+                                    ${question.options.map((opt, i) => {
+                                        let cls = 'option-btn';
+                                        if (mp.revealed) {
+                                            if (question.correct.includes(i)) cls += ' correct';
+                                            else if (myAnswer === i) cls += ' incorrect';
+                                        } else if (myAnswer === i) {
+                                            cls += ' selected';
+                                        }
+                                        
+                                        return `
+                                            <button 
+                                                class="${cls}" 
+                                                onclick="Multiplayer.submitAnswer(${i})"
+                                                ${hasAnswered || mp.revealed ? 'disabled' : ''}
+                                            >
+                                                <span class="option-letter">${String.fromCharCode(65 + i)}</span>
+                                                <span style="flex:1">${escapeHtml(opt)}</span>
+                                                ${mp.revealed && question.correct.includes(i) ? '<span class="badge badge-success">✓</span>' : ''}
+                                                ${mp.revealed && myAnswer === i && !question.correct.includes(i) ? '<span class="badge badge-error">✗</span>' : ''}
+                                            </button>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                
+                                ${hasAnswered && !mp.revealed ? `
+                                    <div class="mp-waiting-reveal">
+                                        <div class="mp-waiting-spinner"></div>
+                                        <p>Waiting for others... (${answeredCount}/${totalPlayers})</p>
+                                    </div>
+                                ` : ''}
+                                
+                                ${mp.revealed ? `
+                                    <div class="mp-results-summary">
+                                        ${question.explanation ? `
+                                            <div class="explanation-box" style="margin-bottom:1.5rem">
+                                                <p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p>
+                                                <p>${escapeHtml(question.explanation)}</p>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        <div class="mp-answer-results">
+                                            ${players.map((p, i) => {
+                                                const pAnswer = mp.currentAnswers[p.id];
+                                                const isCorrect = pAnswer !== undefined && question.correct.includes(pAnswer);
+                                                const noAnswer = pAnswer === undefined || pAnswer === null;
+                                                
+                                                return `
+                                                    <div class="mp-player-result ${isCorrect ? 'correct' : noAnswer ? 'timeout' : 'incorrect'}">
+                                                        <div class="mp-player-avatar" style="background:${getPlayerColor(i)}">${p.name.charAt(0).toUpperCase()}</div>
+                                                        <span class="mp-player-name">${escapeHtml(p.name)}</span>
+                                                        <span class="mp-player-answer">
+                                                            ${noAnswer ? '⏰ Timeout' : String.fromCharCode(65 + pAnswer)}
+                                                        </span>
+                                                        <span class="mp-score-change ${isCorrect ? 'positive' : 'negative'}">
+                                                            ${isCorrect ? '+1' : '-1'}
+                                                        </span>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                        
+                                        <button onclick="Multiplayer.readyForNext()" class="btn btn-accent btn-lg" style="width:100%;margin-top:1.5rem">
+                                            ${state.currentQuestionIndex < mp.quiz.questions.length - 1 ? '➡️ Next Question' : '🏆 See Results'}
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="mp-leaderboard">
+                            <h3 style="margin-bottom:1rem">🏆 Leaderboard</h3>
+                            <div class="mp-leaderboard-list">
+                                ${players.map((p, i) => `
+                                    <div class="mp-leaderboard-item ${p.id === mp.playerId ? 'is-you' : ''}">
+                                        <span class="mp-rank">${i + 1}</span>
+                                        <div class="mp-player-avatar" style="background:${getPlayerColor(i)}">${p.name.charAt(0).toUpperCase()}</div>
+                                        <span class="mp-player-name">${escapeHtml(p.name)}</span>
+                                        <span class="mp-player-score">${p.score || 0}</span>
+                                        ${!mp.revealed && p.answeredCurrent ? '<span class="mp-answered-badge">✓</span>' : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    `;
+}
+
+function renderMultiplayerResults() {
+    const mp = state.multiplayer;
+    const players = Object.values(mp.players).sort((a, b) => (b.score || 0) - (a.score || 0));
+    const winner = players[0];
+    const myRank = players.findIndex(p => p.id === mp.playerId) + 1;
+    const myScore = players.find(p => p.id === mp.playerId)?.score || 0;
+    
+    return `
+        <div class="mp-container mp-results">
+            <div class="mp-results-hero">
+                <div class="mp-confetti"></div>
+                <h1 class="mp-results-title">🎉 Game Over!</h1>
+                <p class="text-muted" style="margin-bottom:2rem">${escapeHtml(mp.quiz?.title || 'Quiz')}</p>
+            </div>
+            
+            <div class="container-narrow">
+                <div class="mp-podium">
+                    ${players.length >= 2 ? `
+                        <div class="mp-podium-place second">
+                            <div class="mp-player-avatar large" style="background:${getPlayerColor(1)}">${players[1].name.charAt(0).toUpperCase()}</div>
+                            <p class="mp-podium-name">${escapeHtml(players[1].name)}</p>
+                            <p class="mp-podium-score">${players[1].score || 0} pts</p>
+                            <div class="mp-podium-stand">🥈</div>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mp-podium-place first">
+                        <div class="mp-winner-crown">👑</div>
+                        <div class="mp-player-avatar large" style="background:${getPlayerColor(0)}">${winner.name.charAt(0).toUpperCase()}</div>
+                        <p class="mp-podium-name">${escapeHtml(winner.name)}</p>
+                        <p class="mp-podium-score">${winner.score || 0} pts</p>
+                        <div class="mp-podium-stand">🥇</div>
+                    </div>
+                    
+                    ${players.length >= 3 ? `
+                        <div class="mp-podium-place third">
+                            <div class="mp-player-avatar large" style="background:${getPlayerColor(2)}">${players[2].name.charAt(0).toUpperCase()}</div>
+                            <p class="mp-podium-name">${escapeHtml(players[2].name)}</p>
+                            <p class="mp-podium-score">${players[2].score || 0} pts</p>
+                            <div class="mp-podium-stand">🥉</div>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="mp-your-result card" style="padding:1.5rem;margin:2rem 0;text-align:center">
+                    <p class="text-muted">Your Result</p>
+                    <h2 style="font-size:2rem;margin:0.5rem 0">#${myRank} with ${myScore} points</h2>
+                </div>
+                
+                <div class="mp-full-results card" style="padding:1.5rem;margin-bottom:2rem">
+                    <h3 style="margin-bottom:1rem">Final Standings</h3>
+                    ${players.map((p, i) => `
+                        <div class="mp-final-rank ${p.id === mp.playerId ? 'is-you' : ''}">
+                            <span class="mp-rank">${i + 1}</span>
+                            <div class="mp-player-avatar" style="background:${getPlayerColor(i)}">${p.name.charAt(0).toUpperCase()}</div>
+                            <span class="mp-player-name">${escapeHtml(p.name)}</span>
+                            <span class="mp-player-score">${p.score || 0} pts</span>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="flex gap-md">
+                    ${mp.isHost ? `
+                        <button onclick="Multiplayer.leaveSession();setTimeout(()=>showMultiplayerQuizSelect(),100)" class="btn btn-accent flex-1">
+                            🔄 Play Again
+                        </button>
+                    ` : ''}
+                    <button onclick="Multiplayer.leaveSession()" class="btn btn-ghost flex-1">
+                        ← Back to Library
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Helper function for player colors
+function getPlayerColor(index) {
+    const colors = ['#d97706', '#059669', '#0284c7', '#7c3aed', '#db2777', '#dc2626', '#0891b2', '#4f46e5'];
+    return colors[index % colors.length];
+}
+
+// Show modal to create/join multiplayer
+function showMultiplayerModal() {
+    const m = document.createElement('div');
+    m.innerHTML = `
+        <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>🎮 Multiplayer</h2>
+                    <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="mp-modal-options">
+                        <button onclick="this.closest('.modal-overlay').remove();showMultiplayerQuizSelect()" class="mp-modal-option">
+                            <span class="mp-modal-icon">🎯</span>
+                            <span class="mp-modal-title">Host a Game</span>
+                            <span class="mp-modal-desc">Create a session and invite friends</span>
+                        </button>
+                        
+                        <button onclick="this.closest('.modal-overlay').querySelector('.mp-join-section').style.display='block';this.style.display='none'" class="mp-modal-option">
+                            <span class="mp-modal-icon">🔗</span>
+                            <span class="mp-modal-title">Join a Game</span>
+                            <span class="mp-modal-desc">Enter a session code</span>
+                        </button>
+                    </div>
+                    
+                    <div class="mp-join-section" style="display:none;margin-top:1.5rem">
+                        <label class="input-label">Enter Session Code</label>
+                        <input type="text" id="mp-join-code" class="input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:0.25rem">
+                        <button onclick="joinMultiplayerGame()" class="btn btn-accent" style="width:100%;margin-top:1rem">
+                            Join Game
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m.firstElementChild);
+}
+
+// Show quiz selection for hosting
+function showMultiplayerQuizSelect() {
+    const m = document.createElement('div');
+    m.innerHTML = `
+        <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
+            <div class="modal modal-lg">
+                <div class="modal-header">
+                    <h2>🎯 Select a Quiz to Host</h2>
+                    <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                </div>
+                <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+                    <div class="mp-quiz-grid">
+                        ${state.quizzes.map(q => `
+                            <div class="mp-quiz-option card" onclick="hostMultiplayerGame(${q.id})">
+                                <h3 style="margin-bottom:0.25rem">${escapeHtml(q.title)}</h3>
+                                <p class="text-sm text-muted">${q.questions?.length || 0} questions • ${q.description || 'No category'}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(m.firstElementChild);
+}
+
+async function hostMultiplayerGame(quizId) {
+    document.querySelector('.modal-overlay')?.remove();
+    showLoading();
+    await Multiplayer.createSession(quizId);
+    hideLoading();
+}
+
+async function joinMultiplayerGame() {
+    const code = document.getElementById('mp-join-code')?.value;
+    if (!code || code.length < 4) {
+        showToast('Enter a valid code', 'warning');
+        return;
+    }
+    
+    document.querySelector('.modal-overlay')?.remove();
+    showLoading();
+    await Multiplayer.joinSession(code);
+    hideLoading();
+}
+
+console.log('🚀 Phase 5: Multiplayer Mode loaded!');
+console.log('   ✓ Firebase real-time sync');
+console.log('   ✓ Session management');
+console.log('   ✓ Live scoring');
+console.log('   ✓ 60-second timer');
 
         /* ============================================
    QUICK WIN FEATURES - ADD TO BEGINNING OF app.js
@@ -3859,7 +4774,24 @@ function renderVisualEditor() {
         function render() {
             let html = '';
             if (!state.isAuthenticated) html = renderAuth();
-            else { switch (state.view) { case 'library': html = renderLibrary(); break; case 'create': html = renderCreate(); break; case 'quiz': html = renderQuiz(); break; case 'results': html = renderResults(); break; case 'review': html = renderReview(); break; default: html = renderLibrary(); } }
+            else { 
+                switch (state.view) { 
+                    case 'library': html = renderLibrary(); break; 
+                    case 'create': html = renderCreate(); break; 
+                    case 'quiz': html = renderQuiz(); break; 
+                    case 'results': html = renderResults(); break; 
+                    case 'review': html = renderReview(); break;
+                    case 'multiplayer-lobby': html = renderMultiplayerLobby(); break;
+                    case 'multiplayer-game': 
+                        if (state.multiplayer.phase === 'finished') {
+                            html = renderMultiplayerResults();
+                        } else {
+                            html = renderMultiplayerGame();
+                        }
+                        break;
+                    default: html = renderLibrary(); 
+                } 
+            }
             document.getElementById('app').innerHTML = html;
             bindEvents();
 
@@ -4257,6 +5189,7 @@ function discardProgress(quizId) {
                             </a>
                             <div class="flex items-center gap-sm">
                                 <button onclick="toggleDarkMode()" class="btn btn-icon btn-ghost">${state.darkMode ? '☀️' : '🌙'}</button>
+                                <button onclick="showMultiplayerModal()" class="btn btn-ghost btn-sm">🎮 Multiplayer</button>
                                 <button onclick="showQuizletImport()" class="btn btn-ghost btn-sm">Quizlet</button>
                                 <button onclick="state.view='create';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';render()" class="btn btn-accent">+ New Quiz</button>
                                 <div class="dropdown">
