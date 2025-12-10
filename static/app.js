@@ -2218,50 +2218,49 @@ const Multiplayer = {
     },
     
     // Leave session
-    async leaveSession() {
+async leaveSession() {
         if (!state.multiplayer.active) return;
         
-        clearInterval(state.multiplayer.timerInterval);
+        console.log('Cleaning up multiplayer session...');
         
+        // CRITICAL: Stop timer
+        if (state.multiplayer.timerInterval) {
+            clearInterval(state.multiplayer.timerInterval);
+            state.multiplayer.timerInterval = null;
+        }
+        
+        // CRITICAL: Stop Firebase listener
         if (sessionListener) {
+            console.log('Removing Firebase listener...');
             sessionListener.off();
             sessionListener = null;
         }
         
+        // CRITICAL: Clear session reference
+        if (sessionRef) {
+            sessionRef = null;
+        }
+        
         try {
-            if (state.multiplayer.isHost) {
-                // Host leaving ends the session
-                await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).remove();
-            } else {
-                // Player leaving just removes them
-                await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}/players/${state.multiplayer.playerId}`).remove();
+            if (state.multiplayer.sessionCode) {
+                if (state.multiplayer.isHost) {
+                    // Host leaving ends the session
+                    await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}`).remove();
+                } else {
+                    // Player leaving just removes them
+                    await firebaseDB.ref(`sessions/${state.multiplayer.sessionCode}/players/${state.multiplayer.playerId}`).remove();
+                }
             }
         } catch (err) {
             console.error('Leave session error:', err);
         }
         
+        // Reset state
         this.resetState();
-        state.view = 'library';
-        render();
-        showToast('Left session', 'info');
+        
+        console.log('Multiplayer cleanup complete!');
     },
     
-    // Handle session ended (host left or error)
-    handleSessionEnded() {
-        clearInterval(state.multiplayer.timerInterval);
-        
-        if (sessionListener) {
-            sessionListener.off();
-            sessionListener = null;
-        }
-        
-        this.resetState();
-        state.view = 'library';
-        render();
-        showToast('Session ended', 'info');
-    },
-    
-    // Reset multiplayer state
     resetState() {
         state.multiplayer = {
             active: false,
@@ -2284,7 +2283,7 @@ const Multiplayer = {
 // ========== MULTIPLAYER UI COMPONENTS ==========
 
 function renderMultiplayerLobby() {
-    const mp = state.multiplayer;
+     const mp = state.multiplayer;
     const players = Object.values(mp.players).sort((a, b) => a.joinedAt - b.joinedAt);
     const playerCount = players.length;
     
@@ -2293,6 +2292,7 @@ function renderMultiplayerLobby() {
             <nav class="navbar">
                 <div class="container">
                     <div class="navbar-inner">
+                        <!-- FIXED: Properly leave session when clicking back -->
                         <button onclick="Multiplayer.leaveSession()" class="btn btn-ghost">← Leave</button>
                         <div style="text-align:center">
                             <h2 style="font-size:1rem;margin-bottom:2px">🎮 Multiplayer</h2>
@@ -2598,7 +2598,8 @@ function getPlayerColor(index) {
 }
 
 // Show modal to create/join multiplayer
-function showMultiplayerModal() {
+async function showMultiplayerModal() {
+    // DON'T initialize Firebase until user actually wants to play
     const m = document.createElement('div');
     m.innerHTML = `
         <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
@@ -2608,26 +2609,52 @@ function showMultiplayerModal() {
                     <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
                 </div>
                 <div class="modal-body">
-                    <div class="mp-modal-options">
-                        <button onclick="this.closest('.modal-overlay').remove();showMultiplayerQuizSelect()" class="mp-modal-option">
-                            <span class="mp-modal-icon">🎯</span>
-                            <span class="mp-modal-title">Host a Game</span>
-                            <span class="mp-modal-desc">Create a session and invite friends</span>
-                        </button>
+                    <p class="text-muted" style="margin-bottom:2rem">
+                        Quiz with friends in real-time!
+                    </p>
+                    
+                    <div class="mp-options">
+                        <!-- FIXED: Only init Firebase when user clicks -->
+                        <div class="mp-option-card" onclick="this.closest('.modal-overlay').remove();hostGameWithInit()">
+                            <div class="mp-option-icon" style="background:var(--accent);color:white">
+                                <span style="font-size:2rem">🎯</span>
+                            </div>
+                            <div style="flex:1">
+                                <h3 style="margin-bottom:0.25rem">Host a Game</h3>
+                                <p class="text-sm text-muted">Create a session and invite friends</p>
+                            </div>
+                            <span style="font-size:1.5rem;color:var(--cream)">→</span>
+                        </div>
                         
-                        <button onclick="this.closest('.modal-overlay').querySelector('.mp-join-section').style.display='block';this.style.display='none'" class="mp-modal-option">
-                            <span class="mp-modal-icon">🔗</span>
-                            <span class="mp-modal-title">Join a Game</span>
-                            <span class="mp-modal-desc">Enter a session code</span>
-                        </button>
+                        <div class="mp-option-card" onclick="event.stopPropagation()">
+                            <div class="mp-option-icon" style="background:var(--success);color:white">
+                                <span style="font-size:2rem">🔗</span>
+                            </div>
+                            <div style="flex:1">
+                                <h3 style="margin-bottom:0.5rem">Join a Game</h3>
+                                <div class="flex gap-sm">
+                                    <input 
+                                        type="text" 
+                                        id="mp-join-code" 
+                                        class="input" 
+                                        placeholder="Enter code"
+                                        maxlength="6"
+                                        style="text-transform:uppercase;font-family:monospace"
+                                        oninput="this.value=this.value.toUpperCase()"
+                                    >
+                                    <!-- FIXED: Only init Firebase when user clicks join -->
+                                    <button onclick="joinGameWithInit()" class="btn btn-success">
+                                        Join
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="mp-join-section" style="display:none;margin-top:1.5rem">
-                        <label class="input-label">Enter Session Code</label>
-                        <input type="text" id="mp-join-code" class="input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:0.25rem">
-                        <button onclick="joinMultiplayerGame()" class="btn btn-accent" style="width:100%;margin-top:1rem">
-                            Join Game
-                        </button>
+                    <div class="card" style="padding:1rem;background:var(--cream);margin-top:1.5rem">
+                        <p class="text-sm text-muted">
+                            ⚠️ Note: Multiplayer requires Firebase and may use bandwidth
+                        </p>
                     </div>
                 </div>
             </div>
@@ -2635,7 +2662,46 @@ function showMultiplayerModal() {
     `;
     document.body.appendChild(m.firstElementChild);
 }
+async function hostGameWithInit() {
+    showLoading();
+    const initialized = await initFirebase();
+    hideLoading();
+    
+    if (!initialized) {
+        showToast('Failed to initialize multiplayer', 'error');
+        return;
+    }
+    
+    showMultiplayerQuizSelect();
+}
 
+async function joinGameWithInit() {
+    const code = document.getElementById('mp-join-code')?.value;
+    if (!code || code.length < 4) {
+        showToast('Enter a valid code', 'warning');
+        return;
+    }
+    
+    showLoading();
+    const initialized = await initFirebase();
+    
+    if (!initialized) {
+        hideLoading();
+        showToast('Failed to initialize multiplayer', 'error');
+        return;
+    }
+    
+    document.querySelector('.modal-overlay')?.remove();
+    await Multiplayer.joinSession(code);
+    hideLoading();
+}
+
+window.addEventListener('beforeunload', () => {
+    if (state.multiplayer.active) {
+        console.log('Page unloading, cleaning up multiplayer...');
+        Multiplayer.leaveSession();
+    }
+});
 // Show quiz selection for hosting
 function showMultiplayerQuizSelect() {
     const m = document.createElement('div');
@@ -4773,33 +4839,41 @@ function renderVisualEditor() {
     });
 }
         function render() {
-            let html = '';
-            if (!state.isAuthenticated) html = renderAuth();
-            else { 
-                switch (state.view) { 
-                    case 'library': html = renderLibrary(); break; 
-                    case 'create': html = renderCreate(); break; 
-                    case 'quiz': html = renderQuiz(); break; 
-                    case 'results': html = renderResults(); break; 
-                    case 'review': html = renderReview(); break;
-                    case 'multiplayer-lobby': html = renderMultiplayerLobby(); break;
-                    case 'multiplayer-game': 
-                        if (state.multiplayer.phase === 'finished') {
-                            html = renderMultiplayerResults();
-                        } else {
-                            html = renderMultiplayerGame();
-                        }
-                        break;
-                    default: html = renderLibrary(); 
-                } 
-            }
-            document.getElementById('app').innerHTML = html;
-            bindEvents();
+    // CRITICAL: Stop multiplayer listeners if leaving multiplayer views
+    if (state.multiplayer.active && 
+        state.view !== 'multiplayer-lobby' && 
+        state.view !== 'multiplayer-game') {
+        console.log('Leaving multiplayer, cleaning up Firebase...');
+        Multiplayer.leaveSession();
+    }
+    
+    let html = '';
+    if (!state.isAuthenticated) html = renderAuth();
+    else { 
+        switch (state.view) { 
+            case 'library': html = renderLibrary(); break; 
+            case 'create': html = renderCreate(); break; 
+            case 'quiz': html = renderQuiz(); break; 
+            case 'results': html = renderResults(); break; 
+            case 'review': html = renderReview(); break;
+            case 'multiplayer-lobby': html = renderMultiplayerLobby(); break;
+            case 'multiplayer-game': 
+                if (state.multiplayer.phase === 'finished') {
+                    html = renderMultiplayerResults();
+                } else {
+                    html = renderMultiplayerGame();
+                }
+                break;
+            default: html = renderLibrary(); 
+        } 
+    }
+    document.getElementById('app').innerHTML = html;
+    bindEvents();
 
-            // Save creation state after rendering
     if (state.isAuthenticated && state.view === 'create') {
-        saveCreationState();}
-        }
+        saveCreationState();
+    }
+}
         
         function renderQuizGrid() {
             console.log('renderQuizGrid called');
