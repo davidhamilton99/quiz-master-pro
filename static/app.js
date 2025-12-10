@@ -4916,8 +4916,52 @@ function bindEvents() {
     } catch (e) {
         console.error('Failed to save quiz progress:', e);
     }
+    if (state.view === 'quiz' && state.currentQuiz) {
+        const quizContent = document.querySelector('.quiz-content');
+        if (quizContent && 'ontouchstart' in window) {
+            quizContent.addEventListener('touchstart', handleTouchStart, { passive: true });
+            quizContent.addEventListener('touchend', handleTouchEnd, { passive: true });
+        }
+    }
+}
+let touchStartX = 0;
+let touchEndX = 0;
+let touchStartY = 0;
+let touchEndY = 0;
+
+function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
 }
 
+function handleTouchEnd(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+}
+
+function handleSwipe() {
+    const swipeThreshold = 50; // minimum distance for swipe
+    const horizontalDistance = Math.abs(touchEndX - touchStartX);
+    const verticalDistance = Math.abs(touchEndY - touchStartY);
+    
+    // Only trigger if horizontal swipe is dominant (not vertical scroll)
+    if (horizontalDistance > verticalDistance && horizontalDistance > swipeThreshold) {
+        if (touchEndX < touchStartX) {
+            // Swipe left - next question
+            if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
+                nextQuestion();
+            }
+        }
+        
+        if (touchEndX > touchStartX) {
+            // Swipe right - previous question
+            if (state.currentQuestionIndex > 0) {
+                prevQuestion();
+            }
+        }
+    }
+}
 
 function loadQuizProgress(quizId = null) {
     try {
@@ -5419,40 +5463,146 @@ C. 120
     `;
 }
         
-        function renderQuiz() {
-            const q = state.currentQuiz.questions[state.currentQuestionIndex];
-            console.log('Question type:', q.type, 'Full question:', q); // DEBUG
-            const prog = ((state.currentQuestionIndex + 1) / state.currentQuiz.questions.length) * 100;
-            const flagged = state.flaggedQuestions.has(state.currentQuestionIndex);
-            const ua = state.answers[state.currentQuestionIndex] || [];
-            let isCorrect = false;
-            if (state.studyMode && state.showAnswer) {
-                if (q.type === 'choice') { const as = new Set(ua), cs = new Set(q.correct); isCorrect = as.size === cs.size && [...as].every(a => cs.has(a)); }
-                else if (q.type === 'ordering') isCorrect = JSON.stringify(ua) === JSON.stringify(q.correct);
-            }
+function renderQuiz() {
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    console.log('Question type:', q.type, 'Full question:', q); // DEBUG
+    const prog = ((state.currentQuestionIndex + 1) / state.currentQuiz.questions.length) * 100;
+    const flagged = state.flaggedQuestions.has(state.currentQuestionIndex);
+    const ua = state.answers[state.currentQuestionIndex] || [];
+    let isCorrect = false;
+    if (state.studyMode && state.showAnswer) {
+        if (q.type === 'choice') { const as = new Set(ua), cs = new Set(q.correct); isCorrect = as.size === cs.size && [...as].every(a => cs.has(a)); }
+        else if (q.type === 'ordering') isCorrect = JSON.stringify(ua) === JSON.stringify(q.correct);
+    }
+    
+    let optHTML = '';
+    if (q.type === 'ordering') {
+        const order = state.answers[state.currentQuestionIndex] || q.options.map((_, i) => i);
+        optHTML = `<div class="flex flex-col gap-sm">${order.map((oi, pos) => `<div draggable="true" class="draggable-item ${state.studyMode && state.showAnswer ? (q.correct[pos] === oi ? 'correct' : 'incorrect') : ''}" data-position="${pos}"><span class="drag-handle">☰</span><span class="drag-number">${pos + 1}</span><span style="flex:1">${escapeHtml(q.options[oi])}</span></div>`).join('')}</div><p class="text-sm text-muted" style="margin-top:1rem">${state.studyMode && !state.showAnswer ? '💡 Drag to reorder, then click Check Answer' : '💡 Drag to reorder'}</p>`;
+    } else if (q.type !== 'ios' && q.options && q.options.length > 0) {
+        optHTML = q.options.map((opt, i) => {
+            const sel = ua.includes(i), corr = q.correct.includes(i);
+            let cls = 'option-btn';
+            if (state.studyMode && state.showAnswer) { if (corr) cls += ' correct'; else if (sel) cls += ' incorrect'; }
+            else if (sel) cls += ' selected';
+            return `<button class="${cls}" onclick="selectAnswer(${i})" ${state.studyMode && state.showAnswer ? 'disabled' : ''}><span class="option-letter">${String.fromCharCode(65 + i)}</span><span style="flex:1">${escapeHtml(opt)}</span>${state.studyMode && state.showAnswer && corr ? '<span class="badge badge-success">✓</span>' : ''}${state.studyMode && state.showAnswer && sel && !corr ? '<span class="badge badge-error">✗</span>' : ''}</button>`;
+        }).join('');
+    }
+    
+    return `
+        <div style="min-height:100vh;background:var(--paper)">
+            <header class="quiz-header">
+                <div class="container">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-md">
+                            <div class="flex gap-sm">
+                                <button onclick="saveAndExitQuiz()" class="btn btn-ghost btn-sm">💾 Save & Exit</button>
+                            </div>
+                            <div>
+                                <h2 style="font-size:1rem;margin-bottom:2px">${escapeHtml(state.currentQuiz.title)}</h2>
+                                <p class="text-xs text-muted">${state.studyMode ? '📖 Study' : '🎯 Quiz'}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-sm">
+                            ${state.timerEnabled ? `<div class="badge" style="font-family:monospace;font-size:1rem;padding:0.5rem 1rem">⏱️ <span id="timer">${Math.floor(state.timeRemaining / 60)}:${(state.timeRemaining % 60).toString().padStart(2, '0')}</span></div>` : ''}
+                            ${state.studyMode && state.streak > 0 ? `<div class="streak-badge">🔥 ${state.streak}</div>` : ''}
+                            <button onclick="toggleFlag()" class="btn btn-icon ${flagged ? 'btn-accent' : 'btn-ghost'}">${flagged ? '🚩' : '⚑'}</button>
+                        </div>
+                    </div>
+                </div>
+            </header>
             
-            let optHTML = '';
-            if (q.type === 'ordering') {
-                const order = state.answers[state.currentQuestionIndex] || q.options.map((_, i) => i);
-                optHTML = `<div class="flex flex-col gap-sm">${order.map((oi, pos) => `<div draggable="true" class="draggable-item ${state.studyMode && state.showAnswer ? (q.correct[pos] === oi ? 'correct' : 'incorrect') : ''}" data-position="${pos}"><span class="drag-handle">☰</span><span class="drag-number">${pos + 1}</span><span style="flex:1">${escapeHtml(q.options[oi])}</span></div>`).join('')}</div><p class="text-sm text-muted" style="margin-top:1rem">${state.studyMode && !state.showAnswer ? '💡 Drag to reorder, then click Check Answer' : '💡 Drag to reorder'}</p>`;
-            } else if (q.type !== 'ios' && q.options && q.options.length > 0) {
-                optHTML = q.options.map((opt, i) => {
-                    const sel = ua.includes(i), corr = q.correct.includes(i);
-                    let cls = 'option-btn';
-                    if (state.studyMode && state.showAnswer) { if (corr) cls += ' correct'; else if (sel) cls += ' incorrect'; }
-                    else if (sel) cls += ' selected';
-                    return `<button class="${cls}" onclick="selectAnswer(${i})" ${state.studyMode && state.showAnswer ? 'disabled' : ''}><span class="option-letter">${String.fromCharCode(65 + i)}</span><span style="flex:1">${escapeHtml(opt)}</span>${state.studyMode && state.showAnswer && corr ? '<span class="badge badge-success">✓</span>' : ''}${state.studyMode && state.showAnswer && sel && !corr ? '<span class="badge badge-error">✗</span>' : ''}</button>`;
-                }).join('');
-            }
+            <div class="quiz-progress-section">
+                <div class="container">
+                    <div class="flex justify-between items-center" style="margin-bottom:0.5rem">
+                        <span class="text-sm text-muted">Question ${state.currentQuestionIndex + 1} of ${state.currentQuiz.questions.length}</span>
+                        <span class="text-sm font-semibold" style="color:var(--accent)">${Math.round(prog)}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width:${prog}%"></div>
+                    </div>
+                </div>
+            </div>
             
-            return `<div style="min-height:100vh;background:var(--paper)"><header class="quiz-header"><div class="container"><div class="flex justify-between items-center"><div class="flex items-center gap-md"><div class="flex gap-sm">
-    <button onclick="saveAndExitQuiz()" class="btn btn-ghost btn-sm">💾 Save & Exit</button>
-</div><div><h2 style="font-size:1rem;margin-bottom:2px">${escapeHtml(state.currentQuiz.title)}</h2><p class="text-xs text-muted">${state.studyMode ? '📖 Study' : '🎯 Quiz'}</p></div></div><div class="flex items-center gap-sm">${state.timerEnabled ? `<div class="badge" style="font-family:monospace;font-size:1rem;padding:0.5rem 1rem">⏱️ <span id="timer">${Math.floor(state.timeRemaining / 60)}:${(state.timeRemaining % 60).toString().padStart(2, '0')}</span></div>` : ''}${state.studyMode && state.streak > 0 ? `<div class="streak-badge">🔥 ${state.streak}</div>` : ''}<button onclick="toggleFlag()" class="btn btn-icon ${flagged ? 'btn-accent' : 'btn-ghost'}">${flagged ? '🚩' : '⚑'}</button></div></div></div></header>
-            <div class="quiz-progress-section"><div class="container"><div class="flex justify-between items-center" style="margin-bottom:0.5rem"><span class="text-sm text-muted">Question ${state.currentQuestionIndex + 1} of ${state.currentQuiz.questions.length}</span><span class="text-sm font-semibold" style="color:var(--accent)">${Math.round(prog)}%</span></div><div class="progress-bar"><div class="progress-fill" style="width:${prog}%"></div></div></div></div>
-            <div class="quiz-content"><div class="container-narrow">${state.studyMode && state.showAnswer ? `<div class="feedback-banner ${isCorrect ? 'correct' : 'incorrect'}" style="margin-bottom:1.5rem"><span style="font-size:1.25rem">${isCorrect ? '✓' : '✗'}</span><span>${isCorrect ? 'Correct!' : 'Incorrect'}</span>${isCorrect && state.streak > 1 ? `<span class="streak-badge" style="margin-left:auto">🔥 ${state.streak}</span>` : ''}</div>` : ''}
-            <div class="card" style="padding:2rem;margin-bottom:1.5rem"><div class="flex items-start gap-md" style="margin-bottom:2rem"><div class="question-number">${state.currentQuestionIndex + 1}</div><h2 class="question-text">${escapeHtml(q.question)}</h2>${q.type === 'ios' ? '<span class="question-type-ios">Cisco IOS</span>' : ''}</div>${q.type === 'ios' ? renderIOSTerminal(q, state.currentQuestionIndex) : ''}${q.code && q.type !== 'ios' ? renderExecutableCodeBlock(q, state.currentQuestionIndex) : ''}${q.image ? `<img src="${escapeHtml(q.image)}" alt="Question image" style="max-width:100%;max-height:300px;border-radius:var(--radius-md);margin-bottom:1.5rem">` : ''}${q.type === 'choice' && q.correct && q.correct.length > 1 ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}${q.type !== 'ios' ? `<div class="flex flex-col gap-sm">${optHTML}</div>` : ''}${q.type === 'ios' ? `<button onclick="submitIOSAnswer(${state.currentQuestionIndex})" class="btn btn-accent" style="margin-top:1rem;width:100%">Submit Answer</button>` : ''}${state.studyMode && !state.showAnswer && q.correct && (q.correct.length > 1 || q.type === 'ordering') ? `<button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>` : ''}${state.studyMode && state.showAnswer && q.explanation ? `<div class="explanation-box" style="margin-top:1.5rem"><p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p><p>${escapeHtml(q.explanation)}</p></div>` : ''}</div></div></div>
-            <footer class="quiz-footer"><div class="container"><div class="flex justify-between items-center gap-md"><button onclick="prevQuestion()" class="btn btn-ghost" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>← Prev</button><div class="flex gap-xs">${Array.from({length: Math.min(state.currentQuiz.questions.length, 10)}, (_, i) => { const idx = state.currentQuiz.questions.length <= 10 ? i : Math.max(0, Math.min(state.currentQuestionIndex - 4, state.currentQuiz.questions.length - 10)) + i; const cur = idx === state.currentQuestionIndex, ans = state.answers[idx] != null, fl = state.flaggedQuestions.has(idx); return `<button onclick="state.currentQuestionIndex=${idx};state.showAnswer=false;render()" class="btn btn-icon btn-sm" style="width:32px;height:32px;font-size:0.75rem;background:${cur ? 'var(--accent)' : ans ? 'var(--cream)' : 'transparent'};color:${cur ? 'white' : 'var(--ink)'};border:${fl ? '2px solid var(--accent)' : '1px solid var(--cream)'}">${idx + 1}</button>`; }).join('')}</div>${state.currentQuestionIndex === state.currentQuiz.questions.length - 1 ? `<button onclick="submitQuiz()" class="btn btn-accent">Submit</button>` : `<button onclick="nextQuestion()" class="btn btn-primary">Next →</button>`}</div></div></footer></div>`;
-        }
+            <div class="quiz-content">
+                <div class="container-narrow">
+                    ${state.studyMode && state.showAnswer ? `
+                        <div class="feedback-banner ${isCorrect ? 'correct' : 'incorrect'}" style="margin-bottom:1.5rem">
+                            <span style="font-size:1.25rem">${isCorrect ? '✓' : '✗'}</span>
+                            <span>${isCorrect ? 'Correct!' : 'Incorrect'}</span>
+                            ${isCorrect && state.streak > 1 ? `<span class="streak-badge" style="margin-left:auto">🔥 ${state.streak}</span>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="card" style="padding:2rem;margin-bottom:1.5rem">
+                        <div class="flex items-start gap-md" style="margin-bottom:2rem">
+                            <div class="question-number">${state.currentQuestionIndex + 1}</div>
+                            <h2 class="question-text">${escapeHtml(q.question)}</h2>
+                            ${q.type === 'ios' ? '<span class="question-type-ios">Cisco IOS</span>' : ''}
+                        </div>
+                        
+                        ${q.type === 'ios' ? renderIOSTerminal(q, state.currentQuestionIndex) : ''}
+                        
+                        ${q.code && q.type !== 'ios' ? renderExecutableCodeBlock(q, state.currentQuestionIndex) : ''}
+                        
+                        ${q.image ? `<img src="${escapeHtml(q.image)}" alt="Question image" style="max-width:100%;max-height:300px;border-radius:var(--radius-md);margin-bottom:1.5rem">` : ''}
+                        
+                        ${q.type === 'choice' && q.correct && q.correct.length > 1 ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}
+                        
+                        ${q.type !== 'ios' ? `<div class="flex flex-col gap-sm">${optHTML}</div>` : ''}
+                        
+                        ${q.type === 'ios' ? `<button onclick="submitIOSAnswer(${state.currentQuestionIndex})" class="btn btn-accent" style="margin-top:1rem;width:100%">Submit Answer</button>` : ''}
+                        
+                        ${state.studyMode && !state.showAnswer && q.correct && (q.correct.length > 1 || q.type === 'ordering') ? `<button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>` : ''}
+                        
+                        ${state.studyMode && state.showAnswer && q.explanation ? `
+                            <div class="explanation-box" style="margin-top:1.5rem">
+                                <p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p>
+                                <p>${escapeHtml(q.explanation)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            
+            <footer class="quiz-footer">
+                <div class="container">
+                    <div class="flex justify-between items-center gap-md">
+                        <button onclick="prevQuestion()" class="btn btn-ghost btn-sm" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>
+                            ← Prev
+                        </button>
+                        
+                        <!-- Mobile: Show current question and total -->
+                        <div class="show-mobile" style="text-align:center">
+                            <div style="font-size:0.875rem;font-weight:600;color:var(--text-primary)">
+                                ${state.currentQuestionIndex + 1} / ${state.currentQuiz.questions.length}
+                            </div>
+                            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">
+                                👆 Swipe to navigate
+                            </div>
+                        </div>
+                        
+                        <!-- Desktop: Show question dots -->
+                        <div class="flex gap-xs hide-mobile">
+                            ${Array.from({length: Math.min(state.currentQuiz.questions.length, 10)}, (_, i) => { 
+                                const idx = state.currentQuiz.questions.length <= 10 ? i : Math.max(0, Math.min(state.currentQuestionIndex - 4, state.currentQuiz.questions.length - 10)) + i; 
+                                const cur = idx === state.currentQuestionIndex;
+                                const ans = state.answers[idx] != null;
+                                const fl = state.flaggedQuestions.has(idx); 
+                                return `<button onclick="state.currentQuestionIndex=${idx};state.showAnswer=false;render()" class="btn btn-icon btn-sm" style="width:32px;height:32px;font-size:0.75rem;background:${cur ? 'var(--accent)' : ans ? 'var(--cream)' : 'transparent'};color:${cur ? 'white' : 'var(--ink)'};border:${fl ? '2px solid var(--accent)' : '1px solid var(--cream)'}">${idx + 1}</button>`; 
+                            }).join('')}
+                        </div>
+                        
+                        ${state.currentQuestionIndex === state.currentQuiz.questions.length - 1 ? 
+                            `<button onclick="submitQuiz()" class="btn btn-accent btn-sm">Submit</button>` : 
+                            `<button onclick="nextQuestion()" class="btn btn-primary btn-sm">Next →</button>`
+                        }
+                    </div>
+                </div>
+            </footer>
+        </div>
+    `;
+}
         function saveAndExitQuiz() {
     saveQuizProgress();
     stopTimer();
