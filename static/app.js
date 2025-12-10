@@ -1820,7 +1820,7 @@ function initFirebase() {
             return false;
         }
         
-        firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+        firebaseApp = firebase.initializeApp(firebaseConfig); // ✅ Fixed: use firebaseConfig (lowercase)
         firebaseDB = firebase.database();
         console.log('✅ Firebase initialized');
         return true;
