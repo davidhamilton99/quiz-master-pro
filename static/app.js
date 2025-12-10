@@ -4818,6 +4818,9 @@ function renderEditorContent(q) {
     }
 }
         
+// APP.JS - IMPROVED DROPDOWN HANDLING
+// Update the bindEvents function to prevent dropdown from closing on hover
+
 function bindEvents() {
     if (state.view === 'create' && !state.visualEditorMode && state.isAuthenticated) {
         setTimeout(() => {
@@ -4840,8 +4843,8 @@ function bindEvents() {
         }, 0);
     }
     
-    // Combine all library view event bindings
-    if (state.view === 'library') {
+    // IMPROVED LIBRARY VIEW EVENT BINDINGS
+       if (state.view === 'library') {
         setTimeout(() => {
             // Search input
             const searchInput = document.getElementById('quiz-search');
@@ -4852,10 +4855,43 @@ function bindEvents() {
                 });
             }
             
+            // IMPROVED: Dropdown handling - prevent closing on hover
+            document.querySelectorAll('.dropdown').forEach(dropdown => {
+                const button = dropdown.querySelector('.btn-icon');
+                const menu = dropdown.querySelector('.dropdown-menu');
+                
+                // Toggle on button click
+                button?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    
+                    // Close all other dropdowns
+                    document.querySelectorAll('.dropdown').forEach(d => {
+                        if (d !== dropdown) d.classList.remove('open');
+                    });
+                    
+                    // Toggle this dropdown
+                    dropdown.classList.toggle('open');
+                });
+                
+                // Keep open when hovering menu
+                menu?.addEventListener('mouseenter', (e) => {
+                    e.stopPropagation();
+                });
+                
+                // Close only when clicking menu items
+                menu?.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('dropdown-item')) {
+                        dropdown.classList.remove('open');
+                    }
+                });
+            });
+            
             // Close dropdowns when clicking outside
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.dropdown')) {
-                    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+                    document.querySelectorAll('.dropdown.open').forEach(d => {
+                        d.classList.remove('open');
+                    });
                 }
             });
         }, 0);
@@ -4863,61 +4899,8 @@ function bindEvents() {
         renderQuizGrid();
     }
 
-    if (state.view === 'quiz' && state.currentQuiz?.questions[state.currentQuestionIndex]?.type === 'ordering') {
-        setTimeout(() => {
-            document.querySelectorAll('.draggable-item').forEach((item, i) => {
-                item.addEventListener('dragstart', e => handleDragStart(e, i));
-                item.addEventListener('dragover', handleDragOver);
-                item.addEventListener('dragleave', handleDragLeave);
-                item.addEventListener('drop', e => handleDrop(e, i));
-                item.addEventListener('dragend', handleDragEnd);
-            });
-        }, 0);
-    }
-    
-    if (state.view === 'quiz' && state.timerEnabled) updateTimerDisplay();
+    // ... rest of bindEvents
 }
-        function saveQuizProgress() {
-    if (!state.currentQuiz) return;
-    
-    const progress = {
-        quizId: state.currentQuiz.id,
-        quizTitle: state.currentQuiz.title,
-        questions: state.currentQuiz.questions,
-        currentQuestionIndex: state.currentQuestionIndex,
-        answers: state.answers,
-        studyMode: state.studyMode,
-        showAnswer: state.showAnswer,
-        flaggedQuestions: Array.from(state.flaggedQuestions),
-        timerEnabled: state.timerEnabled,
-        timerMinutes: state.timerMinutes,
-        timeRemaining: state.timeRemaining || 0,
-        startTime: state.startTime || Date.now(),
-        streak: state.streak || 0,
-        maxStreak: state.maxStreak || 0,
-        savedAt: Date.now()
-    };
-    
-    try {
-        const stored = localStorage.getItem('quiz-progress-all');
-        const allProgress = stored ? JSON.parse(stored) : {};
-        
-        allProgress[state.currentQuiz.id] = progress;
-        
-        // Clean up old progress (older than 7 days)
-        Object.keys(allProgress).forEach(qid => {
-            const daysSinceStart = (Date.now() - (allProgress[qid].startTime || Date.now())) / (1000 * 60 * 60 * 24);
-            if (daysSinceStart > 7) {
-                delete allProgress[qid];
-            }
-        });
-        
-        localStorage.setItem('quiz-progress-all', JSON.stringify(allProgress));
-    } catch (e) {
-        console.error('Failed to save quiz progress:', e);
-    }
-}
-
 
 function loadQuizProgress(quizId = null) {
     try {
