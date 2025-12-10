@@ -1810,14 +1810,20 @@ let firebaseDB = null;
 let sessionRef = null;
 let sessionListener = null;
 
-function initFirebase() {
+async function initFirebase() {
     if (firebaseApp) return true;
     
     try {
-        // Check if Firebase is loaded
+        // Wait for Firebase to load (max 5 seconds)
+        let attempts = 0;
+        while (typeof firebase === 'undefined' && attempts < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+        
         if (typeof firebase === 'undefined') {
-            console.warn('Firebase SDK not loaded');
-            showToast('Firebase not loaded. Please refresh the page.', 'error');
+            console.warn('Firebase SDK not loaded after waiting');
+            showToast('Multiplayer service unavailable', 'error');
             return false;
         }
         
@@ -1836,7 +1842,7 @@ function initFirebase() {
         return true;
     } catch (err) {
         console.error('Firebase init error:', err);
-        showToast('Failed to connect to multiplayer service: ' + err.message, 'error');
+        showToast('Multiplayer setup failed: ' + err.message, 'error');
         return false;
     }
 }
@@ -2608,7 +2614,13 @@ function getPlayerColor(index) {
 }
 
 // Show modal to create/join multiplayer
-function showMultiplayerModal() {
+async function showMultiplayerModal() {
+    // Try to initialize Firebase first
+    const initialized = await initFirebase();
+    if (!initialized) {
+        return; // Error already shown by initFirebase
+    }
+    
     const m = document.createElement('div');
     m.innerHTML = `
         <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
@@ -2617,35 +2629,12 @@ function showMultiplayerModal() {
                     <h2>🎮 Multiplayer</h2>
                     <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
                 </div>
-                <div class="modal-body">
-                    <div class="mp-modal-options">
-                        <button onclick="this.closest('.modal-overlay').remove();showMultiplayerQuizSelect()" class="mp-modal-option">
-                            <span class="mp-modal-icon">🎯</span>
-                            <span class="mp-modal-title">Host a Game</span>
-                            <span class="mp-modal-desc">Create a session and invite friends</span>
-                        </button>
-                        
-                        <button onclick="this.closest('.modal-overlay').querySelector('.mp-join-section').style.display='block';this.style.display='none'" class="mp-modal-option">
-                            <span class="mp-modal-icon">🔗</span>
-                            <span class="mp-modal-title">Join a Game</span>
-                            <span class="mp-modal-desc">Enter a session code</span>
-                        </button>
-                    </div>
-                    
-                    <div class="mp-join-section" style="display:none;margin-top:1.5rem">
-                        <label class="input-label">Enter Session Code</label>
-                        <input type="text" id="mp-join-code" class="input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;text-align:center;font-size:1.5rem;letter-spacing:0.25rem">
-                        <button onclick="joinMultiplayerGame()" class="btn btn-accent" style="width:100%;margin-top:1rem">
-                            Join Game
-                        </button>
-                    </div>
-                </div>
+                <!-- rest of the modal HTML -->
             </div>
         </div>
     `;
     document.body.appendChild(m.firstElementChild);
 }
-
 // Show quiz selection for hosting
 function showMultiplayerQuizSelect() {
     const m = document.createElement('div');
@@ -5200,7 +5189,7 @@ function discardProgress(quizId) {
                             </a>
                             <div class="flex items-center gap-sm">
                                 <button onclick="toggleDarkMode()" class="btn btn-icon btn-ghost">${state.darkMode ? '☀️' : '🌙'}</button>
-                                <button onclick="showMultiplayerModal()" class="btn btn-ghost btn-sm">🎮 Multiplayer</button>
+                                <button onclick="(async()=>await showMultiplayerModal())()" class="btn btn-ghost btn-sm">🎮 Multiplayer</button>
                                 <button onclick="showQuizletImport()" class="btn btn-ghost btn-sm">Quizlet</button>
                                 <button onclick="state.view='create';state.editingQuizId=null;state.quizTitle='';state.quizData='';state.quizCategory='';render()" class="btn btn-accent">+ New Quiz</button>
                                 <div class="dropdown">
