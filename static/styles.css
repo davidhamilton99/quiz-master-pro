@@ -666,7 +666,6 @@ input[type="checkbox"] {
 
 .dropdown {
     position: relative;
-    isolation: isolate;
 }
 
 .dropdown-menu {
