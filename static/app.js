@@ -2631,6 +2631,7 @@ function getPlayerColor(index) {
 }
 
 // Show modal to create/join multiplayer
+// Replace your incomplete showMultiplayerModal function with this:
 async function showMultiplayerModal() {
     // Try to initialize Firebase first
     const initialized = await initFirebase();
@@ -2646,11 +2647,69 @@ async function showMultiplayerModal() {
                     <h2>🎮 Multiplayer</h2>
                     <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
                 </div>
-                <!-- rest of the modal HTML -->
+                <div class="modal-body">
+                    <p class="text-muted" style="margin-bottom:2rem">
+                        Quiz with friends in real-time!
+                    </p>
+                    
+                    <div class="mp-options">
+                        <div class="mp-option-card" onclick="this.closest('.modal-overlay').remove();showMultiplayerQuizSelect()">
+                            <div class="mp-option-icon" style="background:var(--accent);color:white">
+                                <span style="font-size:2rem">🎯</span>
+                            </div>
+                            <div style="flex:1">
+                                <h3 style="margin-bottom:0.25rem">Host a Game</h3>
+                                <p class="text-sm text-muted">Create a session and invite friends</p>
+                            </div>
+                            <span style="font-size:1.5rem;color:var(--cream)">→</span>
+                        </div>
+                        
+                        <div class="mp-option-card" onclick="event.stopPropagation()">
+                            <div class="mp-option-icon" style="background:var(--success);color:white">
+                                <span style="font-size:2rem">🔗</span>
+                            </div>
+                            <div style="flex:1">
+                                <h3 style="margin-bottom:0.5rem">Join a Game</h3>
+                                <div class="flex gap-sm">
+                                    <input 
+                                        type="text" 
+                                        id="mp-join-code" 
+                                        class="input" 
+                                        placeholder="Enter 6-digit code"
+                                        maxlength="6"
+                                        style="text-transform:uppercase;font-family:monospace;font-size:1.25rem;letter-spacing:0.1em;padding:0.75rem"
+                                        oninput="this.value=this.value.toUpperCase()"
+                                    >
+                                    <button onclick="joinMultiplayerGame()" class="btn btn-success" style="padding:0 1.5rem">
+                                        Join
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="padding:1rem;background:var(--cream);margin-top:1.5rem">
+                        <p class="text-sm" style="margin-bottom:0.5rem">
+                            <strong>How it works:</strong>
+                        </p>
+                        <ul class="text-sm text-muted" style="padding-left:1.25rem;line-height:1.8">
+                            <li>Host creates a game and shares the code</li>
+                            <li>Friends join using the code</li>
+                            <li>Answer questions in real-time</li>
+                            <li>Compete for the highest score!</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     `;
     document.body.appendChild(m.firstElementChild);
+    
+    // Focus on join code input after modal appears
+    setTimeout(() => {
+        const input = document.getElementById('mp-join-code');
+        if (input) input.focus();
+    }, 100);
 }
 // Show quiz selection for hosting
 function showMultiplayerQuizSelect() {
