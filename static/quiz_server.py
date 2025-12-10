@@ -15,17 +15,32 @@ import os
 from datetime import datetime, timedelta
 from functools import wraps
 
-# At the top where Flask is created:
+# Create Flask app with static folder
 app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
+CORS(app)  # Add this if it's missing
 
-# Update the serve_static route:
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
+# Database path
+DATABASE = 'quiz_master.db'
+
+# ============== IMPORTANT: ADD THESE ROUTES AT THE TOP ==============
 
 @app.route('/')
-def index():
+def landing():
+    """Serve landing page"""
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'landing.html')
+
+@app.route('/app')
+def app_page():
+    """Serve main app"""
     return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'index.html')
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files"""
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
+
+# ============== Rest of your code stays the same ==============
+# (All your existing database and API code continues below)
 
 # Use environment variable or default to local path
 DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
