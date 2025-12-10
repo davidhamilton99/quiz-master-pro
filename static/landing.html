@@ -798,66 +798,103 @@
            ============================================ */
         
         .steps-container {
-            max-width: 1000px;
-            margin: 0 auto;
-            position: relative;
-        }
-        
-        .steps-line {
-            position: absolute;
-            left: 50%;
-            top: 60px;
-            bottom: 60px;
-            width: 2px;
-            background: linear-gradient(to bottom, var(--accent), var(--purple), var(--blue));
-            transform: translateX(-50%);
-        }
-        
-        .step {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            gap: 3rem;
-            align-items: center;
-            margin-bottom: 4rem;
-        }
-        
-        .step:nth-child(even) .step-content {
-            order: 3;
-            text-align: left;
-        }
-        
-        .step:nth-child(odd) .step-content {
-            text-align: right;
-        }
-        
-        .step-number {
-            width: 60px;
-            height: 60px;
-            background: var(--bg-elevated);
-            border: 2px solid var(--accent);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: var(--font-display);
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--accent);
-            position: relative;
-            z-index: 1;
-        }
-        
-        .step-title {
-            font-family: var(--font-display);
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-        
-        .step-desc {
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
+    max-width: 1000px;
+    margin: 0 auto;
+    position: relative;
+    padding: 2rem 0;
+}
+
+.steps-line {
+    position: absolute;
+    left: 50%;
+    top: 80px;
+    bottom: 80px;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--accent), var(--purple), var(--blue));
+    transform: translateX(-50%);
+}
+
+.step {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 3rem;
+    align-items: center;
+    margin-bottom: 4rem;
+    position: relative;
+}
+
+.step:nth-child(even) .step-content {
+    grid-column: 3;
+    text-align: left;
+}
+
+.step:nth-child(odd) .step-content {
+    grid-column: 1;
+    text-align: right;
+}
+
+.step-number {
+    grid-column: 2;
+    width: 60px;
+    height: 60px;
+    background: var(--bg-elevated);
+    border: 3px solid var(--accent);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.step-content {
+    padding: 1.5rem;
+}
+
+.step-title {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.step-desc {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    font-size: 1rem;
+}
+/* Mobile - Stack vertically */
+@media (max-width: 768px) {
+    .steps-line {
+        display: none;
+    }
+    
+    .step {
+        grid-template-columns: auto 1fr;
+        gap: 1.5rem;
+        text-align: left !important;
+        margin-bottom: 2rem;
+    }
+    
+    .step-content {
+        grid-column: 2 !important;
+        text-align: left !important;
+        padding: 0;
+    }
+    
+    .step-number {
+        grid-column: 1;
+        width: 48px;
+        height: 48px;
+        font-size: 1.25rem;
+    }
+}
         
         /* ============================================
            TESTIMONIALS
