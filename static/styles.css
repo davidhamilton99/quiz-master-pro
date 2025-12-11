@@ -664,11 +664,7 @@ input[type="checkbox"] {
    DROPDOWN - Fixed z-index and mobile
    ============================================ */
 
-.dropdown {
-    position: relative;
-    isolation: isolate;
-}
-
+/* Default dropdown (fallback for non-popover browsers) */
 .dropdown-menu {
     position: absolute;
     top: calc(100% + 8px);
@@ -695,6 +691,47 @@ input[type="checkbox"] {
     visibility: visible;
     transform: translateY(0);
     pointer-events: auto;
+}
+
+/* Popover API styles (when supported) */
+[popover].dropdown-menu {
+    position: static; /* Popover handles positioning automatically */
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+    /* No z-index needed - popovers are in top layer! */
+    
+    /* Anchor positioning (modern browsers) */
+    inset: unset;
+    position-anchor: --dropdown-button;
+    top: anchor(bottom);
+    right: anchor(right);
+    margin-top: 8px;
+}
+
+/* Popover opening animation */
+[popover].dropdown-menu:popover-open {
+    animation: dropdownSlideIn 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdownSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Popover closing animation */
+@starting-style {
+    [popover].dropdown-menu:popover-open {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
 }
 
 .dropdown-item {
