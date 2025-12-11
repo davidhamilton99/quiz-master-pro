@@ -939,7 +939,7 @@ input[type="checkbox"] {
         border-color var(--transition-base),
         transform var(--transition-base),
         box-shadow var(--transition-base);
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     flex-direction: column;
     min-height: 160px;
@@ -1001,7 +1001,7 @@ input[type="checkbox"] {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    overflow: hidden;
+    overflow: visible;
     text-overflow: ellipsis;
 }
 
