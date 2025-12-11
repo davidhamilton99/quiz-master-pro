@@ -5287,19 +5287,14 @@ function discardProgress(quizId) {
                                                     <h3 class="quiz-card-title">${state.searchQuery ? highlightText(q.title, state.searchQuery) : escapeHtml(q.title)}</h3>
                                                     <p class="quiz-card-meta">${q.description || 'No category'}</p>
                                                 </div>
-   <div class="dropdown" onclick="event.stopPropagation()">
-    <button 
-        popovertarget="quiz-menu-${q.id}"
-        onclick="event.stopPropagation()" 
-        class="btn btn-icon btn-ghost btn-sm">⋮</button>
-    <div 
-        id="quiz-menu-${q.id}" 
-        popover="auto" 
-        class="dropdown-menu"
-        style="margin: 0;">
-        <button class="dropdown-item" onclick="event.stopPropagation(); document.getElementById('quiz-menu-${q.id}').hidePopover(); showQuizPreview(${q.id})">👁️ Preview</button>
-        <button class="dropdown-item" onclick="event.stopPropagation(); document.getElementById('quiz-menu-${q.id}').hidePopover(); editQuiz(${q.id})">✏️ Edit</button>
-        <!-- etc -->
+                                                <div class="dropdown" onclick="event.stopPropagation()">
+    <button onclick="event.stopPropagation(); this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
+    <div class="dropdown-menu">
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
+        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); ExportManager.showExportModal(state.quizzes.find(x=>x.id===${q.id}))">📤 Export</button>
+        ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
+        <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
     </div>
 </div>
                                             </div>
