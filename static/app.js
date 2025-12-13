@@ -4661,28 +4661,29 @@ function renderEditorContent(q) {
                         <p class="text-sm text-muted"><span id="termCount">0</span> terms</p>
                     </div>
                     
-                    <!-- AI Explanation Checkbox -->
                     <div style="margin-bottom:1rem">
-                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer">
+                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;padding:1rem;background:var(--accent-glow);border-radius:var(--radius-md);border:2px solid var(--accent)">
                             <input 
                                 type="checkbox" 
                                 id="generateExplanations"
-                                style="width:18px;height:18px;accent-color:var(--accent)"
+                                style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer"
                             >
                             <div>
-                                <span style="font-weight:600">🤖 Generate AI Explanations</span>
-                                <p class="text-xs text-muted" style="margin-top:2px">
-                                    Uses AI to create better explanations (slower)
+                                <span style="font-weight:600;font-size:1rem">🤖 Generate AI Explanations</span>
+                                <p class="text-xs text-muted" style="margin-top:4px">
+                                    Uses AI to create better explanations instead of just repeating definitions (takes longer)
                                 </p>
                             </div>
                         </label>
                     </div>
                     
-                    <!-- Progress indicator (hidden by default) -->
-                    <div id="quizletProgress" style="display:none;margin-top:1rem">
-                        <p id="quizletStatus" class="text-sm text-muted" style="text-align:center;margin-bottom:0.5rem">
-                            Generating explanations...
+                    <div id="quizletProgress" style="display:none;margin-top:1rem;padding:1rem;background:var(--cream);border-radius:var(--radius-md)">
+                        <p id="quizletStatus" class="text-sm font-semibold" style="text-align:center;margin-bottom:0.5rem">
+                            Generating AI explanations...
                         </p>
+                        <div class="progress-bar">
+                            <div id="quizletProgressBar" class="progress-fill" style="width:0%"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -4694,7 +4695,6 @@ function renderEditorContent(q) {
     `;
     document.body.appendChild(m.firstElementChild);
     
-    // Add term counter
     document.getElementById('quizletContent').addEventListener('input', e => { 
         document.getElementById('termCount').textContent = e.target.value.split('\n').filter(l => l.trim() && l.includes('\t')).length; 
     });
@@ -4705,15 +4705,17 @@ function renderEditorContent(q) {
           content = document.getElementById('quizletContent').value,
           generateExplanations = document.getElementById('generateExplanations')?.checked;
     
+    console.log('🔍 Starting import. AI enabled:', generateExplanations);
+    
     if (!title) { showToast('Enter a title', 'warning'); return; }
     const lines = content.split('\n').filter(l => l.trim() && l.includes('\t'));
     if (lines.length < 4) { showToast('Need at least 4 terms', 'warning'); return; }
     const terms = lines.map(l => { const [t, d] = l.split('\t'); return { term: t?.trim(), def: d?.trim() }; }).filter(t => t.term && t.def);
     
-    // Show loading state if AI is enabled
     if (generateExplanations) {
         showLoading();
         const progressEl = document.getElementById('quizletProgress');
+        const progressBar = document.getElementById('quizletProgressBar');
         if (progressEl) progressEl.style.display = 'block';
     }
     
@@ -4725,19 +4727,21 @@ function renderEditorContent(q) {
         const opts = shuffleArray([t.def, ...wrong]); 
         const ci = opts.indexOf(t.def);
         
-        // Use definition by default
         let explanation = t.def;
         
-        // Generate AI explanation ONLY if checkbox is checked
         if (generateExplanations) {
             try {
                 const statusEl = document.getElementById('quizletStatus');
-                if (statusEl) statusEl.textContent = `Generating explanations... ${i + 1}/${terms.length}`;
+                const progressBar = document.getElementById('quizletProgressBar');
                 
+                if (statusEl) statusEl.textContent = `Generating AI explanation ${i + 1} of ${terms.length}...`;
+                if (progressBar) progressBar.style.width = `${((i + 1) / terms.length) * 100}%`;
+                
+                console.log(`🤖 Generating explanation for: "${t.term}"`);
                 explanation = await generateExplanation(t.term, t.def);
+                console.log(`✅ Got explanation: "${explanation.substring(0, 50)}..."`);
             } catch (err) {
-                console.error('AI explanation error for term:', t.term, err);
-                // Falls back to definition if AI fails
+                console.error('❌ AI failed for:', t.term, err);
             }
         }
         
@@ -4750,9 +4754,7 @@ function renderEditorContent(q) {
         });
     }
     
-    if (generateExplanations) {
-        hideLoading();
-    }
+    if (generateExplanations) hideLoading();
     
     try { 
         await apiCall('/quizzes', { 
@@ -4771,7 +4773,8 @@ function renderEditorContent(q) {
         render(); 
     } catch (e) { 
         hideLoading();
-        showToast('Failed', 'error'); 
+        showToast('Failed to create quiz', 'error'); 
+        console.error('Save error:', e);
     }
 }
         
