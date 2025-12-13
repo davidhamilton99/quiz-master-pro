@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-Quiz Master Pro - Backend Server (Phase 1: Code Execution)
-SQLite database with user authentication and quiz storage
-Now with support for executable code questions!
+Quiz Master Pro - Backend Server (Complete Fixed Version)
 """
-from flask import send_from_directory
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import sqlite3
 import hashlib
@@ -15,40 +12,18 @@ import os
 from datetime import datetime, timedelta
 from functools import wraps
 
-# Create Flask app with static folder
+# Create Flask app
 app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
-CORS(app)  # Add this if it's missing
+CORS(app)
+
+# Gemini API setup
+GEMINI_API_KEY = "AIzaSyAyshCARQ4odmz1U4mCiH-9EQwZ5Sm3JoQ"
 
 # Database path
-DATABASE = 'quiz_master.db'
-
-# ============== IMPORTANT: ADD THESE ROUTES AT THE TOP ==============
-
-@app.route('/')
-def landing():
-    """Serve landing page"""
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'landing.html')
-
-@app.route('/app')
-def app_page():
-    """Serve main app"""
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'index.html')
-
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    """Serve static files"""
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
-
-# ============== Rest of your code stays the same ==============
-# (All your existing database and API code continues below)
-
-# Use environment variable or default to local path
 DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
 
-# ============== Database Setup ==============
-
+# ============== DATABASE ==============
 def get_db():
-    """Get database connection with row factory"""
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
@@ -120,7 +95,7 @@ def init_db():
         )
     ''')
 
-    # Create indexes for better query performance
+    # Create indexes
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_quizzes_user ON quizzes(user_id)')
@@ -129,10 +104,9 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("Database initialized successfully!")
+    print("✅ Database initialized successfully!")
 
-# ============== Password Hashing ==============
-
+# ============== PASSWORD HASHING ==============
 def hash_password(password, salt=None):
     """Hash password with salt using SHA-256"""
     if salt is None:
@@ -145,8 +119,7 @@ def verify_password(password, password_hash, salt):
     computed_hash, _ = hash_password(password, salt)
     return computed_hash == password_hash
 
-# ============== Authentication Middleware ==============
-
+# ============== AUTHENTICATION MIDDLEWARE ==============
 def token_required(f):
     """Decorator to require valid authentication token"""
     @wraps(f)
@@ -155,7 +128,6 @@ def token_required(f):
         if not token:
             return jsonify({'error': 'Token is missing'}), 401
 
-        # Remove 'Bearer ' prefix if present
         if token.startswith('Bearer '):
             token = token[7:]
 
@@ -174,7 +146,6 @@ def token_required(f):
         if not session:
             return jsonify({'error': 'Invalid or expired token'}), 401
 
-        # Add user info to request context
         request.user_id = session['user_id']
         request.username = session['username']
         request.email = session['email']
@@ -182,18 +153,102 @@ def token_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ============== Auth Routes ==============
+# ============== AI EXPLANATION ENDPOINT (FIXED) ==============
+@app.route('/api/generate-explanation', methods=['POST'])
+@token_required
+def generate_explanation():
+    """Generate AI explanation for a flashcard term"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        term = data.get('term', '').strip()
+        definition = data.get('definition', '').strip()
+        
+        print(f"🤖 AI REQUEST: term='{term}', definition='{definition}'")
+        
+        if not term or not definition:
+            return jsonify({'error': 'Term and definition required'}), 400
+        
+        # Try to import and use Gemini
+        try:
+            import google.generativeai as genai
+            
+            # Configure Gemini
+            genai.configure(api_key=GEMINI_API_KEY)
+            
+            # Create model - use correct model name
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            
+            # Generate explanation
+            prompt = f"""Create a clear, educational explanation for this flashcard term. 
+Keep it concise (2-3 sentences) and suitable for students studying.
 
+Term: {term}
+Definition: {definition}
+
+Provide ONLY the explanation text, no preamble or extra formatting."""
+            
+            response = model.generate_content(prompt)
+            explanation = response.text.strip()
+            
+            print(f"✅ AI RESPONSE: {explanation[:100]}...")
+            
+            return jsonify({
+                'explanation': explanation,
+                'fallback': False
+            })
+            
+        except ImportError:
+            print("❌ google.generativeai not installed")
+            return jsonify({
+                'explanation': definition,
+                'fallback': True,
+                'error': 'Gemini library not installed'
+            }), 200
+            
+        except Exception as gemini_error:
+            print(f"❌ Gemini API error: {str(gemini_error)}")
+            return jsonify({
+                'explanation': definition,
+                'fallback': True,
+                'error': str(gemini_error)
+            }), 200
+        
+    except Exception as e:
+        print(f"❌ Server error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'explanation': data.get('definition', 'Error generating explanation'),
+            'fallback': True,
+            'error': str(e)
+        }), 200
+
+# ============== STATIC FILES ==============
+@app.route('/')
+def landing():
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'landing.html')
+
+@app.route('/app')
+def app_page():
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'index.html')
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
+
+# ============== AUTH ROUTES ==============
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """Register a new user"""
     data = request.get_json()
-
     username = data.get('username', '').strip()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
 
-    # Validation
     if not username or len(username) < 3:
         return jsonify({'error': 'Username must be at least 3 characters'}), 400
     if not email or '@' not in email:
@@ -214,7 +269,6 @@ def register():
 
         user_id = cursor.lastrowid
 
-        # Create session token
         token = secrets.token_hex(32)
         expires_at = datetime.now() + timedelta(days=7)
 
@@ -229,11 +283,7 @@ def register():
         return jsonify({
             'message': 'Registration successful',
             'token': token,
-            'user': {
-                'id': user_id,
-                'username': username,
-                'email': email
-            }
+            'user': {'id': user_id, 'username': username, 'email': email}
         }), 201
 
     except sqlite3.IntegrityError as e:
@@ -248,7 +298,6 @@ def register():
 def login():
     """Login user and return session token"""
     data = request.get_json()
-
     username_or_email = data.get('username', '').strip()
     password = data.get('password', '')
 
@@ -258,7 +307,6 @@ def login():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Check if input is email or username
     if '@' in username_or_email:
         cursor.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', (username_or_email.lower(),))
     else:
@@ -270,7 +318,6 @@ def login():
         conn.close()
         return jsonify({'error': 'Invalid credentials'}), 401
 
-    # Create new session token
     token = secrets.token_hex(32)
     expires_at = datetime.now() + timedelta(days=7)
 
@@ -279,7 +326,6 @@ def login():
         VALUES (?, ?, ?)
     ''', (user['id'], token, expires_at))
 
-    # Update last login
     cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
 
     conn.commit()
@@ -288,11 +334,7 @@ def login():
     return jsonify({
         'message': 'Login successful',
         'token': token,
-        'user': {
-            'id': user['id'],
-            'username': user['username'],
-            'email': user['email']
-        }
+        'user': {'id': user['id'], 'username': user['username'], 'email': user['email']}
     })
 
 @app.route('/api/auth/logout', methods=['POST'])
@@ -323,43 +365,7 @@ def get_current_user():
         }
     })
 
-@app.route('/api/auth/change-password', methods=['POST'])
-@token_required
-def change_password():
-    """Change user password"""
-    data = request.get_json()
-    current_password = data.get('current_password', '')
-    new_password = data.get('new_password', '')
-
-    if len(new_password) < 6:
-        return jsonify({'error': 'New password must be at least 6 characters'}), 400
-
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT password_hash, salt FROM users WHERE id = ?', (request.user_id,))
-    user = cursor.fetchone()
-
-    if not verify_password(current_password, user['password_hash'], user['salt']):
-        conn.close()
-        return jsonify({'error': 'Current password is incorrect'}), 401
-
-    new_hash, new_salt = hash_password(new_password)
-    cursor.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?',
-                   (new_hash, new_salt, request.user_id))
-
-    # Invalidate all other sessions
-    token = request.headers.get('Authorization')
-    if token.startswith('Bearer '):
-        token = token[7:]
-    cursor.execute('DELETE FROM sessions WHERE user_id = ? AND token != ?', (request.user_id, token))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({'message': 'Password changed successfully'})
-
-# ============== Quiz Routes ==============
-
+# ============== QUIZ ROUTES ==============
 @app.route('/api/quizzes', methods=['GET'])
 @token_required
 def get_quizzes():
@@ -425,7 +431,7 @@ def create_quiz():
 @app.route('/api/quizzes/<int:quiz_id>', methods=['GET'])
 @token_required
 def get_quiz(quiz_id):
-    """Get a specific quiz with attempts"""
+    """Get a specific quiz"""
     conn = get_db()
     cursor = conn.cursor()
 
@@ -439,7 +445,6 @@ def get_quiz(quiz_id):
     quiz_dict = dict(quiz)
     quiz_dict['questions'] = json.loads(quiz_dict['questions'])
 
-    # Get attempts
     cursor.execute('''
         SELECT * FROM attempts WHERE quiz_id = ? AND user_id = ? ORDER BY created_at DESC
     ''', (quiz_id, request.user_id))
@@ -464,7 +469,6 @@ def update_quiz(quiz_id):
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify ownership
     cursor.execute('SELECT id FROM quizzes WHERE id = ? AND user_id = ?', (quiz_id, request.user_id))
     if not cursor.fetchone():
         conn.close()
@@ -505,8 +509,6 @@ def delete_quiz(quiz_id):
 
     return jsonify({'message': 'Quiz deleted successfully'})
 
-# ============== Attempt Routes ==============
-
 @app.route('/api/quizzes/<int:quiz_id>/attempts', methods=['POST'])
 @token_required
 def record_attempt(quiz_id):
@@ -516,7 +518,6 @@ def record_attempt(quiz_id):
     conn = get_db()
     cursor = conn.cursor()
 
-    # Verify quiz exists and user has access
     cursor.execute('SELECT id FROM quizzes WHERE id = ? AND (user_id = ? OR is_public = 1)',
                    (quiz_id, request.user_id))
     if not cursor.fetchone():
@@ -548,88 +549,27 @@ def record_attempt(quiz_id):
         'attempt_id': attempt_id
     }), 201
 
-@app.route('/api/stats', methods=['GET'])
-@token_required
-def get_user_stats():
-    """Get overall user statistics"""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Total quizzes
-    cursor.execute('SELECT COUNT(*) as count FROM quizzes WHERE user_id = ?', (request.user_id,))
-    total_quizzes = cursor.fetchone()['count']
-
-    # Total questions
-    cursor.execute('SELECT questions FROM quizzes WHERE user_id = ?', (request.user_id,))
-    total_questions = sum(len(json.loads(row['questions'])) for row in cursor.fetchall())
-
-    # Attempt stats
-    cursor.execute('''
-        SELECT COUNT(*) as count, AVG(percentage) as avg, MAX(percentage) as best, MAX(max_streak) as streak
-        FROM attempts WHERE user_id = ?
-    ''', (request.user_id,))
-
-    attempt_stats = cursor.fetchone()
-
-    # Recent activity (last 30 days)
-    cursor.execute('''
-        SELECT DATE(created_at) as date, COUNT(*) as count, AVG(percentage) as avg
-        FROM attempts
-        WHERE user_id = ? AND created_at > datetime('now', '-30 days')
-        GROUP BY DATE(created_at)
-        ORDER BY date
-    ''', (request.user_id,))
-
-    activity = [dict(row) for row in cursor.fetchall()]
-
-    conn.close()
-
-    return jsonify({
-        'stats': {
-            'total_quizzes': total_quizzes,
-            'total_questions': total_questions,
-            'total_attempts': attempt_stats['count'] or 0,
-            'average_score': round(attempt_stats['avg'] or 0),
-            'best_score': attempt_stats['best'] or 0,
-            'best_streak': attempt_stats['streak'] or 0,
-            'activity': activity
-        }
-    })
-
-# ============== Public Quiz Routes ==============
-
-@app.route('/api/public/quizzes', methods=['GET'])
-def get_public_quizzes():
-    """Get all public quizzes"""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        SELECT q.id, q.title, q.description, q.color, q.created_at, u.username,
-               (SELECT COUNT(*) FROM attempts WHERE quiz_id = q.id) as attempt_count
-        FROM quizzes q
-        JOIN users u ON q.user_id = u.id
-        WHERE q.is_public = 1
-        ORDER BY attempt_count DESC, q.created_at DESC
-        LIMIT 50
-    ''')
-
-    quizzes = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-
-    return jsonify({'quizzes': quizzes})
-
-# ============== Health Check ==============
-
+# ============== HEALTH CHECK ==============
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'database': os.path.exists(DATABASE)})
+    try:
+        import google.generativeai as genai
+        gemini_available = True
+    except ImportError:
+        gemini_available = False
+    
+    return jsonify({
+        'status': 'healthy',
+        'database': os.path.exists(DATABASE),
+        'gemini_available': gemini_available,
+        'gemini_key_set': bool(GEMINI_API_KEY)
+    })
 
-# ============== Main ==============
-
+# ============== MAIN ==============
 if __name__ == '__main__':
     init_db()
-    print("Starting Quiz Master Pro Server...")
-    print("API available at http://172.17.28.77:5000/api")
+    print("🚀 Starting Quiz Master Pro Server...")
+    print(f"   API: http://172.17.28.77:5000/api")
+    print(f"   Gemini API Key: {'✓ Set' if GEMINI_API_KEY else '✗ Not Set'}")
     app.run(host='0.0.0.0', port=5000, debug=True)
