@@ -3477,7 +3477,7 @@ function toggleFlag() {
         a.splice(ti, 0, di); 
         state.answers[state.currentQuestionIndex] = a; 
         saveQuizProgress(); // Auto-save
-        // REMOVED: if (state.studyMode) checkStudyAnswer();
+        if (state.studyMode) checkStudyAnswer(); 
         render(); 
     } 
 }
