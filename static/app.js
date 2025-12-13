@@ -1830,35 +1830,7 @@ function initFirebase() {
         return false;
     }
 }
-// Frontend - update generateExplanation function
-async function generateExplanation(term, definition) {
-    try {
-        const response = await fetch(`${API_URL}/generate-explanation`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${state.token}`
-            },
-            body: JSON.stringify({ term, definition })
-        });
-        
-        if (!response.ok) {
-            console.warn(`❌ API returned ${response.status}, using fallback`);
-            return definition;
-        }
-        
-        const data = await response.json();
-        
-        if (data.fallback) {
-            console.warn(`⚠️ AI fallback used: ${data.error || 'Unknown error'}`);
-        }
-        
-        return data.explanation || definition;
-    } catch (err) {
-        console.error('❌ AI explanation network error:', err);
-        return definition;
-    }
-}
+
 // ========== MULTIPLAYER SESSION MANAGEMENT ==========
 const Multiplayer = {
     // Generate a 6-character session code
@@ -3477,7 +3449,7 @@ function toggleFlag() {
         a.splice(ti, 0, di); 
         state.answers[state.currentQuestionIndex] = a; 
         saveQuizProgress(); // Auto-save
-        if (state.studyMode) checkStudyAnswer(); 
+        // REMOVED: if (state.studyMode) checkStudyAnswer();
         render(); 
     } 
 }
@@ -4639,183 +4611,25 @@ function renderEditorContent(q) {
             reader.readAsText(f);
         }
         
-      function showQuizletImport() {
-    // ✅ Remove any existing modals first
-    document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
-    
-    const m = document.createElement('div');
-    m.innerHTML = `
-        <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
-            <div class="modal modal-lg">
-                <div class="modal-header">
-                    <h2>Import from Quizlet</h2>
-                    <button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
-                </div>
-                <div class="modal-body">
-                    <div class="card" style="padding:1rem;margin-bottom:1.5rem;background:var(--accent-glow)">
-                        <p class="font-semibold" style="margin-bottom:0.5rem">How to Import</p>
-                        <ol class="text-sm text-muted" style="padding-left:1.5rem">
-                            <li>Open Quizlet set</li>
-                            <li>Click "..." → Export</li>
-                            <li>Copy text</li>
-                            <li>Paste below</li>
-                        </ol>
-                    </div>
-                    
-                    <div class="flex gap-md" style="margin-bottom:1rem">
-                        <div class="flex-1">
-                            <label class="input-label">Title</label>
-                            <input type="text" id="quizletTitle" class="input" placeholder="Quiz title">
-                        </div>
-                        <div class="flex-1">
-                            <label class="input-label">Category</label>
-                            <input type="text" id="quizletCategory" class="input" placeholder="Category">
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom:1rem">
-                        <label class="input-label">Paste Content</label>
-                        <textarea id="quizletContent" class="input" rows="8" placeholder="Term[TAB]Definition"></textarea>
-                        <p class="text-sm text-muted"><span id="termCount">0</span> terms</p>
-                    </div>
-                    
-                    <div style="margin-bottom:1rem">
-                        <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;padding:1rem;background:var(--accent-glow);border-radius:var(--radius-md);border:2px solid var(--accent)">
-                            <input 
-                                type="checkbox" 
-                                id="generateExplanations"
-                                style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer"
-                            >
-                            <div>
-                                <span style="font-weight:600;font-size:1rem">🤖 Generate AI Explanations</span>
-                                <p class="text-xs text-muted" style="margin-top:4px">
-                                    Uses AI to create better explanations instead of just repeating definitions (takes longer)
-                                </p>
-                            </div>
-                        </label>
-                    </div>
-                    
-                    <div id="quizletProgress" style="display:none;margin-top:1rem;padding:1rem;background:var(--cream);border-radius:var(--radius-md)">
-                        <p id="quizletStatus" class="text-sm font-semibold" style="text-align:center;margin-bottom:0.5rem">
-                            Generating AI explanations...
-                        </p>
-                        <div class="progress-bar">
-                            <div id="quizletProgressBar" class="progress-fill" style="width:0%"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-ghost flex-1" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-                    <button class="btn btn-accent flex-1" onclick="processQuizletImport()">Create Quiz</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(m.firstElementChild);
-    
-    // ✅ Add event listener for term count
-    document.getElementById('quizletContent').addEventListener('input', e => { 
-        const termCount = e.target.value.split('\n').filter(l => l.trim() && l.includes('\t')).length;
-        document.getElementById('termCount').textContent = termCount; 
-    });
-
-    // DEBUG: Check if elements exist
-    console.log('🔍 Modal elements check:', {
-        titleExists: !!document.getElementById('quizletTitle'),
-        categoryExists: !!document.getElementById('quizletCategory'),
-        contentExists: !!document.getElementById('quizletContent'),
-        checkboxExists: !!document.getElementById('generateExplanations'),
-        checkboxValue: document.getElementById('generateExplanations')?.checked
-    });
-}
-    async function processQuizletImport() {
-    const title = document.getElementById('quizletTitle').value.trim(), 
-          cat = document.getElementById('quizletCategory').value.trim(), 
-          content = document.getElementById('quizletContent').value,
-          generateExplanations = document.getElementById('generateExplanations')?.checked;
-    
-    console.log('🔍 Starting import. AI enabled:', generateExplanations);
-    
-    if (!title) { showToast('Enter a title', 'warning'); return; }
-    const lines = content.split('\n').filter(l => l.trim() && l.includes('\t'));
-    if (lines.length < 4) { showToast('Need at least 4 terms', 'warning'); return; }
-    const terms = lines.map(l => { const [t, d] = l.split('\t'); return { term: t?.trim(), def: d?.trim() }; }).filter(t => t.term && t.def);
-    
-    showLoading();
-    
-    if (generateExplanations) {
-        const progressEl = document.getElementById('quizletProgress');
-        const progressBar = document.getElementById('quizletProgressBar');
-        if (progressEl) progressEl.style.display = 'block';
-    }
-    
-    const qs = [];
-    
-    for (let i = 0; i < terms.length; i++) {
-        const t = terms[i];
-        const wrong = terms.filter((_, j) => j !== i).sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.def);
-        const opts = shuffleArray([t.def, ...wrong]); 
-        const ci = opts.indexOf(t.def);
-        
-        let explanation = t.def;
-        
-        if (generateExplanations) {
-            try {
-                const statusEl = document.getElementById('quizletStatus');
-                const progressBar = document.getElementById('quizletProgressBar');
-                
-                if (statusEl) statusEl.textContent = `Generating AI explanation ${i + 1} of ${terms.length}...`;
-                if (progressBar) progressBar.style.width = `${((i + 1) / terms.length) * 100}%`;
-                
-                console.log(`🤖 Generating explanation for: "${t.term}"`);
-                
-                // Try to get AI explanation, but don't fail if it doesn't work
-                try {
-                    explanation = await generateExplanation(t.term, t.def);
-                    console.log(`✅ Got explanation: "${explanation.substring(0, 50)}..."`);
-                } catch (apiErr) {
-                    console.warn(`⚠️ AI explanation failed for "${t.term}", using definition`);
-                    // Just use the definition if AI fails
-                    explanation = t.def;
-                }
-            } catch (err) {
-                console.error('❌ Explanation error:', err);
-                explanation = t.def;
-            }
+        function showQuizletImport() {
+            const m = document.createElement('div');
+            m.innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)this.remove()"><div class="modal modal-lg"><div class="modal-header"><h2>Import from Quizlet</h2><button class="btn btn-icon btn-ghost" onclick="this.closest('.modal-overlay').remove()">✕</button></div><div class="modal-body"><div class="card" style="padding:1rem;margin-bottom:1.5rem;background:var(--accent-glow)"><p class="font-semibold" style="margin-bottom:0.5rem">How to Import</p><ol class="text-sm text-muted" style="padding-left:1.5rem"><li>Open Quizlet set</li><li>Click "..." → Export</li><li>Copy text</li><li>Paste below</li></ol></div><div class="flex gap-md" style="margin-bottom:1rem"><div class="flex-1"><label class="input-label">Title</label><input type="text" id="quizletTitle" class="input" placeholder="Quiz title"></div><div class="flex-1"><label class="input-label">Category</label><input type="text" id="quizletCategory" class="input" placeholder="Category"></div></div><div><label class="input-label">Paste Content</label><textarea id="quizletContent" class="input" rows="8" placeholder="Term[TAB]Definition"></textarea><p class="text-sm text-muted"><span id="termCount">0</span> terms</p></div></div><div class="modal-footer"><button class="btn btn-ghost flex-1" onclick="this.closest('.modal-overlay').remove()">Cancel</button><button class="btn btn-accent flex-1" onclick="processQuizletImport()">Create Quiz</button></div></div></div>`;
+            document.body.appendChild(m.firstElementChild);
+            document.getElementById('quizletContent').addEventListener('input', e => { document.getElementById('termCount').textContent = e.target.value.split('\n').filter(l => l.trim() && l.includes('\t')).length; });
         }
-        
-        qs.push({ 
-            question: `What is: ${t.term}?`, 
-            type: 'choice', 
-            options: opts, 
-            correct: [ci], 
-            explanation: explanation
-        });
-    }
-    
-    hideLoading();
-    
-    try { 
-        await apiCall('/quizzes', { 
-            method: 'POST', 
-            body: JSON.stringify({ 
-                title, 
-                questions: qs, 
-                description: cat, 
-                color: getRandomColor(), 
-                is_public: false 
-            }) 
-        }); 
-        await loadQuizzes(); 
-        document.querySelector('.modal-overlay')?.remove(); 
-        showToast(`Created ${qs.length} questions!${generateExplanations ? ' (Note: Some AI explanations may have failed)' : ''}`, 'success'); 
-        render(); 
-    } catch (e) { 
-        hideLoading();
-        showToast('Failed to create quiz: ' + (e.message || 'Unknown error'), 'error'); 
-        console.error('Save error:', e);
-    }
-}
+        async function processQuizletImport() {
+            const title = document.getElementById('quizletTitle').value.trim(), cat = document.getElementById('quizletCategory').value.trim(), content = document.getElementById('quizletContent').value;
+            if (!title) { showToast('Enter a title', 'warning'); return; }
+            const lines = content.split('\n').filter(l => l.trim() && l.includes('\t'));
+            if (lines.length < 4) { showToast('Need at least 4 terms', 'warning'); return; }
+            const terms = lines.map(l => { const [t, d] = l.split('\t'); return { term: t?.trim(), def: d?.trim() }; }).filter(t => t.term && t.def);
+            const qs = terms.map((t, i) => {
+                const wrong = terms.filter((_, j) => j !== i).sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.def);
+                const opts = shuffleArray([t.def, ...wrong]); const ci = opts.indexOf(t.def);
+                return { question: `What is: ${t.term}?`, type: 'choice', options: opts, correct: [ci], explanation: t.def };
+            });
+            try { await apiCall('/quizzes', { method: 'POST', body: JSON.stringify({ title, questions: qs, description: cat, color: getRandomColor(), is_public: false }) }); await loadQuizzes(); document.querySelector('.modal-overlay').remove(); showToast(`Created ${qs.length} questions!`, 'success'); render(); } catch (e) { showToast('Failed', 'error'); }
+        }
         
         function createFolder() { const n = prompt('Folder name:'); if (!n?.trim()) return; state.folders.push({ id: Date.now(), name: n.trim(), quizIds: [], color: getRandomColor() }); saveFolders(); showToast('Created', 'success'); render(); }
        function addToFolder(qid, fid) { 
@@ -5102,8 +4916,15 @@ function bindEvents() {
     } catch (e) {
         console.error('Failed to save quiz progress:', e);
     }
-    // Touch handlers removed - were causing errors
+    if (state.view === 'quiz' && state.currentQuiz) {
+        const quizContent = document.querySelector('.quiz-content');
+        if (quizContent && 'ontouchstart' in window) {
+            quizContent.addEventListener('touchstart', handleTouchStart, { passive: true });
+            quizContent.addEventListener('touchend', handleTouchEnd, { passive: true });
+        }
+    }
 }
+
 function loadQuizProgress(quizId = null) {
     try {
         const stored = localStorage.getItem('quiz-progress-all');
