@@ -28,41 +28,79 @@ genai.configure(api_key=GEMINI_API_KEY)
 DATABASE = 'quiz_master.db'
 
 # ============== IMPORTANT: ADD THESE ROUTES AT THE TOP ==============
+# ============== AI EXPLANATION ENDPOINT (FIXED) ==============
 @app.route('/api/generate-explanation', methods=['POST'])
 @token_required
 def generate_explanation():
     """Generate AI explanation for a flashcard term"""
-    data = request.get_json()
-    
-    term = data.get('term', '').strip()
-    definition = data.get('definition', '').strip()
-    
-    print(f"🤖 AI REQUEST: {term}")
-    
-    if not term or not definition:
-        return jsonify({'error': 'Term and definition required'}), 400
-    
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        data = request.get_json()
         
-        prompt = f"""Create a clear, educational explanation for this flashcard term. 
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        term = data.get('term', '').strip()
+        definition = data.get('definition', '').strip()
+        
+        print(f"🤖 AI REQUEST: term='{term}', definition='{definition}'")
+        
+        if not term or not definition:
+            return jsonify({'error': 'Term and definition required'}), 400
+        
+        # Try to import and use Gemini
+        try:
+            import google.generativeai as genai
+            
+            # Configure Gemini
+            genai.configure(api_key=GEMINI_API_KEY)
+            
+            # Create model
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            # Generate explanation
+            prompt = f"""Create a clear, educational explanation for this flashcard term. 
 Keep it concise (2-3 sentences) and suitable for students studying.
 
 Term: {term}
 Definition: {definition}
 
 Provide ONLY the explanation text, no preamble or extra formatting."""
-        
-        response = model.generate_content(prompt)
-        explanation = response.text.strip()
-        
-        print(f"✅ AI RESPONSE: {explanation[:100]}...")
-        
-        return jsonify({'explanation': explanation})
+            
+            response = model.generate_content(prompt)
+            explanation = response.text.strip()
+            
+            print(f"✅ AI RESPONSE: {explanation[:100]}...")
+            
+            return jsonify({
+                'explanation': explanation,
+                'fallback': False
+            })
+            
+        except ImportError:
+            print("❌ google.generativeai not installed")
+            return jsonify({
+                'explanation': definition,
+                'fallback': True,
+                'error': 'Gemini library not installed'
+            }), 200
+            
+        except Exception as gemini_error:
+            print(f"❌ Gemini API error: {str(gemini_error)}")
+            return jsonify({
+                'explanation': definition,
+                'fallback': True,
+                'error': str(gemini_error)
+            }), 200
         
     except Exception as e:
-        print(f"❌ Gemini API error: {str(e)}")
-        return jsonify({'explanation': definition, 'fallback': True})
+        print(f"❌ Server error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'explanation': data.get('definition', 'Error generating explanation'),
+            'fallback': True,
+            'error': str(e)
+        }), 200  # Return 200 with fallback instead of 500
 
 
 @app.route('/')

@@ -1833,15 +1833,30 @@ function initFirebase() {
 // Frontend - update generateExplanation function
 async function generateExplanation(term, definition) {
     try {
-        const response = await apiCall('/generate-explanation', {
+        const response = await fetch(`${API_URL}/generate-explanation`, {
             method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
             body: JSON.stringify({ term, definition })
         });
         
-        return response.explanation;
+        if (!response.ok) {
+            console.warn(`❌ API returned ${response.status}, using fallback`);
+            return definition;
+        }
+        
+        const data = await response.json();
+        
+        if (data.fallback) {
+            console.warn(`⚠️ AI fallback used: ${data.error || 'Unknown error'}`);
+        }
+        
+        return data.explanation || definition;
     } catch (err) {
-        console.error('AI explanation error:', err);
-        return definition; // Fallback
+        console.error('❌ AI explanation network error:', err);
+        return definition;
     }
 }
 // ========== MULTIPLAYER SESSION MANAGEMENT ==========
@@ -4699,7 +4714,7 @@ function renderEditorContent(q) {
         document.getElementById('termCount').textContent = e.target.value.split('\n').filter(l => l.trim() && l.includes('\t')).length; 
     });
 }
-       async function processQuizletImport() {
+    async function processQuizletImport() {
     const title = document.getElementById('quizletTitle').value.trim(), 
           cat = document.getElementById('quizletCategory').value.trim(), 
           content = document.getElementById('quizletContent').value,
@@ -4712,8 +4727,9 @@ function renderEditorContent(q) {
     if (lines.length < 4) { showToast('Need at least 4 terms', 'warning'); return; }
     const terms = lines.map(l => { const [t, d] = l.split('\t'); return { term: t?.trim(), def: d?.trim() }; }).filter(t => t.term && t.def);
     
+    showLoading();
+    
     if (generateExplanations) {
-        showLoading();
         const progressEl = document.getElementById('quizletProgress');
         const progressBar = document.getElementById('quizletProgressBar');
         if (progressEl) progressEl.style.display = 'block';
@@ -4738,10 +4754,19 @@ function renderEditorContent(q) {
                 if (progressBar) progressBar.style.width = `${((i + 1) / terms.length) * 100}%`;
                 
                 console.log(`🤖 Generating explanation for: "${t.term}"`);
-                explanation = await generateExplanation(t.term, t.def);
-                console.log(`✅ Got explanation: "${explanation.substring(0, 50)}..."`);
+                
+                // Try to get AI explanation, but don't fail if it doesn't work
+                try {
+                    explanation = await generateExplanation(t.term, t.def);
+                    console.log(`✅ Got explanation: "${explanation.substring(0, 50)}..."`);
+                } catch (apiErr) {
+                    console.warn(`⚠️ AI explanation failed for "${t.term}", using definition`);
+                    // Just use the definition if AI fails
+                    explanation = t.def;
+                }
             } catch (err) {
-                console.error('❌ AI failed for:', t.term, err);
+                console.error('❌ Explanation error:', err);
+                explanation = t.def;
             }
         }
         
@@ -4754,7 +4779,7 @@ function renderEditorContent(q) {
         });
     }
     
-    if (generateExplanations) hideLoading();
+    hideLoading();
     
     try { 
         await apiCall('/quizzes', { 
@@ -4768,12 +4793,12 @@ function renderEditorContent(q) {
             }) 
         }); 
         await loadQuizzes(); 
-        document.querySelector('.modal-overlay').remove(); 
-        showToast(`Created ${qs.length} questions!`, 'success'); 
+        document.querySelector('.modal-overlay')?.remove(); 
+        showToast(`Created ${qs.length} questions!${generateExplanations ? ' (Note: Some AI explanations may have failed)' : ''}`, 'success'); 
         render(); 
     } catch (e) { 
         hideLoading();
-        showToast('Failed to create quiz', 'error'); 
+        showToast('Failed to create quiz: ' + (e.message || 'Unknown error'), 'error'); 
         console.error('Save error:', e);
     }
 }
