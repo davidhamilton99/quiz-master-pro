@@ -55,7 +55,7 @@ def generate_explanation():
             genai.configure(api_key=GEMINI_API_KEY)
             
             # Create model
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
             # Generate explanation
             prompt = f"""Create a clear, educational explanation for this flashcard term. 
