@@ -5088,15 +5088,8 @@ function bindEvents() {
     } catch (e) {
         console.error('Failed to save quiz progress:', e);
     }
-    if (state.view === 'quiz' && state.currentQuiz) {
-        const quizContent = document.querySelector('.quiz-content');
-        if (quizContent && 'ontouchstart' in window) {
-            quizContent.addEventListener('touchstart', handleTouchStart, { passive: true });
-            quizContent.addEventListener('touchend', handleTouchEnd, { passive: true });
-        }
-    }
+    // Touch handlers removed - were causing errors
 }
-
 function loadQuizProgress(quizId = null) {
     try {
         const stored = localStorage.getItem('quiz-progress-all');
