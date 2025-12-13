@@ -4640,6 +4640,9 @@ function renderEditorContent(q) {
         }
         
       function showQuizletImport() {
+    // ✅ Remove any existing modals first
+    document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+    
     const m = document.createElement('div');
     m.innerHTML = `
         <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
@@ -4710,8 +4713,19 @@ function renderEditorContent(q) {
     `;
     document.body.appendChild(m.firstElementChild);
     
+    // ✅ Add event listener for term count
     document.getElementById('quizletContent').addEventListener('input', e => { 
-        document.getElementById('termCount').textContent = e.target.value.split('\n').filter(l => l.trim() && l.includes('\t')).length; 
+        const termCount = e.target.value.split('\n').filter(l => l.trim() && l.includes('\t')).length;
+        document.getElementById('termCount').textContent = termCount; 
+    });
+
+    // DEBUG: Check if elements exist
+    console.log('🔍 Modal elements check:', {
+        titleExists: !!document.getElementById('quizletTitle'),
+        categoryExists: !!document.getElementById('quizletCategory'),
+        contentExists: !!document.getElementById('quizletContent'),
+        checkboxExists: !!document.getElementById('generateExplanations'),
+        checkboxValue: document.getElementById('generateExplanations')?.checked
     });
 }
     async function processQuizletImport() {
