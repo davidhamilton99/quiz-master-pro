@@ -14,15 +14,60 @@ import json
 import os
 from datetime import datetime, timedelta
 from functools import wraps
+import google.generativeai as genai
+from flask import Flask, request, jsonify
 
 # Create Flask app with static folder
 app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
 CORS(app)  # Add this if it's missing
 
+GEMINI_API_KEY = "AIzaSyAyshCARQ4odmz1U4mCiH-9EQwZ5Sm3JoQ"  # Or use environment variable
+genai.configure(api_key=GEMINI_API_KEY)
+
 # Database path
 DATABASE = 'quiz_master.db'
 
 # ============== IMPORTANT: ADD THESE ROUTES AT THE TOP ==============
+@app.route('/api/generate-explanation', methods=['POST'])
+@token_required
+def generate_explanation():
+  """Generate AI explanation for a flashcard term"""
+    data = request.get_json()
+    
+    term = data.get('term', '').strip()
+    definition = data.get('definition', '').strip()
+    
+    if not term or not definition:
+        return jsonify({'error': 'Term and definition required'}), 400
+    
+    try:
+        # Use Gemini to generate explanation
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""Create a clear, educational explanation for this flashcard term. 
+Keep it concise (2-3 sentences) and suitable for students studying.
+
+Term: {term}
+Definition: {definition}
+
+Provide ONLY the explanation text, no preamble or extra formatting."""
+        
+        response = model.generate_content(prompt)
+        explanation = response.text.strip()
+        
+        return jsonify({
+            'explanation': explanation
+        })
+        
+    except Exception as e:
+        print(f"Gemini API error: {str(e)}")
+        # Fallback to definition if API fails
+        return jsonify({
+            'explanation': definition,
+            'fallback': True
+        })
+
+
 
 @app.route('/')
 def landing():

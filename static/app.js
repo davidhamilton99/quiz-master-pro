@@ -1830,7 +1830,20 @@ function initFirebase() {
         return false;
     }
 }
-
+// Frontend - update generateExplanation function
+async function generateExplanation(term, definition) {
+    try {
+        const response = await apiCall('/generate-explanation', {
+            method: 'POST',
+            body: JSON.stringify({ term, definition })
+        });
+        
+        return response.explanation;
+    } catch (err) {
+        console.error('AI explanation error:', err);
+        return definition; // Fallback
+    }
+}
 // ========== MULTIPLAYER SESSION MANAGEMENT ==========
 const Multiplayer = {
     // Generate a 6-character session code
