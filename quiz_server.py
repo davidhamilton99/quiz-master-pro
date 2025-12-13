@@ -37,11 +37,12 @@ def generate_explanation():
     term = data.get('term', '').strip()
     definition = data.get('definition', '').strip()
     
+    print(f"🤖 AI REQUEST: {term}")
+    
     if not term or not definition:
         return jsonify({'error': 'Term and definition required'}), 400
     
     try:
-        # Use Gemini to generate explanation
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""Create a clear, educational explanation for this flashcard term. 
@@ -55,18 +56,13 @@ Provide ONLY the explanation text, no preamble or extra formatting."""
         response = model.generate_content(prompt)
         explanation = response.text.strip()
         
-        return jsonify({
-            'explanation': explanation
-        })
+        print(f"✅ AI RESPONSE: {explanation[:100]}...")
+        
+        return jsonify({'explanation': explanation})
         
     except Exception as e:
-        print(f"Gemini API error: {str(e)}")
-        # Fallback to definition if API fails
-        return jsonify({
-            'explanation': definition,
-            'fallback': True
-        })
-
+        print(f"❌ Gemini API error: {str(e)}")
+        return jsonify({'explanation': definition, 'fallback': True})
 
 
 @app.route('/')
