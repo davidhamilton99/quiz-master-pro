@@ -31,7 +31,7 @@ DATABASE = 'quiz_master.db'
 @app.route('/api/generate-explanation', methods=['POST'])
 @token_required
 def generate_explanation():
-  """Generate AI explanation for a flashcard term"""
+    """Generate AI explanation for a flashcard term"""
     data = request.get_json()
     
     term = data.get('term', '').strip()
