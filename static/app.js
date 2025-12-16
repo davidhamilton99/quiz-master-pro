@@ -3941,7 +3941,7 @@ function parseQuizData(data) {
                 }
                 
                 // Parse definitions: A) Definition text
-                while (i < lines.length && lines[i].match(/^[A-Z]\)/)) {
+                while (i < lines.length && lines[i].trim().match(/^[A-Z]\)/)) {
                     const defLine = lines[i].trim();
                     const match = defLine.match(/^([A-Z])\)\s*(.+)/);
                     
@@ -3954,6 +3954,13 @@ function parseQuizData(data) {
                     }
                     i++;
                 }
+                
+                // Debug: Log what we parsed
+                console.log('Parsed matching question:', {
+                    question: q.question,
+                    pairs: q.matchPairs,
+                    targets: q.matchTargets
+                });
                 
                 // Shuffle targets for display (but keep IDs)
                 if (q.matchTargets.length > 0) {
@@ -3998,64 +4005,6 @@ function parseQuizData(data) {
     }
     return questions;
 }
-        function exportQuizzes() { const d = state.quizzes.map(q => ({ title: q.title, description: q.description, questions: q.questions, color: q.color })); const b = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `quiz-export-${new Date().toISOString().split('T')[0]}.json`; a.click(); URL.revokeObjectURL(u); showToast('Exported!', 'success'); }
-        // ========== VISUAL EDITOR FUNCTIONS ==========
-
-function proceedToVisualEditor() {
-    if (!state.quizTitle.trim()) {
-        showToast('Enter a title first', 'warning');
-        return;
-    }
-    
-    // REMOVED: No longer require quiz data in text box
-    // Users can start fresh in visual editor
-    
-    try {
-        let questions = [];
-        
-        // Only parse if there's actual data
-        if (state.quizData.trim()) {
-            questions = parseQuizData(state.quizData);
-            
-            // PRESERVE IMAGES: If editing existing quiz, restore base64 images
-            if (state.editingQuizId) {
-                const originalQuiz = state.quizzes.find(q => q.id === state.editingQuizId);
-                if (originalQuiz) {
-                    questions.forEach((q, i) => {
-                        if (i < originalQuiz.questions.length) {
-                            const origQuestion = originalQuiz.questions[i];
-                            // If text says "uploaded" and original has base64, restore it
-                            if (q.image === 'uploaded' && origQuestion.image && origQuestion.image.startsWith('data:image/')) {
-                                q.image = origQuestion.image;
-                            }
-                        }
-                    });
-                }
-            }
-        }
-        
-        // If no questions parsed, start with one blank question
-        if (questions.length === 0) {
-            questions = [{
-                question: '',
-                type: 'choice',
-                options: ['', ''],
-                correct: [],
-                image: null,
-                explanation: null,
-                code: null
-            }];
-        }
-        
-        state.parsedQuestions = questions;
-        state.currentEditQuestion = 0;
-        state.visualEditorMode = true;
-        render();
-    } catch (e) {
-        showToast('Error parsing questions: ' + e.message, 'error');
-    }
-}
-
 function saveFromVisualEditor() {
     // Validate all questions (skip IOS type)
     const invalid = state.parsedQuestions.filter(q => 
