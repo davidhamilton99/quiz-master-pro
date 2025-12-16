@@ -4809,26 +4809,34 @@ function renderEditorContent(q) {
                 >${escapeHtml(q.question)}</textarea>
             </div>
             
-            <!-- Question Type -->
-            <div class="editor-section">
-                <label class="editor-section-label">
-                    <span>🎯</span> Question Type
-                </label>
-                <div class="tabs-container">
-                    <button 
-                        class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
-                        onclick="updateQuestionType('choice')"
-                    >
-                        <span style="font-size:1rem">✓</span> Multiple Choice
-                    </button>
-                    <button 
-                        class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
-                        onclick="updateQuestionType('ordering')"
-                    >
-                        <span style="font-size:1rem">↕</span> Ordering
-                    </button>
-                </div>
-            </div>
+           // In the renderEditorContent function, find the Question Type section and update it:
+
+<!-- Question Type -->
+<div class="editor-section">
+    <label class="editor-section-label">
+        <span>🎯</span> Question Type
+    </label>
+    <div class="tabs-container">
+        <button 
+            class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
+            onclick="updateQuestionType('choice')"
+        >
+            <span style="font-size:1rem">✓</span> Multiple Choice
+        </button>
+        <button 
+            class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
+            onclick="updateQuestionType('ordering')"
+        >
+            <span style="font-size:1rem">↕</span> Ordering
+        </button>
+        <button 
+            class="tab-button ${q.type === 'matching' ? 'active' : ''}" 
+            onclick="updateQuestionType('matching')"
+        >
+            <span style="font-size:1rem">🔗</span> Matching
+        </button>
+    </div>
+</div>
             
             <!-- Options -->
             <div class="editor-section">
