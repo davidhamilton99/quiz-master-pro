@@ -3399,15 +3399,124 @@ function clearCreationState() {
     if (state.studyMode && q.correct.length === 1) checkStudyAnswer();
     render();
 }
+function selectMatchAnswer(pairIndex, targetId) {
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    if (!state.answers[state.currentQuestionIndex]) {
+        state.answers[state.currentQuestionIndex] = {};
+    }
+    
+    // Store the match: { pairId: targetId }
+    state.answers[state.currentQuestionIndex][q.matchPairs[pairIndex].id] = targetId;
+    
+    saveQuizProgress();
+    
+    if (state.studyMode) {
+        checkStudyAnswer();
+    }
+    
+    render();
+}
 
+function renderMatchingQuestion(q, questionIndex) {
+    const userAnswers = state.answers[questionIndex] || {};
+    const showResults = state.studyMode && state.showAnswer;
+    
+    return `
+        <div class="matching-container">
+            <div class="matching-hint">
+                <span class="matching-hint-icon">💡</span>
+                <span>Match each term on the left with the correct definition on the right</span>
+            </div>
+            
+            <div class="matching-grid">
+                <!-- Left Column: Terms -->
+                <div class="matching-column matching-pairs">
+                    ${q.matchPairs.map((pair, idx) => {
+                        const selected = userAnswers[pair.id];
+                        const isCorrect = showResults && selected === pair.correctMatch;
+                        const isIncorrect = showResults && selected && selected !== pair.correctMatch;
+                        
+                        return `
+                            <div class="matching-pair ${selected ? 'matched' : ''} ${isCorrect ? 'correct' : ''} ${isIncorrect ? 'incorrect' : ''}">
+                                <div class="matching-pair-label">${pair.id}</div>
+                                <div class="matching-pair-text">${escapeHtml(pair.text)}</div>
+                                ${selected ? `
+                                    <div class="matching-pair-arrow">→</div>
+                                    <div class="matching-pair-selection">${selected}</div>
+                                ` : ''}
+                                ${showResults && isCorrect ? '<span class="match-badge badge-success">✓</span>' : ''}
+                                ${showResults && isIncorrect ? '<span class="match-badge badge-error">✗</span>' : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <!-- Right Column: Definitions -->
+                <div class="matching-column matching-targets">
+                    ${q.matchTargets.map((target) => {
+                        const isSelected = Object.values(userAnswers).includes(target.id);
+                        const isCorrectAnswer = showResults && q.matchPairs.some(p => p.correctMatch === target.id);
+                        
+                        return `
+                            <div class="matching-target ${isSelected ? 'selected' : ''} ${isCorrectAnswer && showResults ? 'highlight-correct' : ''}">
+                                <div class="matching-target-label">${target.id}</div>
+                                <div class="matching-target-text">${escapeHtml(target.text)}</div>
+                                ${!showResults ? `
+                                    <div class="matching-target-buttons">
+                                        ${q.matchPairs.map((pair, idx) => `
+                                            <button 
+                                                class="matching-connect-btn ${userAnswers[pair.id] === target.id ? 'active' : ''}"
+                                                onclick="selectMatchAnswer(${idx}, '${target.id}')"
+                                                ${showResults ? 'disabled' : ''}
+                                            >
+                                                ${pair.id}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            ${showResults && q.explanation ? `
+                <div class="explanation-box" style="margin-top:1.5rem">
+                    <p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p>
+                    <p>${escapeHtml(q.explanation)}</p>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
 function checkStudyAnswer() {
     const q = state.currentQuiz.questions[state.currentQuestionIndex], ua = state.answers[state.currentQuestionIndex] || [];
     let correct = false;
-    if (q.type === 'choice') { const as = new Set(ua), cs = new Set(q.correct); correct = as.size === cs.size && [...as].every(a => cs.has(a)); }
-    else if (q.type === 'ordering') correct = JSON.stringify(ua) === JSON.stringify(q.correct);
-    if (correct) { state.streak++; state.maxStreak = Math.max(state.maxStreak, state.streak); } else state.streak = 0;
+    
+    if (q.type === 'choice') { 
+        const as = new Set(ua), cs = new Set(q.correct); 
+        correct = as.size === cs.size && [...as].every(a => cs.has(a)); 
+    } else if (q.type === 'ordering') {
+        correct = JSON.stringify(ua) === JSON.stringify(q.correct);
+    } else if (q.type === 'matching') {
+        correct = true;
+        for (const pair of q.matchPairs) {
+            if (ua[pair.id] !== pair.correctMatch) {
+                correct = false;
+                break;
+            }
+        }
+    }
+    
+    if (correct) { 
+        state.streak++; 
+        state.maxStreak = Math.max(state.maxStreak, state.streak); 
+    } else {
+        state.streak = 0;
+    }
+    
     state.showAnswer = true;
-    saveQuizProgress(); // Auto-save
+    saveQuizProgress();
 }
 
 function nextQuestion() { 
@@ -3434,7 +3543,31 @@ function toggleFlag() {
     saveQuizProgress(); // Auto-save
     render(); 
 }
-        function calculateScore() { let s = 0; state.currentQuiz.questions.forEach((q, i) => { const ua = state.answers[i]; if (!ua) return; if (q.type === 'choice') { const as = new Set(ua), cs = new Set(q.correct); if (as.size === cs.size && [...as].every(a => cs.has(a))) s++; } else if (q.type === 'ordering' && JSON.stringify(ua) === JSON.stringify(q.correct)) s++; }); return s; }
+        function calculateScore() { 
+    let s = 0; 
+    state.currentQuiz.questions.forEach((q, i) => { 
+        const ua = state.answers[i]; 
+        if (!ua) return; 
+        
+        if (q.type === 'choice') { 
+            const as = new Set(ua), cs = new Set(q.correct); 
+            if (as.size === cs.size && [...as].every(a => cs.has(a))) s++; 
+        } else if (q.type === 'ordering' && JSON.stringify(ua) === JSON.stringify(q.correct)) {
+            s++;
+        } else if (q.type === 'matching') {
+            // Check all matches
+            let allCorrect = true;
+            for (const pair of q.matchPairs) {
+                if (ua[pair.id] !== pair.correctMatch) {
+                    allCorrect = false;
+                    break;
+                }
+            }
+            if (allCorrect) s++;
+        }
+    }); 
+    return s; 
+}
         
         let draggedIndex = null;
         function handleDragStart(e, i) { draggedIndex = i; e.target.classList.add('dragging'); }
@@ -3603,15 +3736,18 @@ function parseQuizData(data) {
         let line = lines[i].trim();
         if (line.match(/^\d+\./)) {
             const isOrder = line.includes('[order]');
-            const qText = line.replace(/^\d+\./, '').replace('[order]', '').trim();
+            const isMatching = line.includes('[matching]');
+            const qText = line.replace(/^\d+\./, '').replace('[order]', '').replace('[matching]', '').trim();
             let q = { 
                 question: qText, 
-                type: isOrder ? 'ordering' : 'choice', 
+                type: isOrder ? 'ordering' : isMatching ? 'matching' : 'choice', 
                 options: [], 
                 correct: [], 
                 image: null, 
                 explanation: null, 
-                code: null 
+                code: null,
+                matchPairs: isMatching ? [] : null, // Left items (terms)
+                matchTargets: isMatching ? [] : null // Right items (definitions)
             };
             i++;
             
@@ -3619,28 +3755,68 @@ function parseQuizData(data) {
             if (i < lines.length && lines[i].trim() === '[code]') { 
                 i++; 
                 let codeLines = []; 
-                // Collect all lines until [/code]
                 while (i < lines.length && lines[i].trim() !== '[/code]') { 
                     codeLines.push(lines[i]); 
                     i++; 
                 } 
-                // Join with newlines exactly as they appear
                 if (codeLines.length > 0) { 
                     q.code = codeLines.join('\n'); 
                 }
-                // Skip the [/code] line
                 if (i < lines.length && lines[i].trim() === '[/code]') {
                     i++;
                 }
             }
             
-            // Rest of parsing remains the same...
             if (i < lines.length && lines[i].trim().match(/^\[image:\s*(.+?)\]/i)) { 
                 q.image = lines[i].trim().match(/^\[image:\s*(.+?)\]/i)[1]; 
                 i++; 
             }
             
-            if (isOrder) { 
+            // ===== MATCHING QUESTION PARSING =====
+            if (isMatching) {
+                // Format: A. Term = B *
+                // Where A is the term, B is the correct definition ID
+                while (i < lines.length && lines[i].match(/^[A-Z]\./)) {
+                    const matchLine = lines[i].trim();
+                    const match = matchLine.match(/^([A-Z])\.\s*(.+?)\s*=\s*([A-Z])\s*\*/);
+                    
+                    if (match) {
+                        const [_, termLetter, termText, correctAnswer] = match;
+                        q.matchPairs.push({
+                            id: termLetter,
+                            text: termText.trim(),
+                            correctMatch: correctAnswer
+                        });
+                    }
+                    i++;
+                }
+                
+                // Now parse the definitions (right column)
+                // Look for "Definitions:" or similar header (optional)
+                if (i < lines.length && lines[i].trim().match(/^definitions?:/i)) {
+                    i++;
+                }
+                
+                // Parse definitions: A) Definition text
+                while (i < lines.length && lines[i].match(/^[A-Z]\)/)) {
+                    const defLine = lines[i].trim();
+                    const match = defLine.match(/^([A-Z])\)\s*(.+)/);
+                    
+                    if (match) {
+                        const [_, defLetter, defText] = match;
+                        q.matchTargets.push({
+                            id: defLetter,
+                            text: defText.trim()
+                        });
+                    }
+                    i++;
+                }
+                
+                // Shuffle targets for display (but keep IDs)
+                q.matchTargets = shuffleArray(q.matchTargets);
+            }
+            // ===== END MATCHING PARSING =====
+            else if (isOrder) { 
                 while (i < lines.length && lines[i].match(/^\d+\)/)) { 
                     const n = parseInt(lines[i].match(/^(\d+)\)/)[1]); 
                     q.options.push(lines[i].replace(/^\d+\)/, '').trim()); 
@@ -5433,14 +5609,30 @@ function renderQuiz() {
     const ua = state.answers[state.currentQuestionIndex] || [];
     let isCorrect = false;
     if (state.studyMode && state.showAnswer) {
-        if (q.type === 'choice') { const as = new Set(ua), cs = new Set(q.correct); isCorrect = as.size === cs.size && [...as].every(a => cs.has(a)); }
-        else if (q.type === 'ordering') isCorrect = JSON.stringify(ua) === JSON.stringify(q.correct);
+        if (q.type === 'choice') { 
+            const as = new Set(ua), cs = new Set(q.correct); 
+            isCorrect = as.size === cs.size && [...as].every(a => cs.has(a)); 
+        }
+        else if (q.type === 'ordering') {
+            isCorrect = JSON.stringify(ua) === JSON.stringify(q.correct);
+        }
+        else if (q.type === 'matching') {
+            isCorrect = true;
+            for (const pair of q.matchPairs) {
+                if (ua[pair.id] !== pair.correctMatch) {
+                    isCorrect = false;
+                    break;
+                }
+            }
+        }
     }
     
     let optHTML = '';
     if (q.type === 'ordering') {
         const order = state.answers[state.currentQuestionIndex] || q.options.map((_, i) => i);
         optHTML = `<div class="flex flex-col gap-sm">${order.map((oi, pos) => `<div draggable="true" class="draggable-item ${state.studyMode && state.showAnswer ? (q.correct[pos] === oi ? 'correct' : 'incorrect') : ''}" data-position="${pos}"><span class="drag-handle">☰</span><span class="drag-number">${pos + 1}</span><span style="flex:1">${escapeHtml(q.options[oi])}</span></div>`).join('')}</div><p class="text-sm text-muted" style="margin-top:1rem">${state.studyMode && !state.showAnswer ? '💡 Drag to reorder, then click Check Answer' : '💡 Drag to reorder'}</p>`;
+    } else if (q.type === 'matching') {
+        optHTML = renderMatchingQuestion(q, state.currentQuestionIndex);
     } else if (q.type !== 'ios' && q.options && q.options.length > 0) {
         optHTML = q.options.map((opt, i) => {
             const sel = ua.includes(i), corr = q.correct.includes(i);
