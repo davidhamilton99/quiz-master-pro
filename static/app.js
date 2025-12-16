@@ -5988,6 +5988,13 @@ ${state.studyMode && !state.showAnswer && q.type === 'matching' && state.answers
         </div>
     `;
 }
+
+function selectMatchAnswer(pairIndex, targetId) {
+    console.log('selectMatchAnswer called', pairIndex, targetId);
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    console.log('Question:', q);
+    // ... rest of function
+}
         function saveAndExitQuiz() {
     saveQuizProgress();
     stopTimer();
