@@ -4223,3 +4223,29 @@ kbd {
         padding-right: calc(var(--space-md) + 32px);
     }
 }
+/* Add to your CSS file */
+.matching-pair-match-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex: 1;
+}
+
+.matching-pair-match-text {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.matching-pair.matched .matching-pair-match-text {
+    color: var(--text-secondary);
+}
+
+.matching-pair.correct .matching-pair-match-text {
+    color: var(--success);
+}
+
+.matching-pair.incorrect .matching-pair-match-text {
+    color: var(--error);
+}

@@ -3447,15 +3447,21 @@ function renderMatchingQuestion(q, questionIndex) {
                         const isCorrect = showResults && selected === pair.correctMatch;
                         const isIncorrect = showResults && selected && selected !== pair.correctMatch;
                         
+                        // Find the selected target's text
+                        const selectedTarget = selected ? q.matchTargets.find(t => t.id === selected) : null;
+                        
                         return `
                             <div class="matching-pair ${selected ? 'matched' : ''} ${isCorrect ? 'correct' : ''} ${isIncorrect ? 'incorrect' : ''}"
                                  data-pair-id="${pair.id}"
                                  data-question-index="${questionIndex}">
                                 <div class="matching-pair-label">${pair.id}</div>
                                 <div class="matching-pair-text">${escapeHtml(pair.text)}</div>
-                                ${selected ? `
+                                ${selected && selectedTarget ? `
                                     <div class="matching-pair-arrow">→</div>
-                                    <div class="matching-pair-selection">${selected}</div>
+                                    <div class="matching-pair-match-preview">
+                                        <div class="matching-pair-selection">${selected}</div>
+                                        <div class="matching-pair-match-text">${escapeHtml(selectedTarget.text.substring(0, 50))}${selectedTarget.text.length > 50 ? '...' : ''}</div>
+                                    </div>
                                 ` : ''}
                                 ${showResults && isCorrect ? '<span class="match-badge badge-success">✓</span>' : ''}
                                 ${showResults && isIncorrect ? '<span class="match-badge badge-error">✗</span>' : ''}
@@ -3493,7 +3499,6 @@ function renderMatchingQuestion(q, questionIndex) {
         </div>
     `;
 }
-
 // Initialize drag and drop for matching questions
 function initMatchingDragDrop() {
     const targets = document.querySelectorAll('.matching-target.draggable');
