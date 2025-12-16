@@ -4005,6 +4005,59 @@ function parseQuizData(data) {
     }
     return questions;
 }
+function proceedToVisualEditor() {
+    if (!state.quizTitle.trim()) {
+        showToast('Enter a title first', 'warning');
+        return;
+    }
+    
+    try {
+        let questions = [];
+        
+        // Only parse if there's actual data
+        if (state.quizData.trim()) {
+            questions = parseQuizData(state.quizData);
+            
+            // PRESERVE IMAGES: If editing existing quiz, restore base64 images
+            if (state.editingQuizId) {
+                const originalQuiz = state.quizzes.find(q => q.id === state.editingQuizId);
+                if (originalQuiz) {
+                    questions.forEach((q, i) => {
+                        if (i < originalQuiz.questions.length) {
+                            const origQuestion = originalQuiz.questions[i];
+                            // If text says "uploaded" and original has base64, restore it
+                            if (q.image === 'uploaded' && origQuestion.image && origQuestion.image.startsWith('data:image/')) {
+                                q.image = origQuestion.image;
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        
+        // If no questions parsed, start with one blank question
+        if (questions.length === 0) {
+            questions = [{
+                question: '',
+                type: 'choice',
+                options: ['', ''],
+                correct: [],
+                image: null,
+                explanation: null,
+                code: null
+            }];
+        }
+        
+        state.parsedQuestions = questions;
+        state.currentEditQuestion = 0;
+        state.visualEditorMode = true;
+        render();
+    } catch (e) {
+        console.error('Parse error:', e);
+        showToast('Error parsing questions: ' + e.message, 'error');
+    }
+}
+
 function saveFromVisualEditor() {
     // Validate all questions (skip IOS type)
     const invalid = state.parsedQuestions.filter(q => 
