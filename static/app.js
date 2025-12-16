@@ -3841,6 +3841,16 @@ function parseQuizData(data) {
                 if (q.matchTargets.length > 0) {
                     q.matchTargets = shuffleArray(q.matchTargets);
                 }
+                
+                // Parse explanation if present
+                if (i < lines.length && lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)) { 
+                    q.explanation = lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)[1]; 
+                    i++; 
+                }
+                
+                // Add question and skip to next
+                questions.push(q);
+                continue; // CRITICAL: Skip the else blocks below
             }
             // ===== END MATCHING PARSING =====
             else if (isOrder) { 
@@ -3859,7 +3869,7 @@ function parseQuizData(data) {
                 } 
             }
             
-            // Explanation parsing
+            // Explanation parsing (for non-matching questions)
             if (i < lines.length && lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)) { 
                 q.explanation = lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)[1]; 
                 i++; 
