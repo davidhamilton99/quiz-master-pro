@@ -3772,12 +3772,12 @@ function parseQuizData(data) {
                 image: null, 
                 explanation: null, 
                 code: null,
-                matchPairs: isMatching ? [] : null, // Left items (terms)
-                matchTargets: isMatching ? [] : null // Right items (definitions)
+                matchPairs: isMatching ? [] : null,
+                matchTargets: isMatching ? [] : null
             };
             i++;
             
-            // IMPROVED CODE BLOCK PARSING
+            // Code block parsing
             if (i < lines.length && lines[i].trim() === '[code]') { 
                 i++; 
                 let codeLines = []; 
@@ -3793,6 +3793,7 @@ function parseQuizData(data) {
                 }
             }
             
+            // Image parsing
             if (i < lines.length && lines[i].trim().match(/^\[image:\s*(.+?)\]/i)) { 
                 q.image = lines[i].trim().match(/^\[image:\s*(.+?)\]/i)[1]; 
                 i++; 
@@ -3800,8 +3801,7 @@ function parseQuizData(data) {
             
             // ===== MATCHING QUESTION PARSING =====
             if (isMatching) {
-                // Format: A. Term = B *
-                // Where A is the term, B is the correct definition ID
+                // Parse terms with their correct matches: A. Term = B *
                 while (i < lines.length && lines[i].match(/^[A-Z]\./)) {
                     const matchLine = lines[i].trim();
                     const match = matchLine.match(/^([A-Z])\.\s*(.+?)\s*=\s*([A-Z])\s*\*/);
@@ -3817,8 +3817,7 @@ function parseQuizData(data) {
                     i++;
                 }
                 
-                // Now parse the definitions (right column)
-                // Look for "Definitions:" or similar header (optional)
+                // Look for "Definitions:" header (optional but recommended)
                 if (i < lines.length && lines[i].trim().match(/^definitions?:/i)) {
                     i++;
                 }
@@ -3839,7 +3838,9 @@ function parseQuizData(data) {
                 }
                 
                 // Shuffle targets for display (but keep IDs)
-                q.matchTargets = shuffleArray(q.matchTargets);
+                if (q.matchTargets.length > 0) {
+                    q.matchTargets = shuffleArray(q.matchTargets);
+                }
             }
             // ===== END MATCHING PARSING =====
             else if (isOrder) { 
@@ -3858,6 +3859,7 @@ function parseQuizData(data) {
                 } 
             }
             
+            // Explanation parsing
             if (i < lines.length && lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)) { 
                 q.explanation = lines[i].trim().match(/^\[explanation:\s*(.+?)\]/i)[1]; 
                 i++; 
