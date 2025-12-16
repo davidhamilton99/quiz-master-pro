@@ -4255,20 +4255,24 @@ function updateEditorContent() {
         </div>
     `}).join('')}
     
-    <!-- Definitions (Right Column) -->
-    <h4 style="font-size:0.875rem;font-weight:600;margin:1.5rem 0 0.75rem">Definitions</h4>
-    ${q.matchTargets.map((target, i) => `
-        <div class="option-editor">
-            <span class="option-label">${target.id}</span>
-            <input 
-                type="text" 
-                class="input" 
-                value="${escapeHtml(target.text)}"
-                placeholder="Definition ${target.id}"
-                oninput="updateMatchTarget(${i}, this.value)"
-            >
-        </div>
-    `).join('')}
+   <!-- Definitions (Right Column) -->
+<h4 style="font-size:0.875rem;font-weight:600;margin:1.5rem 0 0.75rem">Definitions</h4>
+<div class="editor-section-hint" style="margin-bottom:1rem">
+    <span class="editor-section-hint-icon">💡</span>
+    <span>These are the actual definition texts that students will match to the terms above</span>
+</div>
+${q.matchTargets.map((target, i) => `
+    <div class="option-editor">
+        <span class="option-label">${target.id}</span>
+        <input 
+            type="text" 
+            class="input" 
+            value="${escapeHtml(target.text)}"
+            placeholder="Enter the definition for ${target.id}"
+            oninput="updateMatchTarget(${i}, this.value)"
+        >
+    </div>
+`).join('')}
     
 ` : q.type === 'ordering' ? `
         <div class="editor-section-hint">
