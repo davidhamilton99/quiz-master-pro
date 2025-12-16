@@ -4215,58 +4215,62 @@ function updateEditorContent() {
     </div>
     
     ${q.type === 'matching' ? `
-        <div class="editor-section-hint">
-            <span class="editor-section-hint-icon">💡</span>
-            <span>Create terms (left) and their matching definitions (right)</span>
+    <div class="editor-section-hint">
+        <span class="editor-section-hint-icon">💡</span>
+        <span>Create terms (left) and their matching definitions (right)</span>
+    </div>
+    
+    <!-- Terms (Left Column) -->
+    <h4 style="font-size:0.875rem;font-weight:600;margin-bottom:0.75rem">Terms</h4>
+    ${q.matchPairs.map((pair, i) => {
+        // Find the target definition for this pair
+        const targetDef = q.matchTargets.find(t => t.id === pair.correctMatch);
+        
+        return `
+        <div class="option-editor" style="margin-bottom:1rem">
+            <span class="option-label">${pair.id}</span>
+            <input 
+                type="text" 
+                class="input" 
+                value="${escapeHtml(pair.text)}"
+                placeholder="Term ${i + 1}"
+                oninput="updateMatchPair(${i}, 'text', this.value)"
+            >
+            <select 
+                class="input" 
+                style="width:200px"
+                onchange="updateMatchPair(${i}, 'correctMatch', this.value)"
+            >
+                ${q.matchTargets.map(target => `
+                    <option value="${target.id}" ${pair.correctMatch === target.id ? 'selected' : ''}>
+                        → ${target.id}: ${escapeHtml(target.text.substring(0, 30))}${target.text.length > 30 ? '...' : ''}
+                    </option>
+                `).join('')}
+            </select>
+            ${q.matchPairs.length > 2 ? `
+                <button onclick="removeMatchPair(${i})" class="option-remove-btn">
+                    <span style="font-size:1.125rem">✕</span>
+                </button>
+            ` : ''}
         </div>
-        
-        <!-- Terms (Left Column) -->
-        <h4 style="font-size:0.875rem;font-weight:600;margin-bottom:0.75rem">Terms</h4>
-        ${q.matchPairs.map((pair, i) => `
-            <div class="option-editor" style="margin-bottom:1rem">
-                <span class="option-label">${pair.id}</span>
-                <input 
-                    type="text" 
-                    class="input" 
-                    value="${escapeHtml(pair.text)}"
-                    placeholder="Term ${i + 1}"
-                    oninput="updateMatchPair(${i}, 'text', this.value)"
-                >
-                <select 
-                    class="input" 
-                    style="width:120px"
-                    onchange="updateMatchPair(${i}, 'correctMatch', this.value)"
-                >
-                    ${q.matchTargets.map(target => `
-                        <option value="${target.id}" ${pair.correctMatch === target.id ? 'selected' : ''}>
-                            → ${target.id}
-                        </option>
-                    `).join('')}
-                </select>
-                ${q.matchPairs.length > 2 ? `
-                    <button onclick="removeMatchPair(${i})" class="option-remove-btn">
-                        <span style="font-size:1.125rem">✕</span>
-                    </button>
-                ` : ''}
-            </div>
-        `).join('')}
-        
-        <!-- Definitions (Right Column) -->
-        <h4 style="font-size:0.875rem;font-weight:600;margin:1.5rem 0 0.75rem">Definitions</h4>
-        ${q.matchTargets.map((target, i) => `
-            <div class="option-editor">
-                <span class="option-label">${target.id}</span>
-                <input 
-                    type="text" 
-                    class="input" 
-                    value="${escapeHtml(target.text)}"
-                    placeholder="Definition ${target.id}"
-                    oninput="updateMatchTarget(${i}, this.value)"
-                >
-            </div>
-        `).join('')}
-        
-    ` : q.type === 'ordering' ? `
+    `}).join('')}
+    
+    <!-- Definitions (Right Column) -->
+    <h4 style="font-size:0.875rem;font-weight:600;margin:1.5rem 0 0.75rem">Definitions</h4>
+    ${q.matchTargets.map((target, i) => `
+        <div class="option-editor">
+            <span class="option-label">${target.id}</span>
+            <input 
+                type="text" 
+                class="input" 
+                value="${escapeHtml(target.text)}"
+                placeholder="Definition ${target.id}"
+                oninput="updateMatchTarget(${i}, this.value)"
+            >
+        </div>
+    `).join('')}
+    
+` : q.type === 'ordering' ? `
         <div class="editor-section-hint">
             <span class="editor-section-hint-icon">💡</span>
             <span>Drag options to set the correct order. The sequence shown here is the answer.</span>
