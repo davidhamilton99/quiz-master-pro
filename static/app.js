@@ -3405,12 +3405,20 @@ function selectMatchAnswer(pairIndex, targetId) {
         state.answers[state.currentQuestionIndex] = {};
     }
     
-    // Store the match: { pairId: targetId }
-    state.answers[state.currentQuestionIndex][q.matchPairs[pairIndex].id] = targetId;
+    const pairId = q.matchPairs[pairIndex].id;
+    
+    // Toggle selection - if already selected, unselect
+    if (state.answers[state.currentQuestionIndex][pairId] === targetId) {
+        delete state.answers[state.currentQuestionIndex][pairId];
+    } else {
+        // Store the match: { pairId: targetId }
+        state.answers[state.currentQuestionIndex][pairId] = targetId;
+    }
     
     saveQuizProgress();
     
-    if (state.studyMode) {
+    // Check if all pairs are matched and we're in study mode
+    if (state.studyMode && Object.keys(state.answers[state.currentQuestionIndex]).length === q.matchPairs.length) {
         checkStudyAnswer();
     }
     
@@ -3499,11 +3507,20 @@ function checkStudyAnswer() {
     } else if (q.type === 'ordering') {
         correct = JSON.stringify(ua) === JSON.stringify(q.correct);
     } else if (q.type === 'matching') {
+        // Check if all pairs are correctly matched
         correct = true;
-        for (const pair of q.matchPairs) {
-            if (ua[pair.id] !== pair.correctMatch) {
-                correct = false;
-                break;
+        const answers = state.answers[state.currentQuestionIndex] || {};
+        
+        // Must have all pairs matched
+        if (Object.keys(answers).length !== q.matchPairs.length) {
+            correct = false;
+        } else {
+            // Check each match
+            for (const pair of q.matchPairs) {
+                if (answers[pair.id] !== pair.correctMatch) {
+                    correct = false;
+                    break;
+                }
             }
         }
     }
@@ -3517,7 +3534,9 @@ function checkStudyAnswer() {
     
     state.showAnswer = true;
     saveQuizProgress();
+    render();
 }
+
 
 function nextQuestion() { 
     if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) { 
@@ -3557,12 +3576,19 @@ function toggleFlag() {
         } else if (q.type === 'matching') {
             // Check all matches
             let allCorrect = true;
-            for (const pair of q.matchPairs) {
-                if (ua[pair.id] !== pair.correctMatch) {
-                    allCorrect = false;
-                    break;
+            
+            // Must have all pairs matched
+            if (Object.keys(ua).length !== q.matchPairs.length) {
+                allCorrect = false;
+            } else {
+                for (const pair of q.matchPairs) {
+                    if (ua[pair.id] !== pair.correctMatch) {
+                        allCorrect = false;
+                        break;
+                    }
                 }
             }
+            
             if (allCorrect) s++;
         }
     }); 
@@ -5904,7 +5930,11 @@ function renderQuiz() {
                         
                         ${q.type === 'choice' && q.correct && q.correct.length > 1 ? `<div class="badge badge-accent" style="margin-bottom:1rem">Select all that apply (${q.correct.length} answers)</div>` : ''}
                         
-                        ${q.type !== 'ios' ? `<div class="flex flex-col gap-sm">${optHTML}</div>` : ''}
+                        ${q.type === 'matching' ? optHTML : q.type !== 'ios' ? `<div class="flex flex-col gap-sm">${optHTML}</div>` : ''}
+
+${state.studyMode && !state.showAnswer && q.type === 'matching' && state.answers[state.currentQuestionIndex] && Object.keys(state.answers[state.currentQuestionIndex]).length === q.matchPairs.length ? `
+    <button onclick="checkStudyAnswer();render()" class="btn btn-accent" style="margin-top:1.5rem;width:100%">Check Answer</button>
+` : ''}
                         
                         ${q.type === 'ios' ? `<button onclick="submitIOSAnswer(${state.currentQuestionIndex})" class="btn btn-accent" style="margin-top:1rem;width:100%">Submit Answer</button>` : ''}
                         
