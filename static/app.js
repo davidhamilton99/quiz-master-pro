@@ -5497,7 +5497,7 @@ function discardProgress(quizId) {
             `;
         }
         
-        function renderCreate() {
+       function renderCreate() {
     const isEdit = state.editingQuizId !== null;
 
     // If in visual editor mode
@@ -5557,8 +5557,18 @@ D. Class Z</div>
 3) Session
 4) Transport</div>
 
+                                <p class="text-sm font-semibold" style="margin-bottom:0.5rem">Matching Questions:</p>
+                                <div class="format-example" style="margin-bottom:1rem">4. [matching] Match protocols with their functions:
+A. DNS = B *
+B. DHCP = A *
+C. FTP = C *
+Definitions:
+A) Assigns IP addresses automatically
+B) Translates domain names to IP addresses
+C) Transfers files between systems</div>
+
                                 <p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Code Block:</p>
-                                <div class="format-example" style="margin-bottom:1rem">4. What does this command display?
+                                <div class="format-example" style="margin-bottom:1rem">5. What does this command display?
 [code]
 show ip route
 [/code]
@@ -5567,14 +5577,14 @@ B. Interface list
 C. ARP cache</div>
 
                                 <p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Image:</p>
-                                <div class="format-example" style="margin-bottom:1rem">5. What topology is shown in this diagram?
+                                <div class="format-example" style="margin-bottom:1rem">6. What topology is shown in this diagram?
 [image: https://example.com/network.png]
 A. Star *
 B. Ring
 C. Mesh</div>
 
                                 <p class="text-sm font-semibold" style="margin-bottom:0.5rem">With Explanation:</p>
-                                <div class="format-example" style="margin-bottom:1rem">6. What is the default admin distance for OSPF?
+                                <div class="format-example" style="margin-bottom:1rem">7. What is the default admin distance for OSPF?
 A. 90
 B. 110 *
 C. 120
@@ -5586,6 +5596,8 @@ C. 120
                                         <li><code>*</code> after an option marks it as correct</li>
                                         <li>Multiple <code>*</code> = "select all that apply"</li>
                                         <li><code>[order]</code> after question number = ordering question</li>
+                                        <li><code>[matching]</code> after question number = matching question</li>
+                                        <li>In matching: <code>A. Term = B *</code> means Term A matches Definition B</li>
                                         <li><code>[code]...[/code]</code> = code block</li>
                                         <li><code>[image: URL]</code> = include an image</li>
                                         <li><code>[explanation: text]</code> = show after answering</li>
