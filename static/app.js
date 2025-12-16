@@ -4020,99 +4020,158 @@ function updateEditorContent() {
             </div>
             
             <!-- Question Type -->
-            <div class="editor-section">
-                <label class="editor-section-label">
-                    <span>🎯</span> Question Type
-                </label>
-                <div class="tabs-container">
-                    <button 
-                        class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
-                        onclick="updateQuestionType('choice')"
-                    >
-                        <span style="font-size:1rem">✓</span> Multiple Choice
-                    </button>
-                    <button 
-                        class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
-                        onclick="updateQuestionType('ordering')"
-                    >
-                        <span style="font-size:1rem">↕</span> Ordering
-                    </button>
-                </div>
-            </div>
+       <div class="tabs-container">
+    <button 
+        class="tab-button ${q.type === 'choice' ? 'active' : ''}" 
+        onclick="updateQuestionType('choice')"
+    >
+        <span style="font-size:1rem">✓</span> Multiple Choice
+    </button>
+    <button 
+        class="tab-button ${q.type === 'ordering' ? 'active' : ''}" 
+        onclick="updateQuestionType('ordering')"
+    >
+        <span style="font-size:1rem">↕</span> Ordering
+    </button>
+    <button 
+        class="tab-button ${q.type === 'matching' ? 'active' : ''}" 
+        onclick="updateQuestionType('matching')"
+    >
+        <span style="font-size:1rem">🔗</span> Matching
+    </button>
+</div>
             
-            <!-- Options -->
-            <div class="editor-section">
-                <div class="flex justify-between items-center" style="margin-bottom:1rem">
-                    <label class="editor-section-label" style="margin-bottom:0">
-                        <span>📋</span> Answer Options
-                    </label>
-                    <button onclick="addOption()" class="btn btn-ghost btn-sm">
-                        <span style="font-size:1rem">+</span> Add Option
+           <!-- Options -->
+<div class="editor-section">
+    <div class="flex justify-between items-center" style="margin-bottom:1rem">
+        <label class="editor-section-label" style="margin-bottom:0">
+            <span>📋</span> ${q.type === 'matching' ? 'Matching Pairs' : 'Answer Options'}
+        </label>
+        ${q.type !== 'matching' ? `
+            <button onclick="addOption()" class="btn btn-ghost btn-sm">
+                <span style="font-size:1rem">+</span> Add Option
+            </button>
+        ` : `
+            <button onclick="addMatchPair()" class="btn btn-ghost btn-sm">
+                <span style="font-size:1rem">+</span> Add Pair
+            </button>
+        `}
+    </div>
+    
+    ${q.type === 'matching' ? `
+        <div class="editor-section-hint">
+            <span class="editor-section-hint-icon">💡</span>
+            <span>Create terms (left) and their matching definitions (right)</span>
+        </div>
+        
+        <!-- Terms (Left Column) -->
+        <h4 style="font-size:0.875rem;font-weight:600;margin-bottom:0.75rem">Terms</h4>
+        ${q.matchPairs.map((pair, i) => `
+            <div class="option-editor" style="margin-bottom:1rem">
+                <span class="option-label">${pair.id}</span>
+                <input 
+                    type="text" 
+                    class="input" 
+                    value="${escapeHtml(pair.text)}"
+                    placeholder="Term ${i + 1}"
+                    oninput="updateMatchPair(${i}, 'text', this.value)"
+                >
+                <select 
+                    class="input" 
+                    style="width:120px"
+                    onchange="updateMatchPair(${i}, 'correctMatch', this.value)"
+                >
+                    ${q.matchTargets.map(target => `
+                        <option value="${target.id}" ${pair.correctMatch === target.id ? 'selected' : ''}>
+                            → ${target.id}
+                        </option>
+                    `).join('')}
+                </select>
+                ${q.matchPairs.length > 2 ? `
+                    <button onclick="removeMatchPair(${i})" class="option-remove-btn">
+                        <span style="font-size:1.125rem">✕</span>
                     </button>
-                </div>
-                
-                ${q.type === 'ordering' ? `
-                    <div class="editor-section-hint">
-                        <span class="editor-section-hint-icon">💡</span>
-                        <span>Drag options to set the correct order. The sequence shown here is the answer.</span>
-                    </div>
-                    ${q.options.map((opt, i) => `
-                        <div 
-                            class="option-editor" 
-                            draggable="true"
-                            ondragstart="handleEditorDragStart(event, ${i})"
-                            ondragover="handleEditorDragOver(event)"
-                            ondragleave="handleEditorDragLeave(event)"
-                            ondrop="handleEditorDrop(event, ${i})"
-                            ondragend="handleEditorDragEnd(event)"
-                            style="cursor:move"
-                        >
-                            <span class="drag-handle">⋮⋮</span>
-                            <span class="option-label">${i + 1}</span>
-                            <input 
-                                type="text" 
-                                class="input" 
-                                value="${escapeHtml(opt)}"
-                                placeholder="Option ${i + 1}"
-                                oninput="updateOption(${i}, this.value)"
-                            >
-                            ${q.options.length > 2 ? `
-                                <button onclick="event.stopPropagation(); removeOption(${i})" class="option-remove-btn">
-                                    <span style="font-size:1.125rem">✕</span>
-                                </button>
-                            ` : ''}
-                        </div>
-                    `).join('')}
-                ` : `
-                    <div class="editor-section-hint">
-                        <span class="editor-section-hint-icon">💡</span>
-                        <span>Check one or more boxes to mark correct answers. Multiple selections create "select all that apply" questions.</span>
-                    </div>
-                    ${q.options.map((opt, i) => `
-                        <div class="option-editor">
-                            <input 
-                                type="checkbox" 
-                                class="option-checkbox"
-                                ${q.correct.includes(i) ? 'checked' : ''}
-                                onchange="toggleCorrectOption(${i})"
-                            >
-                            <span class="option-label">${String.fromCharCode(65 + i)}</span>
-                            <input 
-                                type="text" 
-                                class="input" 
-                                value="${escapeHtml(opt)}"
-                                placeholder="Option ${String.fromCharCode(65 + i)}"
-                                oninput="updateOption(${i}, this.value)"
-                            >
-                            ${q.options.length > 2 ? `
-                                <button onclick="removeOption(${i})" class="option-remove-btn">
-                                    <span style="font-size:1.125rem">✕</span>
-                                </button>
-                            ` : ''}
-                        </div>
-                    `).join('')}
-                `}
+                ` : ''}
             </div>
+        `).join('')}
+        
+        <!-- Definitions (Right Column) -->
+        <h4 style="font-size:0.875rem;font-weight:600;margin:1.5rem 0 0.75rem">Definitions</h4>
+        ${q.matchTargets.map((target, i) => `
+            <div class="option-editor">
+                <span class="option-label">${target.id}</span>
+                <input 
+                    type="text" 
+                    class="input" 
+                    value="${escapeHtml(target.text)}"
+                    placeholder="Definition ${target.id}"
+                    oninput="updateMatchTarget(${i}, this.value)"
+                >
+            </div>
+        `).join('')}
+        
+    ` : q.type === 'ordering' ? `
+        <div class="editor-section-hint">
+            <span class="editor-section-hint-icon">💡</span>
+            <span>Drag options to set the correct order. The sequence shown here is the answer.</span>
+        </div>
+        ${q.options.map((opt, i) => `
+            <div 
+                class="option-editor" 
+                draggable="true"
+                ondragstart="handleEditorDragStart(event, ${i})"
+                ondragover="handleEditorDragOver(event)"
+                ondragleave="handleEditorDragLeave(event)"
+                ondrop="handleEditorDrop(event, ${i})"
+                ondragend="handleEditorDragEnd(event)"
+                style="cursor:move"
+            >
+                <span class="drag-handle">⋮⋮</span>
+                <span class="option-label">${i + 1}</span>
+                <input 
+                    type="text" 
+                    class="input" 
+                    value="${escapeHtml(opt)}"
+                    placeholder="Option ${i + 1}"
+                    oninput="updateOption(${i}, this.value)"
+                >
+                ${q.options.length > 2 ? `
+                    <button onclick="event.stopPropagation(); removeOption(${i})" class="option-remove-btn">
+                        <span style="font-size:1.125rem">✕</span>
+                    </button>
+                ` : ''}
+            </div>
+        `).join('')}
+    ` : `
+        <div class="editor-section-hint">
+            <span class="editor-section-hint-icon">💡</span>
+            <span>Check one or more boxes to mark correct answers. Multiple selections create "select all that apply" questions.</span>
+        </div>
+        ${q.options.map((opt, i) => `
+            <div class="option-editor">
+                <input 
+                    type="checkbox" 
+                    class="option-checkbox"
+                    ${q.correct.includes(i) ? 'checked' : ''}
+                    onchange="toggleCorrectOption(${i})"
+                >
+                <span class="option-label">${String.fromCharCode(65 + i)}</span>
+                <input 
+                    type="text" 
+                    class="input" 
+                    value="${escapeHtml(opt)}"
+                    placeholder="Option ${String.fromCharCode(65 + i)}"
+                    oninput="updateOption(${i}, this.value)"
+                >
+                ${q.options.length > 2 ? `
+                    <button onclick="removeOption(${i})" class="option-remove-btn">
+                        <span style="font-size:1.125rem">✕</span>
+                    </button>
+                ` : ''}
+            </div>
+        `).join('')}
+    `}
+</div>
             
             <!-- Image Section -->
             <div class="editor-section">
@@ -4254,6 +4313,78 @@ function updateEditorContent() {
         </div>
     `;
 }
+
+function updateMatchPair(index, field, value) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    if (field === 'text') {
+        q.matchPairs[index].text = value;
+    } else if (field === 'correctMatch') {
+        q.matchPairs[index].correctMatch = value;
+    }
+}
+
+function updateMatchTarget(index, value) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    q.matchTargets[index].text = value;
+}
+
+function addMatchPair() {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    const newId = String.fromCharCode(65 + q.matchPairs.length);
+    const newTargetId = String.fromCharCode(65 + q.matchTargets.length);
+    
+    q.matchPairs.push({
+        id: newId,
+        text: '',
+        correctMatch: newTargetId
+    });
+    
+    q.matchTargets.push({
+        id: newTargetId,
+        text: ''
+    });
+    
+    render();
+}
+
+function removeMatchPair(index) {
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    if (q.matchPairs.length <= 2) {
+        showToast('Need at least 2 matching pairs', 'warning');
+        return;
+    }
+    
+    const removedPairId = q.matchPairs[index].id;
+    const removedTargetId = q.matchPairs[index].correctMatch;
+    
+    q.matchPairs.splice(index, 1);
+    
+    // Remove the corresponding target
+    const targetIndex = q.matchTargets.findIndex(t => t.id === removedTargetId);
+    if (targetIndex > -1) {
+        q.matchTargets.splice(targetIndex, 1);
+    }
+    
+    // Re-letter remaining pairs
+    q.matchPairs.forEach((pair, i) => {
+        pair.id = String.fromCharCode(65 + i);
+    });
+    
+    q.matchTargets.forEach((target, i) => {
+        target.id = String.fromCharCode(65 + i);
+    });
+    
+    // Update correct matches to new IDs
+    q.matchPairs.forEach(pair => {
+        const targetIndex = q.matchTargets.findIndex(t => t.text === pair.text);
+        if (targetIndex > -1) {
+            pair.correctMatch = q.matchTargets[targetIndex].id;
+        }
+    });
+    
+    showToast('Matching pair removed', 'info');
+    render();
+}
 function updateQuestionField(field, value) {
     const q = state.parsedQuestions[state.currentEditQuestion];
     q[field] = value;
@@ -4295,24 +4426,82 @@ function updateQuestionType(newType) {
     
     // Store the previous correct answers before changing
     if (!q._previousCorrect) {
-        q._previousCorrect = { choice: [], ordering: [] };
+        q._previousCorrect = { choice: [], ordering: [], matching: {} };
     }
     
     // Save current state
-    q._previousCorrect[oldType] = [...q.correct];
+    if (oldType === 'choice' || oldType === 'ordering') {
+        q._previousCorrect[oldType] = [...q.correct];
+    } else if (oldType === 'matching') {
+        q._previousCorrect.matching = JSON.parse(JSON.stringify(q.matchPairs || []));
+    }
     
     // Change type
     q.type = newType;
     
-    // Restore previous state if exists, otherwise set defaults
-    if (q._previousCorrect[newType] && q._previousCorrect[newType].length > 0) {
-        q.correct = [...q._previousCorrect[newType]];
-    } else {
-        // Set defaults for new type
-        if (newType === 'ordering') {
-            q.correct = q.options.map((_, i) => i);
+    // Handle conversion to matching
+    if (newType === 'matching') {
+        // If we have previous matching data, restore it
+        if (q._previousCorrect.matching && q._previousCorrect.matching.length > 0) {
+            q.matchPairs = JSON.parse(JSON.stringify(q._previousCorrect.matching));
+            // Reconstruct matchTargets from matchPairs
+            const targetMap = new Map();
+            q.matchPairs.forEach(pair => {
+                if (!targetMap.has(pair.correctMatch)) {
+                    targetMap.set(pair.correctMatch, {
+                        id: pair.correctMatch,
+                        text: `Definition ${pair.correctMatch}`
+                    });
+                }
+            });
+            q.matchTargets = Array.from(targetMap.values());
         } else {
-            q.correct = [];
+            // Convert existing options to matching format
+            if (q.options && q.options.length >= 2) {
+                q.matchPairs = q.options.slice(0, Math.min(4, q.options.length)).map((opt, i) => ({
+                    id: String.fromCharCode(65 + i),
+                    text: opt,
+                    correctMatch: String.fromCharCode(65 + i)
+                }));
+                q.matchTargets = q.matchPairs.map((pair, i) => ({
+                    id: String.fromCharCode(65 + i),
+                    text: `Definition for ${pair.text}`
+                }));
+            } else {
+                // Create default matching pairs
+                q.matchPairs = [
+                    { id: 'A', text: 'Term 1', correctMatch: 'A' },
+                    { id: 'B', text: 'Term 2', correctMatch: 'B' }
+                ];
+                q.matchTargets = [
+                    { id: 'A', text: 'Definition A' },
+                    { id: 'B', text: 'Definition B' }
+                ];
+            }
+        }
+    } else if (newType === 'choice' || newType === 'ordering') {
+        // Convert matching back to regular options
+        if (oldType === 'matching' && q.matchPairs) {
+            q.options = q.matchPairs.map(pair => pair.text);
+            if (newType === 'choice') {
+                q.correct = q._previousCorrect.choice && q._previousCorrect.choice.length > 0 
+                    ? [...q._previousCorrect.choice] 
+                    : [];
+            } else {
+                q.correct = q.options.map((_, i) => i);
+            }
+        } else {
+            // Restore previous state if exists
+            if (q._previousCorrect[newType] && q._previousCorrect[newType].length > 0) {
+                q.correct = [...q._previousCorrect[newType]];
+            } else {
+                // Set defaults
+                if (newType === 'ordering') {
+                    q.correct = q.options.map((_, i) => i);
+                } else {
+                    q.correct = [];
+                }
+            }
         }
     }
     
