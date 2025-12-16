@@ -1155,9 +1155,9 @@ const SRSService = {
     // Get cards due for review
     getDueCards: (quizId) => {
         const quiz = QuizService.getById(quizId);
-        if (!quiz) return [];
+        if (!quiz || !quiz.questions) return [];
         
-        const srsData = SRSService.getData(quizId);
+        const srsData = SRSService.getData(quizId) || {};
         const now = Date.now();
         
         return quiz.questions.filter(q => {
@@ -1222,7 +1222,7 @@ const SRSService = {
     // Get overall quiz mastery
     getQuizMastery: (quizId) => {
         const quiz = QuizService.getById(quizId);
-        if (!quiz || quiz.questions.length === 0) return 0;
+        if (!quiz || !quiz.questions || quiz.questions.length === 0) return 0;
         
         const totalStars = quiz.questions.reduce((sum, q) => 
             sum + SRSService.getMasteryLevel(quizId, q.id), 0);
@@ -1835,6 +1835,7 @@ const Components = {
     // Navigation bar
     navbar: () => {
         const state = AppState.getState();
+        const stats = state.stats || { streak: 0 };
         return `
             <nav class="navbar">
                 <div class="container navbar-inner">
@@ -1844,10 +1845,10 @@ const Components = {
                     </a>
                     
                     <div class="flex items-center gap-3">
-                        ${state.stats.streak > 0 ? `
+                        ${stats.streak > 0 ? `
                             <div class="streak-display hide-mobile">
                                 <span class="streak-flame">🔥</span>
-                                <span class="streak-count">${state.stats.streak}</span>
+                                <span class="streak-count">${stats.streak}</span>
                                 <span class="streak-label">day streak</span>
                             </div>
                         ` : ''}
@@ -1882,28 +1883,30 @@ const Components = {
     
     // Quiz card
     quizCard: (quiz) => {
-        const dueCount = SRSService.getDueCards(quiz.id).length;
-        const mastery = SRSService.getQuizMastery(quiz.id);
+        const dueCount = SRSService.getDueCards(quiz.id)?.length || 0;
+        const mastery = SRSService.getQuizMastery(quiz.id) || 0;
+        const stats = quiz.stats || { attempts: 0, bestScore: 0 };
+        const questions = quiz.questions || [];
         
         return `
             <div class="quiz-card" data-quiz-id="${quiz.id}">
                 <div class="flex items-start gap-4 mb-3">
-                    <div class="quiz-card-icon" style="background: ${quiz.color}20; color: ${quiz.color}">
-                        ${quiz.icon}
+                    <div class="quiz-card-icon" style="background: ${quiz.color || '#FF6B2C'}20; color: ${quiz.color || '#FF6B2C'}">
+                        ${quiz.icon || '📚'}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <h3 class="quiz-card-title">${Utils.escapeHtml(quiz.title)}</h3>
-                        <p class="quiz-card-meta">${quiz.questions.length} questions</p>
+                        <h3 class="quiz-card-title">${Utils.escapeHtml(quiz.title || 'Untitled')}</h3>
+                        <p class="quiz-card-meta">${questions.length} questions</p>
                     </div>
                     ${dueCount > 0 ? `<span class="due-badge">${dueCount} due</span>` : ''}
                 </div>
                 
                 <div class="quiz-card-stats">
                     <div class="quiz-card-stat">
-                        ${Components.icon('play')} ${quiz.stats.attempts} attempts
+                        ${Components.icon('play')} ${stats.attempts} attempts
                     </div>
                     <div class="quiz-card-stat">
-                        ${Components.icon('trophy')} ${quiz.stats.bestScore}%
+                        ${Components.icon('trophy')} ${stats.bestScore}%
                     </div>
                     <div class="quiz-card-stat">
                         ${Components.masteryStars(Math.round(mastery / 20))}
@@ -2073,8 +2076,8 @@ const Views = {
     // Library view (home)
     library: () => {
         const state = AppState.getState();
-        const quizzes = state.quizzes;
-        const stats = state.stats;
+        const quizzes = state.quizzes || [];
+        const stats = state.stats || { questionsAnswered: 0, correctAnswers: 0, streak: 0 };
         
         return `
             ${Components.navbar()}
@@ -2083,9 +2086,9 @@ const Views = {
                 <!-- Stats Overview -->
                 <div class="stats-grid mb-8" style="margin-bottom: var(--space-8);">
                     ${Components.statCard(quizzes.length, 'Quizzes')}
-                    ${Components.statCard(quizzes.reduce((sum, q) => sum + q.questions.length, 0), 'Questions')}
-                    ${Components.statCard(stats.questionsAnswered, 'Answered')}
-                    ${Components.statCard(`${Utils.percentage(stats.correctAnswers, stats.questionsAnswered || 1)}%`, 'Accuracy', true)}
+                    ${Components.statCard(quizzes.reduce((sum, q) => sum + (q.questions?.length || 0), 0), 'Questions')}
+                    ${Components.statCard(stats.questionsAnswered || 0, 'Answered')}
+                    ${Components.statCard(`${Utils.percentage(stats.correctAnswers || 0, stats.questionsAnswered || 1)}%`, 'Accuracy', true)}
                 </div>
                 
                 <!-- Section Header -->
@@ -3702,40 +3705,62 @@ D. Madrid
 
 const App = {
     init: () => {
-        console.log(`${CONFIG.APP_NAME} v${CONFIG.VERSION} initializing...`);
-        
-        // Load saved data
-        const quizzes = QuizService.getAll();
-        const stats = Analytics.getStats();
-        
-        AppState.setState({
-            initialized: true,
-            quizzes,
-            stats
-        });
-        
-        // Initialize components
-        Toast.init();
-        Loading.init();
-        EventHandlers.init();
-        
-        // Initial route
-        Router.navigate('library');
-        
-        // Listen for state changes
-        AppState.subscribe((state, prevState) => {
-            // Auto-refresh view on relevant state changes
-            if (state.quizzes !== prevState.quizzes && state.currentView === 'library') {
-                Router.refresh();
-            }
-        });
-        
-        // Handle browser back/forward (simple implementation)
-        window.addEventListener('popstate', () => {
+        try {
+            console.log(`${CONFIG.APP_NAME} v${CONFIG.VERSION} initializing...`);
+            
+            // Load saved data
+            const quizzes = QuizService.getAll() || [];
+            const stats = Analytics.getStats() || {
+                totalQuizzes: 0,
+                totalQuestions: 0,
+                questionsAnswered: 0,
+                correctAnswers: 0,
+                streak: 0,
+                lastStudyDate: null,
+                studyHistory: []
+            };
+            
+            AppState.setState({
+                initialized: true,
+                quizzes,
+                stats
+            });
+            
+            // Initialize components
+            Toast.init();
+            Loading.init();
+            EventHandlers.init();
+            
+            // Initial route
             Router.navigate('library');
-        });
-        
-        console.log(`${CONFIG.APP_NAME} initialized with ${quizzes.length} quizzes`);
+            
+            // Listen for state changes
+            AppState.subscribe((state, prevState) => {
+                // Auto-refresh view on relevant state changes
+                if (state.quizzes !== prevState.quizzes && state.currentView === 'library') {
+                    Router.refresh();
+                }
+            });
+            
+            // Handle browser back/forward (simple implementation)
+            window.addEventListener('popstate', () => {
+                Router.navigate('library');
+            });
+            
+            console.log(`${CONFIG.APP_NAME} initialized with ${quizzes.length} quizzes`);
+        } catch (error) {
+            console.error('App initialization failed:', error);
+            document.getElementById('app').innerHTML = `
+                <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+                    <h2 style="color: #FF6B2C; margin-bottom: 0.5rem;">Something went wrong</h2>
+                    <p style="color: #71717A; margin-bottom: 1rem;">${error.message}</p>
+                    <button onclick="localStorage.clear(); location.reload();" style="padding: 10px 20px; background: #FF6B2C; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        Reset & Reload
+                    </button>
+                </div>
+            `;
+        }
     }
 };
 

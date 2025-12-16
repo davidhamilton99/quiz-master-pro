@@ -2,12 +2,17 @@
 // This file adds sample quizzes to help users get started
 
 (function() {
-    // Check if we already have quizzes
-    const existingQuizzes = localStorage.getItem('qmp_quizzes');
-    if (existingQuizzes) {
-        const quizzes = JSON.parse(existingQuizzes);
-        if (quizzes.length > 0) return; // Don't add demo data if user has quizzes
-    }
+    try {
+        // Check if we already have quizzes
+        const existingQuizzes = localStorage.getItem('qmp_quizzes');
+        if (existingQuizzes) {
+            try {
+                const quizzes = JSON.parse(existingQuizzes);
+                if (Array.isArray(quizzes) && quizzes.length > 0) return; // Don't add demo data if user has quizzes
+            } catch (e) {
+                console.warn('Failed to parse existing quizzes, will reset with demo data');
+            }
+        }
     
     const demoQuizzes = [
         {
@@ -357,4 +362,7 @@
     }));
     
     console.log('Demo quizzes loaded successfully!');
+    } catch (error) {
+        console.error('Failed to load demo data:', error);
+    }
 })();
