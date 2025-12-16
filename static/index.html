@@ -2,33 +2,82 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Quiz Master Pro - The only quiz platform where your code actually runs. Practice programming, networking, and more with real execution.">
-    <title>Quiz Master Pro - Where Code Actually Runs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Quiz Master Pro - The ultimate study platform for CCNA and networking students">
     
-    <!-- Fonts - Premium Typography -->
+    <title>Quiz Master Pro</title>
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     
     <!-- Styles -->
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="styles.css">
     
-    <!-- Pyodide for Python execution in browser -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
-    
-    <!-- Firebase for real-time multiplayer -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23FF6B35' rx='20' width='100' height='100'/><text x='50%' y='58%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='55' font-weight='bold' font-family='system-ui'>Q</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+    
+    <style>
+        /* Critical CSS for initial load */
+        body {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        body.loaded {
+            opacity: 1;
+        }
+    </style>
 </head>
 <body>
-    <div id="app"></div>
-    <div id="toast-container" class="toast-container"></div>
+    <!-- Main App Container -->
+    <div id="app">
+        <!-- Loading state while app initializes -->
+        <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🎯</div>
+                <div class="spinner-ring" style="margin: 0 auto;"></div>
+            </div>
+        </div>
+    </div>
     
-    <!-- Main App Script -->
-    <script src="/static/app.js"></script>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <span class="spinner-text">Loading...</span>
+        </div>
+    </div>
+    
+    <!-- SVG Definitions for Progress Rings -->
+    <svg style="position: absolute; width: 0; height: 0;">
+        <defs>
+            <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#FF6B2C"/>
+                <stop offset="100%" style="stop-color:#22D3EE"/>
+            </linearGradient>
+        </defs>
+    </svg>
+    
+    <!-- Demo Data (loads sample quizzes on first visit) -->
+    <script src="demo-data.js"></script>
+    
+    <!-- Main Application Script -->
+    <script src="/statc/app.js/"></script>
+    
+    <!-- Show body after JS loads -->
+    <script>
+        document.body.classList.add('loaded');
+    </script>
 </body>
 </html>
