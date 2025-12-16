@@ -3429,15 +3429,18 @@ function renderMatchingQuestion(q, questionIndex) {
     const userAnswers = state.answers[questionIndex] || {};
     const showResults = state.studyMode && state.showAnswer;
     
+    // Generate unique IDs for this question instance
+    const questionId = `matching-${questionIndex}`;
+    
     return `
-        <div class="matching-container">
+        <div class="matching-container" id="${questionId}">
             <div class="matching-hint">
                 <span class="matching-hint-icon">💡</span>
-                <span>Match each term on the left with the correct definition on the right</span>
+                <span>Drag definitions from the right onto the correct terms on the left</span>
             </div>
             
             <div class="matching-grid">
-                <!-- Left Column: Terms -->
+                <!-- Left Column: Terms (Drop Zones) -->
                 <div class="matching-column matching-pairs">
                     ${q.matchPairs.map((pair, idx) => {
                         const selected = userAnswers[pair.id];
@@ -3445,7 +3448,9 @@ function renderMatchingQuestion(q, questionIndex) {
                         const isIncorrect = showResults && selected && selected !== pair.correctMatch;
                         
                         return `
-                            <div class="matching-pair ${selected ? 'matched' : ''} ${isCorrect ? 'correct' : ''} ${isIncorrect ? 'incorrect' : ''}">
+                            <div class="matching-pair ${selected ? 'matched' : ''} ${isCorrect ? 'correct' : ''} ${isIncorrect ? 'incorrect' : ''}"
+                                 data-pair-id="${pair.id}"
+                                 data-question-index="${questionIndex}">
                                 <div class="matching-pair-label">${pair.id}</div>
                                 <div class="matching-pair-text">${escapeHtml(pair.text)}</div>
                                 ${selected ? `
@@ -3459,29 +3464,20 @@ function renderMatchingQuestion(q, questionIndex) {
                     }).join('')}
                 </div>
                 
-                <!-- Right Column: Definitions -->
+                <!-- Right Column: Definitions (Draggable) -->
                 <div class="matching-column matching-targets">
                     ${q.matchTargets.map((target) => {
                         const isSelected = Object.values(userAnswers).includes(target.id);
                         const isCorrectAnswer = showResults && q.matchPairs.some(p => p.correctMatch === target.id);
                         
                         return `
-                            <div class="matching-target ${isSelected ? 'selected' : ''} ${isCorrectAnswer && showResults ? 'highlight-correct' : ''}">
+                            <div class="matching-target ${!showResults ? 'draggable' : ''} ${isSelected ? 'selected' : ''} ${isCorrectAnswer && showResults ? 'highlight-correct' : ''}"
+                                 data-target-id="${target.id}"
+                                 data-question-index="${questionIndex}"
+                                 draggable="${!showResults}">
                                 <div class="matching-target-label">${target.id}</div>
                                 <div class="matching-target-text">${escapeHtml(target.text)}</div>
-                                ${!showResults ? `
-                                    <div class="matching-target-buttons">
-                                        ${q.matchPairs.map((pair, idx) => `
-                                            <button 
-                                                class="matching-connect-btn ${userAnswers[pair.id] === target.id ? 'active' : ''}"
-                                                onclick="selectMatchAnswer(${idx}, '${target.id}')"
-                                                ${showResults ? 'disabled' : ''}
-                                            >
-                                                ${pair.id}
-                                            </button>
-                                        `).join('')}
-                                    </div>
-                                ` : ''}
+                                ${!showResults ? '<div class="matching-target-drag-indicator">⋮⋮</div>' : ''}
                             </div>
                         `;
                     }).join('')}
@@ -3496,6 +3492,123 @@ function renderMatchingQuestion(q, questionIndex) {
             ` : ''}
         </div>
     `;
+}
+
+// Initialize drag and drop for matching questions
+function initMatchingDragDrop() {
+    const targets = document.querySelectorAll('.matching-target.draggable');
+    const pairs = document.querySelectorAll('.matching-pair');
+    
+    // Draggable items (definitions)
+    targets.forEach(target => {
+        target.addEventListener('dragstart', handleMatchingDragStart);
+        target.addEventListener('dragend', handleMatchingDragEnd);
+    });
+    
+    // Drop zones (terms)
+    pairs.forEach(pair => {
+        pair.addEventListener('dragover', handleMatchingDragOver);
+        pair.addEventListener('dragleave', handleMatchingDragLeave);
+        pair.addEventListener('drop', handleMatchingDrop);
+    });
+}
+
+function handleMatchingDragStart(e) {
+    const targetId = e.currentTarget.dataset.targetId;
+    const questionIndex = e.currentTarget.dataset.questionIndex;
+    
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ targetId, questionIndex }));
+    
+    e.currentTarget.classList.add('dragging');
+    
+    // Highlight all drop zones
+    document.querySelectorAll('.matching-pair').forEach(pair => {
+        if (pair.dataset.questionIndex === questionIndex) {
+            pair.classList.add('drop-zone');
+        }
+    });
+}
+
+function handleMatchingDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    
+    // Remove all highlights
+    document.querySelectorAll('.matching-pair').forEach(pair => {
+        pair.classList.remove('drop-zone', 'drop-valid', 'drop-invalid');
+    });
+}
+
+function handleMatchingDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const pair = e.currentTarget;
+    if (!pair.classList.contains('dragging')) {
+        pair.classList.add('drop-valid');
+        pair.classList.remove('drop-invalid');
+    }
+}
+
+function handleMatchingDragLeave(e) {
+    const pair = e.currentTarget;
+    pair.classList.remove('drop-valid', 'drop-invalid');
+}
+
+function handleMatchingDrop(e) {
+    e.preventDefault();
+    
+    const pair = e.currentTarget;
+    pair.classList.remove('drop-zone', 'drop-valid', 'drop-invalid');
+    
+    try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        const { targetId, questionIndex } = data;
+        
+        const pairId = pair.dataset.pairId;
+        const pairQuestionIndex = parseInt(pair.dataset.questionIndex);
+        
+        // Verify it's the same question
+        if (parseInt(questionIndex) !== pairQuestionIndex) {
+            return;
+        }
+        
+        // Initialize answers object if needed
+        if (!state.answers[questionIndex]) {
+            state.answers[questionIndex] = {};
+        }
+        
+        // Remove this target from any other pairs first
+        Object.keys(state.answers[questionIndex]).forEach(key => {
+            if (state.answers[questionIndex][key] === targetId) {
+                delete state.answers[questionIndex][key];
+            }
+        });
+        
+        // Add the new match
+        state.answers[questionIndex][pairId] = targetId;
+        
+        // Save progress
+        saveQuizProgress();
+        
+        // Visual feedback
+        pair.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+            pair.style.transform = '';
+        }, 200);
+        
+        // Check if all pairs matched in study mode
+        const q = state.currentQuiz.questions[questionIndex];
+        if (state.studyMode && Object.keys(state.answers[questionIndex]).length === q.matchPairs.length) {
+            checkStudyAnswer();
+        }
+        
+        // Re-render to show the match
+        render();
+        
+    } catch (error) {
+        console.error('Drop error:', error);
+    }
 }
 function checkStudyAnswer() {
     const q = state.currentQuiz.questions[state.currentQuestionIndex], ua = state.answers[state.currentQuestionIndex] || [];
@@ -5273,7 +5386,17 @@ function bindEvents() {
         
         renderQuizGrid();
     }
-
+// ===== ADD THIS SECTION HERE =====
+    // Initialize matching question drag-drop
+    if (state.view === 'quiz' && state.currentQuiz) {
+        const currentQ = state.currentQuiz.questions[state.currentQuestionIndex];
+        if (currentQ && currentQ.type === 'matching') {
+            setTimeout(() => {
+                initMatchingDragDrop();
+            }, 100);
+        }
+    }
+    // ===== END NEW SECTION =====
     if (state.view === 'quiz' && state.currentQuiz?.questions[state.currentQuestionIndex]?.type === 'ordering') {
         setTimeout(() => {
             document.querySelectorAll('.draggable-item').forEach((item, i) => {
