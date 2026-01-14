@@ -1,4 +1,9 @@
 /* ============================================
+   QUIZ MASTER PRO - CSS MODULE 01
+   Variables, Reset, Base styles
+   ============================================ */
+
+/* ============================================
    QUIZ MASTER PRO - PREMIUM DESIGN SYSTEM
    v3.0 - Complete Overhaul
    
@@ -171,6 +176,11 @@ body::after {
 }
 
 /* ============================================
+   QUIZ MASTER PRO - CSS MODULE 02
+   Typography, Layout utilities
+   ============================================ */
+
+/* ============================================
    TYPOGRAPHY
    ============================================ */
 
@@ -337,6 +347,11 @@ p { line-height: 1.7; }
 .fixed { position: fixed; }
 .sticky { position: sticky; }
 .inset-0 { inset: 0; }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 03
+   Buttons, Form elements
+   ============================================ */
 
 /* ============================================
    BUTTONS - Fixed hierarchy
@@ -574,6 +589,11 @@ input[type="checkbox"] {
 .search-input {
     padding-left: 2.75rem;
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 04
+   Cards, Navbar, Dropdown, Badges
+   ============================================ */
 
 /* ============================================
    CARDS
@@ -854,6 +874,11 @@ input[type="checkbox"] {
     font-size: 0.75rem;
     color: var(--text-muted);
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 05
+   Tabs, Progress, Quiz cards
+   ============================================ */
 
 /* ============================================
    TABS
@@ -1147,6 +1172,11 @@ input[type="checkbox"] {
 }
 
 /* ============================================
+   QUIZ MASTER PRO - CSS MODULE 06
+   Stats, SRS, Mastery, Heatmap, Folders
+   ============================================ */
+
+/* ============================================
    SRS BANNER
    ============================================ */
 
@@ -1290,6 +1320,11 @@ input[type="checkbox"] {
     border-radius: var(--radius-full);
     margin-left: auto;
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 07
+   Question display, Code blocks, Test results
+   ============================================ */
 
 /* ============================================
    CODE BLOCKS
@@ -1540,6 +1575,11 @@ input[type="checkbox"] {
 }
 
 /* ============================================
+   QUIZ MASTER PRO - CSS MODULE 08
+   Options, Draggable items, Quiz header/footer
+   ============================================ */
+
+/* ============================================
    OPTIONS - Quiz answers
    ============================================ */
 
@@ -1771,6 +1811,11 @@ input[type="checkbox"] {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 09
+   Modals, Toast, Loading spinner, Timer
+   ============================================ */
 
 /* ============================================
    MODALS - Fixed z-index
@@ -2160,6 +2205,11 @@ kbd {
 }
 
 /* ============================================
+   QUIZ MASTER PRO - CSS MODULE 10
+   IOS Terminal, Confetti, Confidence buttons
+   ============================================ */
+
+/* ============================================
    SEARCH HIGHLIGHT
    ============================================ */
 
@@ -2389,8 +2439,11 @@ kbd {
 }
 
 /* ============================================
-   AUTH PAGE
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 11
+   Auth page, Results, Review, Empty state
    ============================================ */
+
 
 .auth-page {
     min-height: 100vh;
@@ -2535,6 +2588,11 @@ kbd {
     color: var(--text-muted);
     margin-bottom: var(--space-lg);
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 12
+   Visual Editor complete styles
+   ============================================ */
 
 /* ============================================
    VISUAL EDITOR - Complete styles
@@ -2882,6 +2940,11 @@ kbd {
     white-space: pre-wrap;
     color: var(--text-secondary);
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 13
+   Multiplayer styles, scrollbar
+   ============================================ */
 
 /* ============================================
    MULTIPLAYER STYLES - Phase 5
@@ -3377,6 +3440,11 @@ kbd {
         max-height: none;
     }
 }
+
+/* ============================================
+   QUIZ MASTER PRO - CSS MODULE 14
+   Responsive, Tablet, Mobile, Touch, Print
+   ============================================ */
 
 /* ============================================
    RESPONSIVE - MOBILE (max-width: 768px)
@@ -3920,6 +3988,11 @@ kbd {
 }
 
 /* ============================================
+   QUIZ MASTER PRO - CSS MODULE 15
+   Matching questions, Portal dropdown
+   ============================================ */
+
+/* ============================================
    MATCHING QUESTIONS
    ============================================ */
 
@@ -4247,4 +4320,214 @@ kbd {
 
 .matching-pair.incorrect .matching-pair-match-text {
     color: var(--error);
+}
+
+/* ============================================
+   PORTAL DROPDOWN SYSTEM
+   Renders outside quiz card to escape stacking context
+   ============================================ */
+
+#dropdown-portal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    z-index: 99999;
+    pointer-events: none;
+}
+
+.dropdown-portal-menu {
+    position: fixed;
+    min-width: 200px;
+    max-width: 280px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-sm);
+    box-shadow: var(--shadow-xl);
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+    transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+
+.dropdown-portal-menu.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.dropdown-portal-menu.closing {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+}
+
+.dropdown-portal-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+    text-align: left;
+}
+
+.dropdown-portal-menu .dropdown-item:hover {
+    background: var(--glass);
+    color: var(--text-primary);
+}
+
+.dropdown-portal-menu .dropdown-item.danger {
+    color: var(--error);
+}
+
+.dropdown-portal-menu .dropdown-item.danger:hover {
+    background: var(--error-light);
+}
+
+.dropdown-portal-menu .dropdown-divider {
+    height: 1px;
+    background: var(--border);
+    margin: var(--space-xs) 0;
+}
+
+/* Mobile bottom sheet */
+.dropdown-portal-menu.mobile-sheet {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    max-width: 100%;
+    width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: var(--space-md);
+    padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 16px));
+    max-height: 70vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    opacity: 1;
+}
+
+.dropdown-portal-menu.mobile-sheet.open {
+    transform: translateY(0);
+}
+
+.dropdown-portal-menu.mobile-sheet.closing {
+    transform: translateY(100%);
+}
+
+.dropdown-portal-menu.mobile-sheet::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-hover);
+    border-radius: 2px;
+    margin: 0 auto var(--space-md);
+}
+
+.dropdown-portal-menu.mobile-sheet .dropdown-item {
+    padding: 1rem;
+    font-size: 1rem;
+    min-height: 52px;
+}
+
+@media (max-width: 768px) {
+    #dropdown-portal::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0);
+        pointer-events: none;
+        transition: background 200ms ease;
+    }
+    
+    #dropdown-portal:has(.dropdown-portal-menu.open)::before {
+        background: rgba(0, 0, 0, 0.5);
+        pointer-events: auto;
+    }
+}
+
+/* ============================================
+   MATCHING QUESTIONS - CLICK SELECTION
+   ============================================ */
+
+.matching-pair.click-selected {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.matching-pair.click-selected .matching-pair-label {
+    background: var(--accent);
+    color: white;
+}
+
+.matching-target.highlighted {
+    border-color: var(--accent);
+    animation: pulse-highlight 1s ease-in-out infinite;
+}
+
+@keyframes pulse-highlight {
+    0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+    50% { box-shadow: 0 0 0 6px var(--accent-glow); }
+}
+
+.matching-target.used {
+    opacity: 0.5;
+    cursor: default !important;
+    background: var(--bg-surface);
+}
+
+.used-indicator {
+    position: absolute;
+    top: var(--space-xs);
+    right: var(--space-xs);
+    color: var(--success);
+    font-size: 0.875rem;
+}
+
+.clear-match-btn {
+    width: 20px;
+    height: 20px;
+    background: var(--error-light);
+    color: var(--error);
+    border: none;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    transition: all var(--transition-fast);
+}
+
+.clear-match-btn:hover {
+    background: var(--error);
+    color: white;
+}
+
+.matching-progress {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.matching-correct-answers {
+    padding: var(--space-md);
+    background: var(--success-light);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-md);
 }

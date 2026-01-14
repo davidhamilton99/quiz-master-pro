@@ -1,3 +1,5 @@
+// @ts-nocheck
+/* eslint-disable */
 const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
         
         const state = {
@@ -34,6 +36,117 @@ const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
         function getRandomColor() { return ['#FF6B35','#10B981','#3B82F6','#A855F7','#EC4899','#EF4444'][Math.floor(Math.random() * 6)]; }
         function shuffleArray(arr) { const s = [...arr]; for (let i = s.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [s[i], s[j]] = [s[j], s[i]]; } return s; }
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+/* ============================================
+   PORTAL DROPDOWN SYSTEM
+   Renders dropdown outside quiz card DOM to escape stacking context
+   ============================================ */
+
+const DropdownPortal = {
+    container: null,
+    menu: null,
+    trigger: null,
+    isOpen: false,
+    
+    init() {
+        if (this.container) return;
+        this.container = document.createElement('div');
+        this.container.id = 'dropdown-portal';
+        document.body.appendChild(this.container);
+        
+        document.addEventListener('click', (e) => {
+            if (!this.isOpen) return;
+            if (this.menu && !this.menu.contains(e.target) && 
+                this.trigger && !this.trigger.contains(e.target)) {
+                this.close();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isOpen) this.close();
+        });
+        
+        let timeout;
+        const reposition = () => { clearTimeout(timeout); timeout = setTimeout(() => this.position(), 10); };
+        window.addEventListener('scroll', reposition, { passive: true, capture: true });
+        window.addEventListener('resize', reposition);
+    },
+    
+    open(triggerEl, quizId) {
+        this.init();
+        if (this.trigger === triggerEl && this.isOpen) { this.close(); return; }
+        this.close(false);
+        this.trigger = triggerEl;
+        this.isOpen = true;
+        
+        const quiz = state.quizzes.find(q => q.id === quizId);
+        if (!quiz) return;
+        
+        this.menu = document.createElement('div');
+        this.menu.className = 'dropdown-portal-menu';
+        this.menu.innerHTML = this.buildMenu(quiz);
+        this.container.appendChild(this.menu);
+        this.position();
+        requestAnimationFrame(() => this.menu.classList.add('open'));
+    },
+    
+    buildMenu(quiz) {
+        let html = `
+            <button class="dropdown-item" onclick="DropdownPortal.close(); showQuizPreview(${quiz.id})">👁️ Preview</button>
+            <button class="dropdown-item" onclick="DropdownPortal.close(); editQuiz(${quiz.id})">✏️ Edit</button>
+            <button class="dropdown-item" onclick="DropdownPortal.close(); ExportManager.showExportModal(state.quizzes.find(x=>x.id===${quiz.id}))">📤 Export</button>
+        `;
+        if (state.folders && state.folders.length > 0) {
+            html += `<div class="dropdown-divider"></div>`;
+            state.folders.forEach(f => {
+                html += `<button class="dropdown-item" onclick="DropdownPortal.close(); addToFolder(${quiz.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`;
+            });
+        }
+        html += `<div class="dropdown-divider"></div>
+            <button class="dropdown-item danger" onclick="DropdownPortal.close(); deleteQuiz(${quiz.id})">🗑️ Delete</button>`;
+        return html;
+    },
+    
+    position() {
+        if (!this.menu || !this.trigger) return;
+        const tr = this.trigger.getBoundingClientRect();
+        const mr = this.menu.getBoundingClientRect();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        
+        if (vw <= 768) {
+            this.menu.style.cssText = 'position:fixed;top:auto;bottom:0;left:0;right:0;';
+            this.menu.classList.add('mobile-sheet');
+        } else {
+            let top = tr.bottom + 8, left = tr.right - mr.width;
+            if (left < 8) left = tr.left;
+            if (left + mr.width > vw - 8) left = vw - mr.width - 8;
+            if (top + mr.height > vh - 8) top = tr.top - mr.height - 8;
+            this.menu.style.cssText = `position:fixed;top:${top}px;left:${left}px;`;
+            this.menu.classList.remove('mobile-sheet');
+        }
+    },
+    
+    close(animate = true) {
+        if (!this.menu) return;
+        if (animate) {
+            this.menu.classList.remove('open');
+            this.menu.classList.add('closing');
+            const ref = this.menu;
+            setTimeout(() => ref.remove(), 150);
+        } else {
+            this.menu.remove();
+        }
+        this.menu = null;
+        this.isOpen = false;
+        this.trigger = null;
+    }
+};
+
+function toggleQuizDropdown(event, quizId) {
+    event.stopPropagation();
+    event.preventDefault();
+    DropdownPortal.open(event.currentTarget, quizId);
+}
 
 /* ============================================
    PHASE 2: ADVANCED CODE EXECUTION
@@ -3425,35 +3538,98 @@ function selectMatchAnswer(pairIndex, targetId) {
     render();
 }
 
+// Click-based matching state
+let matchingSelectedPair = null;
+
+function handleMatchPairClick(pairId, questionIndex) {
+    if (state.showAnswer) return;
+    
+    const q = state.currentQuiz.questions[questionIndex];
+    const userAnswers = state.answers[questionIndex] || {};
+    
+    // If this pair already has a match, clicking it clears the match
+    if (userAnswers[pairId]) {
+        delete state.answers[questionIndex][pairId];
+        matchingSelectedPair = null;
+        saveQuizProgress();
+        render();
+        return;
+    }
+    
+    // Toggle selection
+    if (matchingSelectedPair === pairId) {
+        matchingSelectedPair = null;
+    } else {
+        matchingSelectedPair = pairId;
+    }
+    render();
+}
+
+function handleMatchTargetClick(targetId, questionIndex) {
+    if (state.showAnswer) return;
+    
+    const q = state.currentQuiz.questions[questionIndex];
+    const userAnswers = state.answers[questionIndex] || {};
+    
+    // Check if this target is already used
+    const isUsed = Object.values(userAnswers).includes(targetId);
+    if (isUsed) return;
+    
+    // If a pair is selected, make the match
+    if (matchingSelectedPair) {
+        if (!state.answers[questionIndex]) {
+            state.answers[questionIndex] = {};
+        }
+        
+        // Remove this target from any other pair first
+        Object.keys(state.answers[questionIndex]).forEach(key => {
+            if (state.answers[questionIndex][key] === targetId) {
+                delete state.answers[questionIndex][key];
+            }
+        });
+        
+        state.answers[questionIndex][matchingSelectedPair] = targetId;
+        matchingSelectedPair = null;
+        
+        saveQuizProgress();
+        
+        // Check if all matched in study mode
+        if (state.studyMode && Object.keys(state.answers[questionIndex]).length === q.matchPairs.length) {
+            checkStudyAnswer();
+        }
+        
+        render();
+    }
+}
+
 function renderMatchingQuestion(q, questionIndex) {
     const userAnswers = state.answers[questionIndex] || {};
     const showResults = state.studyMode && state.showAnswer;
-    
-    // Generate unique IDs for this question instance
     const questionId = `matching-${questionIndex}`;
     
     return `
         <div class="matching-container" id="${questionId}">
             <div class="matching-hint">
                 <span class="matching-hint-icon">💡</span>
-                <span>Drag definitions from the right onto the correct terms on the left</span>
+                <span>Click a term, then click its matching definition. Or drag definitions onto terms.</span>
             </div>
             
             <div class="matching-grid">
-                <!-- Left Column: Terms (Drop Zones) -->
+                <!-- Left Column: Terms -->
                 <div class="matching-column matching-pairs">
                     ${q.matchPairs.map((pair, idx) => {
                         const selected = userAnswers[pair.id];
                         const isCorrect = showResults && selected === pair.correctMatch;
                         const isIncorrect = showResults && selected && selected !== pair.correctMatch;
-                        
-                        // Find the selected target's text
+                        const isClickSelected = matchingSelectedPair === pair.id;
                         const selectedTarget = selected ? q.matchTargets.find(t => t.id === selected) : null;
                         
                         return `
-                            <div class="matching-pair ${selected ? 'matched' : ''} ${isCorrect ? 'correct' : ''} ${isIncorrect ? 'incorrect' : ''}"
+                            <div class="matching-pair ${selected ? 'matched' : ''} ${isCorrect ? 'correct' : ''} ${isIncorrect ? 'incorrect' : ''} ${isClickSelected ? 'click-selected' : ''}"
                                  data-pair-id="${pair.id}"
-                                 data-question-index="${questionIndex}">
+                                 data-question-index="${questionIndex}"
+                                 onclick="handleMatchPairClick('${pair.id}', ${questionIndex})"
+                                 style="cursor:pointer">
                                 <div class="matching-pair-label">${pair.id}</div>
                                 <div class="matching-pair-text">${escapeHtml(pair.text)}</div>
                                 ${selected && selectedTarget ? `
@@ -3461,6 +3637,7 @@ function renderMatchingQuestion(q, questionIndex) {
                                     <div class="matching-pair-match-preview">
                                         <div class="matching-pair-selection">${selected}</div>
                                         <div class="matching-pair-match-text">${escapeHtml(selectedTarget.text.substring(0, 50))}${selectedTarget.text.length > 50 ? '...' : ''}</div>
+                                        ${!showResults ? `<button class="clear-match-btn" onclick="event.stopPropagation();handleMatchPairClick('${pair.id}',${questionIndex})">✕</button>` : ''}
                                     </div>
                                 ` : ''}
                                 ${showResults && isCorrect ? '<span class="match-badge badge-success">✓</span>' : ''}
@@ -3470,30 +3647,52 @@ function renderMatchingQuestion(q, questionIndex) {
                     }).join('')}
                 </div>
                 
-                <!-- Right Column: Definitions (Draggable) -->
+                <!-- Right Column: Definitions -->
                 <div class="matching-column matching-targets">
                     ${q.matchTargets.map((target) => {
-                        const isSelected = Object.values(userAnswers).includes(target.id);
+                        const isUsed = Object.values(userAnswers).includes(target.id);
+                        const isHighlighted = matchingSelectedPair && !isUsed && !showResults;
                         const isCorrectAnswer = showResults && q.matchPairs.some(p => p.correctMatch === target.id);
                         
                         return `
-                            <div class="matching-target ${!showResults ? 'draggable' : ''} ${isSelected ? 'selected' : ''} ${isCorrectAnswer && showResults ? 'highlight-correct' : ''}"
+                            <div class="matching-target ${!showResults ? 'draggable' : ''} ${isUsed ? 'used' : ''} ${isHighlighted ? 'highlighted' : ''} ${isCorrectAnswer && showResults ? 'highlight-correct' : ''}"
                                  data-target-id="${target.id}"
                                  data-question-index="${questionIndex}"
-                                 draggable="${!showResults}">
+                                 draggable="${!showResults && !isUsed}"
+                                 onclick="handleMatchTargetClick('${target.id}', ${questionIndex})"
+                                 style="cursor:${isUsed || showResults ? 'default' : 'pointer'}">
                                 <div class="matching-target-label">${target.id}</div>
                                 <div class="matching-target-text">${escapeHtml(target.text)}</div>
-                                ${!showResults ? '<div class="matching-target-drag-indicator">⋮⋮</div>' : ''}
+                                ${!showResults && !isUsed ? '<div class="matching-target-drag-indicator">⋮⋮</div>' : ''}
+                                ${isUsed ? '<span class="used-indicator">✓</span>' : ''}
                             </div>
                         `;
                     }).join('')}
                 </div>
             </div>
             
+            <div class="matching-progress">
+                <span>${Object.keys(userAnswers).length} of ${q.matchPairs.length} matched</span>
+            </div>
+            
             ${showResults && q.explanation ? `
                 <div class="explanation-box" style="margin-top:1.5rem">
                     <p class="font-semibold" style="margin-bottom:0.25rem">💡 Explanation</p>
                     <p>${escapeHtml(q.explanation)}</p>
+                </div>
+            ` : ''}
+            
+            ${showResults ? `
+                <div class="matching-correct-answers" style="margin-top:1rem">
+                    <p class="font-semibold" style="margin-bottom:0.5rem;color:var(--success)">Correct Matches:</p>
+                    ${q.matchPairs.map(pair => {
+                        const correctTarget = q.matchTargets.find(t => t.id === pair.correctMatch);
+                        return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;font-size:0.875rem">
+                            <span style="font-weight:600">${pair.id}. ${escapeHtml(pair.text)}</span>
+                            <span style="color:var(--success)">→</span>
+                            <span style="color:var(--text-secondary)">${pair.correctMatch}. ${escapeHtml(correctTarget?.text || '')}</span>
+                        </div>`;
+                    }).join('')}
                 </div>
             ` : ''}
         </div>
@@ -4784,19 +4983,6 @@ function addNewQuestion() {
     state.currentEditQuestion = state.parsedQuestions.length - 1;
     render();
 }
-function addNewQuestion() {
-    state.parsedQuestions.push({
-        question: '',
-        type: 'choice',
-        options: ['', ''],
-        correct: [],
-        image: null,
-        explanation: null,
-        code: null
-    });
-    state.currentEditQuestion = state.parsedQuestions.length - 1;
-    render();
-}
 
 // ========== DRAG & DROP FOR ORDERING OPTIONS IN EDITOR ==========
 let editorDraggedIndex = null;
@@ -5324,16 +5510,7 @@ function renderEditorContent(q) {
                             <h3 class="quiz-card-title">${state.searchQuery ? highlightText(q.title, state.searchQuery) : escapeHtml(q.title)}</h3>
                             <p class="quiz-card-meta">${q.description || 'No category'}</p>
                         </div>
-                        <div class="dropdown" onclick="event.stopPropagation()">
-    <button onclick="event.stopPropagation(); this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
-    <div class="dropdown-menu">
-        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
-        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
-        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); ExportManager.showExportModal(state.quizzes.find(x=>x.id===${q.id}))">📤 Export</button>
-        ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
-        <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
-    </div>
-</div>
+                        <button onclick="toggleQuizDropdown(event, ${q.id})" class="btn btn-icon btn-ghost btn-sm">⋮</button>
                     </div>
                     <div class="quiz-card-stats">
                         <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
@@ -5836,16 +6013,7 @@ function discardProgress(quizId) {
                                                     <h3 class="quiz-card-title">${state.searchQuery ? highlightText(q.title, state.searchQuery) : escapeHtml(q.title)}</h3>
                                                     <p class="quiz-card-meta">${q.description || 'No category'}</p>
                                                 </div>
-                                                <div class="dropdown" onclick="event.stopPropagation()">
-    <button onclick="event.stopPropagation(); this.parentElement.classList.toggle('open')" class="btn btn-icon btn-ghost btn-sm">⋮</button>
-    <div class="dropdown-menu">
-        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); showQuizPreview(${q.id})">👁️ Preview</button>
-        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); editQuiz(${q.id})">✏️ Edit</button>
-        <button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); ExportManager.showExportModal(state.quizzes.find(x=>x.id===${q.id}))">📤 Export</button>
-        ${state.folders.map(f => `<button class="dropdown-item" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); addToFolder(${q.id},${f.id})">📁 ${escapeHtml(f.name)}</button>`).join('')}
-        <button class="dropdown-item danger" onclick="event.stopPropagation(); this.closest('.dropdown').classList.remove('open'); deleteQuiz(${q.id})">🗑️ Delete</button>
-    </div>
-</div>
+                                                <button onclick="toggleQuizDropdown(event, ${q.id})" class="btn btn-icon btn-ghost btn-sm">⋮</button>
                                             </div>
                                             <div class="quiz-card-stats">
                                                 <div class="quiz-card-stat"><span>📝</span><span>${q.questions?.length || 0}</span></div>
@@ -6147,12 +6315,6 @@ ${state.studyMode && !state.showAnswer && q.type === 'matching' && state.answers
     `;
 }
 
-function selectMatchAnswer(pairIndex, targetId) {
-    console.log('selectMatchAnswer called', pairIndex, targetId);
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    console.log('Question:', q);
-    // ... rest of function
-}
         function saveAndExitQuiz() {
     saveQuizProgress();
     stopTimer();
