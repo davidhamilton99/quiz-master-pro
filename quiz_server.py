@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-Quiz Master Pro - Backend Server (Phase 1: Code Execution)
+Quiz Master Pro - Backend Server
 SQLite database with user authentication and quiz storage
-Now with support for executable code questions!
 """
-from flask import send_from_directory
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import sqlite3
 import hashlib
@@ -15,35 +13,34 @@ import os
 from datetime import datetime, timedelta
 from functools import wraps
 
-# Create Flask app with static folder
+# ============== Flask App Setup ==============
+# IMPORTANT: static_folder points to where your CSS/JS files are
 app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
-CORS(app)  # Add this if it's missing
+CORS(app)
 
 # Database path
-DATABASE = 'quiz_master.db'
+DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
 
-# ============== IMPORTANT: ADD THESE ROUTES AT THE TOP ==============
+# ============== STATIC FILE ROUTES ==============
 
 @app.route('/')
 def landing():
-    """Serve landing page"""
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'landing.html')
+    """Serve landing page (if you have one) or redirect to app"""
+    # Option 1: If you have a landing page
+    # return send_from_directory('/home/davidhamilton/quiz-master-pro', 'landing.html')
+    
+    # Option 2: Go straight to the app
+    return send_from_directory('/home/davidhamilton/quiz-master-pro', 'index.html')
 
 @app.route('/app')
 def app_page():
     """Serve main app"""
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', 'index.html')
+    return send_from_directory('/home/davidhamilton/quiz-master-pro', 'index.html')
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    """Serve static files"""
+    """Serve static files (CSS, JS)"""
     return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
-
-# ============== Rest of your code stays the same ==============
-# (All your existing database and API code continues below)
-
-# Use environment variable or default to local path
-DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
 
 # ============== Database Setup ==============
 
@@ -198,8 +195,8 @@ def register():
         return jsonify({'error': 'Username must be at least 3 characters'}), 400
     if not email or '@' not in email:
         return jsonify({'error': 'Valid email is required'}), 400
-    if not password or len(password) < 6:
-        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+    if not password or len(password) < 4:
+        return jsonify({'error': 'Password must be at least 4 characters'}), 400
 
     password_hash, salt = hash_password(password)
 
@@ -246,27 +243,34 @@ def register():
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    """Login user and return session token"""
+    """Login an existing user"""
     data = request.get_json()
 
-    username_or_email = data.get('username', '').strip()
+    username = data.get('username', '').strip()
     password = data.get('password', '')
 
-    if not username_or_email or not password:
-        return jsonify({'error': 'Username/email and password are required'}), 400
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Check if input is email or username
-    if '@' in username_or_email:
-        cursor.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', (username_or_email.lower(),))
-    else:
-        cursor.execute('SELECT * FROM users WHERE username = ? AND is_active = 1', (username_or_email,))
+    cursor.execute('''
+        SELECT id, username, email, password_hash, salt, is_active
+        FROM users WHERE username = ?
+    ''', (username,))
 
     user = cursor.fetchone()
 
-    if not user or not verify_password(password, user['password_hash'], user['salt']):
+    if not user:
+        conn.close()
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    if not user['is_active']:
+        conn.close()
+        return jsonify({'error': 'Account is disabled'}), 401
+
+    if not verify_password(password, user['password_hash'], user['salt']):
         conn.close()
         return jsonify({'error': 'Invalid credentials'}), 401
 
@@ -298,7 +302,7 @@ def login():
 @app.route('/api/auth/logout', methods=['POST'])
 @token_required
 def logout():
-    """Logout user and invalidate token"""
+    """Logout current user (invalidate token)"""
     token = request.headers.get('Authorization')
     if token.startswith('Bearer '):
         token = token[7:]
@@ -323,41 +327,6 @@ def get_current_user():
         }
     })
 
-@app.route('/api/auth/change-password', methods=['POST'])
-@token_required
-def change_password():
-    """Change user password"""
-    data = request.get_json()
-    current_password = data.get('current_password', '')
-    new_password = data.get('new_password', '')
-
-    if len(new_password) < 6:
-        return jsonify({'error': 'New password must be at least 6 characters'}), 400
-
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT password_hash, salt FROM users WHERE id = ?', (request.user_id,))
-    user = cursor.fetchone()
-
-    if not verify_password(current_password, user['password_hash'], user['salt']):
-        conn.close()
-        return jsonify({'error': 'Current password is incorrect'}), 401
-
-    new_hash, new_salt = hash_password(new_password)
-    cursor.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?',
-                   (new_hash, new_salt, request.user_id))
-
-    # Invalidate all other sessions
-    token = request.headers.get('Authorization')
-    if token.startswith('Bearer '):
-        token = token[7:]
-    cursor.execute('DELETE FROM sessions WHERE user_id = ? AND token != ?', (request.user_id, token))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({'message': 'Password changed successfully'})
-
 # ============== Quiz Routes ==============
 
 @app.route('/api/quizzes', methods=['GET'])
@@ -368,16 +337,10 @@ def get_quizzes():
     cursor = conn.cursor()
 
     cursor.execute('''
-        SELECT q.*,
-               COUNT(a.id) as attempt_count,
-               MAX(a.percentage) as best_score,
-               AVG(a.percentage) as avg_score
-        FROM quizzes q
-        LEFT JOIN attempts a ON q.id = a.quiz_id AND a.user_id = ?
-        WHERE q.user_id = ?
-        GROUP BY q.id
-        ORDER BY q.last_modified DESC
-    ''', (request.user_id, request.user_id))
+        SELECT id, title, description, questions, color, is_public, created_at, last_modified
+        FROM quizzes WHERE user_id = ?
+        ORDER BY last_modified DESC
+    ''', (request.user_id,))
 
     quizzes = []
     for row in cursor.fetchall():
@@ -631,5 +594,5 @@ def health_check():
 if __name__ == '__main__':
     init_db()
     print("Starting Quiz Master Pro Server...")
-    print("API available at http://172.17.28.77:5000/api")
+    print("API available at http://localhost:5000/api")
     app.run(host='0.0.0.0', port=5000, debug=True)
