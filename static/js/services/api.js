@@ -3,8 +3,8 @@
    All backend communication
    ============================================ */
 
-import { getState, setState, saveAuth, clearAuth } from './state.js';
-import { showToast } from './utils/toast.js';
+import { getState, setState, saveAuth, clearAuth } from '../state.js';
+import { showToast } from '../utils/toast.js';
 
 const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
 
