@@ -7,7 +7,7 @@ import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import { renderQuiz, startQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, showQuizOptions, launchQuiz, dragStart, dragOver, dragLeave, drop, dragEnd, selectMatchLeft, selectMatchRight, clearMatches } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz } from './components/results.js';
-import { renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz, openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual } from './components/create.js';
+import { renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz, openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair } from './components/create.js';
 
 function render() {
     const state = getState(), app = document.getElementById('app');
@@ -33,15 +33,23 @@ window.app = {
     showExportModal: showExportById, showImportModal, exportAs, handleImport, 
     showQuizOptions, launchQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, 
     dragStart, dragOver, dragLeave, drop, dragEnd,
-    selectMatchLeft, selectMatchRight, clearMatches,  // New matching handlers
+    selectMatchLeft, selectMatchRight, clearMatches,
     retryQuiz, editQuiz, setTitle, setCat, setData, toggleHelp, saveQuiz, 
-    openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual 
+    openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual,
+    setTFAnswer, updatePair, addPair, removePair
 };
 
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const s = getState();
-    if (s.view === 'quiz') { if (e.key === 'ArrowRight' || e.key === 'n') { e.preventDefault(); nextQ(); } else if (e.key === 'ArrowLeft' || e.key === 'p') { e.preventDefault(); prevQ(); } else if (e.key === 'f') { e.preventDefault(); toggleFlag(); } else if ('12345'.includes(e.key)) { e.preventDefault(); selectOpt(parseInt(e.key) - 1); } }
+    if (s.view === 'quiz') { 
+        if (e.key === 'ArrowRight' || e.key === 'n') { e.preventDefault(); nextQ(); } 
+        else if (e.key === 'ArrowLeft' || e.key === 'p') { e.preventDefault(); prevQ(); } 
+        else if (e.key === 'f') { e.preventDefault(); toggleFlag(); } 
+        else if ('12345'.includes(e.key)) { e.preventDefault(); selectOpt(parseInt(e.key) - 1); }
+        else if (e.key === 't' || e.key === 'T') { e.preventDefault(); selectOpt(0); }
+        else if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); selectOpt(1); }
+    }
     if (e.key === 'Escape') { document.querySelectorAll('.modal-overlay').forEach(m => m.remove()); document.getElementById('user-menu')?.classList.add('hidden'); }
 });
 document.addEventListener('click', e => { const m = document.getElementById('user-menu'); if (m && !m.classList.contains('hidden') && !e.target.closest('.dropdown')) m.classList.add('hidden'); });
