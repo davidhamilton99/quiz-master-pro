@@ -1,11 +1,7 @@
-/* ============================================
-   QUIZ MASTER PRO - Auth View
-   Login and registration
-   ============================================ */
+/* Auth Component */
 
 import { getState, setState } from '../state.js';
 import { login, register } from '../services/api.js';
-import { escapeHtml } from '../utils/dom.js';
 
 export function renderAuth() {
     const state = getState();
@@ -16,58 +12,25 @@ export function renderAuth() {
                 <div class="auth-header">
                     <div class="auth-logo">Q</div>
                     <h1>Quiz Master Pro</h1>
-                    <p class="text-muted">Where code actually runs</p>
+                    <p class="text-muted">Study smarter, not harder</p>
                 </div>
                 
                 <div class="auth-tabs">
-                    <button 
-                        class="auth-tab ${state.authMode === 'login' ? 'active' : ''}"
-                        onclick="window.app.setAuthMode('login')"
-                    >
-                        Sign In
-                    </button>
-                    <button 
-                        class="auth-tab ${state.authMode === 'register' ? 'active' : ''}"
-                        onclick="window.app.setAuthMode('register')"
-                    >
-                        Sign Up
-                    </button>
+                    <button class="auth-tab ${state.authMode === 'login' ? 'active' : ''}" onclick="window.app.setAuthMode('login')">Sign In</button>
+                    <button class="auth-tab ${state.authMode === 'register' ? 'active' : ''}" onclick="window.app.setAuthMode('register')">Sign Up</button>
                 </div>
                 
                 <form onsubmit="window.app.handleAuth(event)">
                     <div class="form-group">
                         <label class="label">Username</label>
-                        <input 
-                            type="text" 
-                            id="auth-username"
-                            class="input" 
-                            placeholder="Enter username"
-                            required
-                            autocomplete="username"
-                        >
+                        <input type="text" id="auth-user" class="input" placeholder="Enter username" required autocomplete="username">
                     </div>
-                    
                     <div class="form-group">
                         <label class="label">Password</label>
-                        <input 
-                            type="password" 
-                            id="auth-password"
-                            class="input" 
-                            placeholder="Enter password"
-                            required
-                            autocomplete="${state.authMode === 'login' ? 'current-password' : 'new-password'}"
-                            minlength="4"
-                        >
+                        <input type="password" id="auth-pass" class="input" placeholder="Enter password" required minlength="4">
                     </div>
-                    
-                    <button 
-                        type="submit" 
-                        class="btn btn-primary btn-lg" 
-                        style="width: 100%"
-                        ${state.loading ? 'disabled' : ''}
-                    >
-                        ${state.loading ? '<span class="spinner spinner-sm"></span>' : ''}
-                        ${state.authMode === 'login' ? 'Sign In' : 'Create Account'}
+                    <button type="submit" class="btn btn-primary btn-lg" style="width:100%" ${state.loading ? 'disabled' : ''}>
+                        ${state.loading ? '<span class="spinner"></span>' : (state.authMode === 'login' ? 'Sign In' : 'Create Account')}
                     </button>
                 </form>
             </div>
@@ -75,28 +38,18 @@ export function renderAuth() {
     `;
 }
 
-// Auth handlers
 export function setAuthMode(mode) {
     setState({ authMode: mode });
 }
 
-export async function handleAuth(event) {
-    event.preventDefault();
+export async function handleAuth(e) {
+    e.preventDefault();
+    const user = document.getElementById('auth-user').value.trim();
+    const pass = document.getElementById('auth-pass').value;
     
-    const username = document.getElementById('auth-username').value.trim();
-    const password = document.getElementById('auth-password').value;
-    
-    const state = getState();
-    
-    try {
-        if (state.authMode === 'login') {
-            await login(username, password);
-        } else {
-            await register(username, password);
-        }
-    } catch (error) {
-        // Error is handled in api.js
+    if (getState().authMode === 'login') {
+        await login(user, pass);
+    } else {
+        await register(user, pass);
     }
 }
-
-export default { renderAuth, setAuthMode, handleAuth };

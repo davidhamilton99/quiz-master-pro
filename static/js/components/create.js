@@ -1,7 +1,4 @@
-/* ============================================
-   QUIZ MASTER PRO - Create/Edit View
-   Quiz creation with text and visual editor
-   ============================================ */
+/* Create/Edit Component */
 
 import { getState, setState } from '../state.js';
 import { getQuiz, createQuiz, updateQuiz } from '../services/api.js';
@@ -12,112 +9,66 @@ import { showToast } from '../utils/toast.js';
 export function renderCreate() {
     const state = getState();
     
-    if (state.visualEditorMode) {
-        return renderVisualEditor();
-    }
+    if (state.visualEditorMode) return renderVisualEditor();
     
     return `
         <div class="create-page">
             <header class="create-header">
                 <div class="create-header-inner">
-                    <button class="btn btn-ghost" onclick="window.app.navigate('library')">
-                        ← Cancel
-                    </button>
+                    <button class="btn btn-ghost" onclick="window.app.navigate('library')">← Cancel</button>
                     <h2>${state.editingQuizId ? 'Edit Quiz' : 'Create Quiz'}</h2>
-                    <button class="btn btn-primary" onclick="window.app.saveQuiz()">
-                        Save Quiz
-                    </button>
+                    <button class="btn btn-primary" onclick="window.app.saveQuiz()">Save</button>
                 </div>
             </header>
             
             <main class="create-main">
                 <div class="form-group">
                     <label class="label">Quiz Title</label>
-                    <input 
-                        type="text" 
-                        id="quiz-title"
-                        class="input" 
-                        placeholder="e.g., CCNA Chapter 5 Review"
-                        value="${escapeHtml(state.quizTitle)}"
-                        oninput="window.app.updateQuizTitle(this.value)"
-                    >
+                    <input type="text" id="q-title" class="input" placeholder="e.g., CCNA Chapter 5" value="${escapeHtml(state.quizTitle)}" oninput="window.app.setTitle(this.value)">
                 </div>
                 
                 <div class="form-group">
                     <label class="label">Category (optional)</label>
-                    <input 
-                        type="text" 
-                        id="quiz-category"
-                        class="input" 
-                        placeholder="e.g., Networking, Python, Security"
-                        value="${escapeHtml(state.quizCategory)}"
-                        oninput="window.app.updateQuizCategory(this.value)"
-                    >
+                    <input type="text" id="q-cat" class="input" placeholder="e.g., Networking" value="${escapeHtml(state.quizCategory)}" oninput="window.app.setCategory(this.value)">
                 </div>
                 
                 <div class="form-group">
                     <div class="flex items-center justify-between mb-2">
-                        <label class="label" style="margin-bottom: 0">Questions</label>
-                        <button 
-                            class="btn btn-sm btn-ghost"
-                            onclick="window.app.toggleFormatHelp()"
-                        >
-                            ${state.showFormatHelp ? 'Hide' : 'Show'} Format Help
-                        </button>
+                        <label class="label" style="margin:0">Questions</label>
+                        <button class="btn btn-sm btn-ghost" onclick="window.app.toggleHelp()">${state.showFormatHelp ? 'Hide' : 'Show'} Format</button>
                     </div>
-                    
-                    <textarea 
-                        id="quiz-data"
-                        class="textarea" 
-                        rows="15"
-                        placeholder="Enter your questions here..."
-                        oninput="window.app.updateQuizData(this.value)"
-                    >${escapeHtml(state.quizData)}</textarea>
+                    <textarea id="q-data" class="textarea" rows="12" placeholder="Enter questions..." oninput="window.app.setData(this.value)">${escapeHtml(state.quizData)}</textarea>
                 </div>
                 
-                ${state.showFormatHelp ? renderFormatHelp() : ''}
-                
-                <div class="flex gap-4 mt-6">
-                    <button class="btn btn-secondary flex-1" onclick="window.app.openVisualEditor()">
-                        🎨 Visual Editor
-                    </button>
-                    <button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">
-                        💾 Save Quiz
-                    </button>
-                </div>
-            </main>
-        </div>
-    `;
-}
+                ${state.showFormatHelp ? `
+                    <div class="format-help">
+                        <h4>📝 Question Format</h4>
+                        <pre>1. What is 2+2?
+A. 3
+B. 4 *
+C. 5
 
-function renderFormatHelp() {
-    return `
-        <div class="format-help">
-            <h4>📝 Question Format</h4>
-            <pre>1. What is the capital of France?
-A. London
-B. Paris *
-C. Berlin
-D. Madrid
+2. [order] Sort these:
+1) First
+2) Second
+3) Third
 
-2. [order] Arrange in order:
-1) First step
-2) Second step
-3) Third step
-
-3. What does this code output?
+3. Code question:
 [code]
 print("Hello")
 [/code]
 A. Hello *
 B. Error
-[explanation: print() outputs text]</pre>
-            <p class="text-sm text-muted mt-4">
-                • Mark correct answers with * at the end<br>
-                • Use [order] for ordering questions<br>
-                • Use [code]...[/code] for code blocks<br>
-                • Use [explanation: text] for explanations
-            </p>
+[explanation: print outputs text]</pre>
+                        <p class="text-sm text-muted mt-4">Mark correct with * · Use [order] for ordering · [code]...[/code] for code</p>
+                    </div>
+                ` : ''}
+                
+                <div class="flex gap-3 mt-6">
+                    <button class="btn btn-secondary flex-1" onclick="window.app.openVisual()">🎨 Visual Editor</button>
+                    <button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">💾 Save Quiz</button>
+                </div>
+            </main>
         </div>
     `;
 }
@@ -125,19 +76,15 @@ B. Error
 function renderVisualEditor() {
     const state = getState();
     const questions = state.parsedQuestions || [];
-    const currentQ = questions[state.currentEditQuestion] || {};
+    const q = questions[state.currentEditQuestion] || {};
     
     return `
         <div class="create-page">
             <header class="create-header">
                 <div class="create-header-inner">
-                    <button class="btn btn-ghost" onclick="window.app.closeVisualEditor()">
-                        ← Back to Text
-                    </button>
+                    <button class="btn btn-ghost" onclick="window.app.closeVisual()">← Text Mode</button>
                     <h2>Visual Editor</h2>
-                    <button class="btn btn-primary" onclick="window.app.saveFromVisualEditor()">
-                        Save Quiz
-                    </button>
+                    <button class="btn btn-primary" onclick="window.app.saveVisual()">Save</button>
                 </div>
             </header>
             
@@ -145,19 +92,13 @@ function renderVisualEditor() {
                 <aside class="editor-sidebar">
                     <div class="flex items-center justify-between mb-4">
                         <span class="text-sm font-medium">Questions</span>
-                        <button class="btn btn-sm btn-ghost" onclick="window.app.addQuestion()">
-                            + Add
-                        </button>
+                        <button class="btn btn-sm btn-ghost" onclick="window.app.addQ()">+ Add</button>
                     </div>
-                    
-                    <div class="editor-question-list">
-                        ${questions.map((q, i) => `
-                            <div 
-                                class="editor-question-item ${i === state.currentEditQuestion ? 'active' : ''}"
-                                onclick="window.app.selectEditQuestion(${i})"
-                            >
-                                <span class="editor-question-number">${i + 1}</span>
-                                <span class="truncate text-sm">${escapeHtml(q.question) || 'Untitled'}</span>
+                    <div class="editor-list">
+                        ${questions.map((item, i) => `
+                            <div class="editor-item ${i === state.currentEditQuestion ? 'active' : ''}" onclick="window.app.selectQ(${i})">
+                                <span class="editor-item-num">${i + 1}</span>
+                                <span class="truncate text-sm">${escapeHtml(item.question) || 'Untitled'}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -165,90 +106,40 @@ function renderVisualEditor() {
                 
                 <main class="editor-main">
                     <div class="editor-card card">
-                        <div class="card-header">
+                        <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3>Question ${state.currentEditQuestion + 1}</h3>
                                 <span class="text-sm text-muted">of ${questions.length}</span>
                             </div>
-                            ${questions.length > 1 ? `
-                                <button class="btn btn-sm btn-ghost text-error" onclick="window.app.deleteQuestion(${state.currentEditQuestion})">
-                                    🗑️ Delete
-                                </button>
-                            ` : ''}
+                            ${questions.length > 1 ? `<button class="btn btn-sm btn-ghost text-error" onclick="window.app.deleteQ(${state.currentEditQuestion})">🗑️</button>` : ''}
                         </div>
                         
-                        <div class="editor-section">
-                            <label class="editor-section-label">📝 Question Text</label>
-                            <textarea 
-                                class="textarea" 
-                                rows="3"
-                                placeholder="Enter your question..."
-                                oninput="window.app.updateQuestion('question', this.value)"
-                            >${escapeHtml(currentQ.question || '')}</textarea>
+                        <div class="form-group">
+                            <label class="label">Question Text</label>
+                            <textarea class="textarea" rows="3" placeholder="Enter question..." oninput="window.app.updateQ('question', this.value)">${escapeHtml(q.question || '')}</textarea>
                         </div>
                         
                         <div class="type-tabs">
-                            <button 
-                                class="type-tab ${currentQ.type === 'choice' ? 'active' : ''}"
-                                onclick="window.app.updateQuestion('type', 'choice')"
-                            >
-                                ✓ Multiple Choice
-                            </button>
-                            <button 
-                                class="type-tab ${currentQ.type === 'ordering' ? 'active' : ''}"
-                                onclick="window.app.updateQuestion('type', 'ordering')"
-                            >
-                                ↕️ Ordering
-                            </button>
+                            <button class="type-tab ${q.type === 'choice' ? 'active' : ''}" onclick="window.app.updateQ('type', 'choice')">✓ Multiple Choice</button>
+                            <button class="type-tab ${q.type === 'ordering' ? 'active' : ''}" onclick="window.app.updateQ('type', 'ordering')">↕️ Ordering</button>
                         </div>
                         
-                        <div class="editor-section">
-                            <label class="editor-section-label">
-                                ${currentQ.type === 'ordering' ? '↕️ Items (drag to reorder)' : '📋 Answer Options'}
-                            </label>
-                            
-                            ${(currentQ.options || []).map((opt, i) => `
-                                <div class="option-editor">
-                                    <span class="text-muted font-medium" style="width: 24px">
-                                        ${currentQ.type === 'ordering' ? (i + 1) : String.fromCharCode(65 + i)}
-                                    </span>
-                                    <input 
-                                        type="text" 
-                                        class="input" 
-                                        value="${escapeHtml(opt)}"
-                                        placeholder="Option ${i + 1}"
-                                        oninput="window.app.updateOption(${i}, this.value)"
-                                    >
-                                    ${currentQ.type === 'choice' ? `
-                                        <button 
-                                            class="option-correct-btn ${(currentQ.correct || []).includes(i) ? 'active' : ''}"
-                                            onclick="window.app.toggleCorrect(${i})"
-                                            title="Mark as correct"
-                                        >
-                                            ✓
-                                        </button>
-                                    ` : ''}
-                                    ${(currentQ.options || []).length > 2 ? `
-                                        <button class="btn btn-icon btn-ghost btn-sm" onclick="window.app.removeOption(${i})">
-                                            ✕
-                                        </button>
-                                    ` : ''}
+                        <div class="form-group">
+                            <label class="label">${q.type === 'ordering' ? 'Items (correct order)' : 'Options'}</label>
+                            ${(q.options || []).map((opt, i) => `
+                                <div class="opt-row">
+                                    <span class="text-muted" style="width:24px">${q.type === 'ordering' ? (i + 1) : String.fromCharCode(65 + i)}</span>
+                                    <input type="text" class="input" value="${escapeHtml(opt)}" placeholder="Option ${i + 1}" oninput="window.app.updateOpt(${i}, this.value)">
+                                    ${q.type === 'choice' ? `<button class="opt-check ${(q.correct || []).includes(i) ? 'active' : ''}" onclick="window.app.toggleCorrect(${i})">✓</button>` : ''}
+                                    ${(q.options || []).length > 2 ? `<button class="btn btn-icon btn-ghost btn-sm" onclick="window.app.removeOpt(${i})">✕</button>` : ''}
                                 </div>
                             `).join('')}
-                            
-                            <button class="btn btn-sm btn-ghost mt-2" onclick="window.app.addOption()">
-                                + Add Option
-                            </button>
+                            <button class="btn btn-sm btn-ghost mt-2" onclick="window.app.addOpt()">+ Add Option</button>
                         </div>
                         
-                        <div class="editor-section">
-                            <label class="editor-section-label">💡 Explanation (optional)</label>
-                            <textarea 
-                                class="textarea" 
-                                rows="2"
-                                placeholder="Explain why this is the correct answer..."
-                                oninput="window.app.updateQuestion('explanation', this.value)"
-                            >${escapeHtml(currentQ.explanation || '')}</textarea>
+                        <div class="form-group">
+                            <label class="label">Explanation (optional)</label>
+                            <textarea class="textarea" rows="2" placeholder="Why is this correct..." oninput="window.app.updateQ('explanation', this.value)">${escapeHtml(q.explanation || '')}</textarea>
                         </div>
                     </div>
                 </main>
@@ -257,345 +148,156 @@ function renderVisualEditor() {
     `;
 }
 
-// ========== HANDLERS ==========
-
-export function updateQuizTitle(value) {
-    setState({ quizTitle: value });
-}
-
-export function updateQuizCategory(value) {
-    setState({ quizCategory: value });
-}
-
-export function updateQuizData(value) {
-    setState({ quizData: value });
-}
-
-export function toggleFormatHelp() {
-    const state = getState();
-    setState({ showFormatHelp: !state.showFormatHelp });
-}
+// Handlers
+export function setTitle(v) { setState({ quizTitle: v }); }
+export function setCategory(v) { setState({ quizCategory: v }); }
+export function setData(v) { setState({ quizData: v }); }
+export function toggleHelp() { setState({ showFormatHelp: !getState().showFormatHelp }); }
 
 export async function saveQuiz() {
     const state = getState();
-    
-    if (!state.quizTitle.trim()) {
-        showToast('Please enter a title', 'warning');
-        return;
-    }
-    
-    if (!state.quizData.trim()) {
-        showToast('Please add some questions', 'warning');
-        return;
-    }
+    if (!state.quizTitle.trim()) return showToast('Enter a title', 'warning');
+    if (!state.quizData.trim()) return showToast('Add some questions', 'warning');
     
     showLoading();
-    
     try {
         const questions = parseQuizData(state.quizData);
+        if (!questions.length) { hideLoading(); return showToast('No valid questions', 'warning'); }
         
-        if (questions.length === 0) {
-            hideLoading();
-            showToast('No valid questions found', 'warning');
-            return;
-        }
+        const invalid = questions.filter(q => (q.type === 'choice' && !q.correct.length) || q.options.length < 2);
+        if (invalid.length) { hideLoading(); return showToast('Some questions missing answers', 'error'); }
         
-        // Validate questions
-        const invalid = questions.filter(q => 
-            (q.type === 'choice' && q.correct.length === 0) ||
-            q.options.length < 2
-        );
+        const payload = { title: state.quizTitle, questions, description: state.quizCategory, color: getRandomColor() };
         
-        if (invalid.length > 0) {
-            hideLoading();
-            showToast('Some questions are missing correct answers', 'error');
-            return;
-        }
+        if (state.editingQuizId) await updateQuiz(state.editingQuizId, payload);
+        else await createQuiz(payload);
         
-        const payload = {
-            title: state.quizTitle,
-            questions,
-            description: state.quizCategory || '',
-            color: getRandomColor()
-        };
-        
-        if (state.editingQuizId) {
-            await updateQuiz(state.editingQuizId, payload);
-        } else {
-            await createQuiz(payload);
-        }
-        
-        // Reset and navigate
-        setState({
-            view: 'library',
-            quizTitle: '',
-            quizData: '',
-            quizCategory: '',
-            editingQuizId: null,
-            visualEditorMode: false,
-            parsedQuestions: null
-        });
-        
+        setState({ view: 'library', quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null, visualEditorMode: false, parsedQuestions: null });
         hideLoading();
-    } catch (error) {
+    } catch (err) {
         hideLoading();
-        showToast(error.message || 'Failed to save quiz', 'error');
+        showToast(err.message || 'Failed to save', 'error');
     }
 }
 
 export async function editQuiz(id) {
     showLoading();
-    
     try {
         const quiz = await getQuiz(id);
-        const text = questionsToText(quiz.questions);
-        
         setState({
             view: 'create',
             quizTitle: quiz.title,
-            quizData: text,
+            quizData: questionsToText(quiz.questions),
             quizCategory: quiz.description || '',
             editingQuizId: id,
             visualEditorMode: false
         });
-        
         hideLoading();
-    } catch (error) {
+    } catch (err) {
         hideLoading();
         showToast('Failed to load quiz', 'error');
     }
 }
 
-// ========== VISUAL EDITOR ==========
-
-export function openVisualEditor() {
+// Visual editor
+export function openVisual() {
     const state = getState();
+    if (!state.quizTitle.trim()) return showToast('Enter a title first', 'warning');
     
-    if (!state.quizTitle.trim()) {
-        showToast('Enter a title first', 'warning');
-        return;
-    }
+    let questions = state.quizData.trim() ? parseQuizData(state.quizData) : [];
+    if (!questions.length) questions = [{ question: '', type: 'choice', options: ['', ''], correct: [], explanation: null }];
     
-    let questions = [];
-    
-    if (state.quizData.trim()) {
-        questions = parseQuizData(state.quizData);
-    }
-    
-    if (questions.length === 0) {
-        questions = [{
-            question: '',
-            type: 'choice',
-            options: ['', ''],
-            correct: [],
-            explanation: null
-        }];
-    }
-    
-    setState({
-        visualEditorMode: true,
-        parsedQuestions: questions,
-        currentEditQuestion: 0
-    });
+    setState({ visualEditorMode: true, parsedQuestions: questions, currentEditQuestion: 0 });
 }
 
-export function closeVisualEditor() {
+export function closeVisual() {
     const state = getState();
-    
-    // Convert back to text
-    if (state.parsedQuestions) {
-        const text = questionsToText(state.parsedQuestions);
-        setState({ quizData: text });
-    }
-    
+    if (state.parsedQuestions) setState({ quizData: questionsToText(state.parsedQuestions) });
     setState({ visualEditorMode: false });
 }
 
-export function selectEditQuestion(index) {
-    setState({ currentEditQuestion: index });
-}
+export function selectQ(i) { setState({ currentEditQuestion: i }); }
 
-export function addQuestion() {
+export function addQ() {
     const state = getState();
-    const questions = [...(state.parsedQuestions || [])];
-    
-    questions.push({
-        question: '',
-        type: 'choice',
-        options: ['', ''],
-        correct: [],
-        explanation: null
-    });
-    
-    setState({
-        parsedQuestions: questions,
-        currentEditQuestion: questions.length - 1
-    });
+    const questions = [...(state.parsedQuestions || []), { question: '', type: 'choice', options: ['', ''], correct: [], explanation: null }];
+    setState({ parsedQuestions: questions, currentEditQuestion: questions.length - 1 });
 }
 
-export function deleteQuestion(index) {
+export function deleteQ(i) {
     const state = getState();
-    const questions = [...state.parsedQuestions];
-    
-    if (questions.length <= 1) {
-        showToast('Need at least one question', 'warning');
-        return;
-    }
-    
-    questions.splice(index, 1);
-    
-    setState({
-        parsedQuestions: questions,
-        currentEditQuestion: Math.min(state.currentEditQuestion, questions.length - 1)
-    });
+    if (state.parsedQuestions.length <= 1) return showToast('Need at least one question', 'warning');
+    const questions = state.parsedQuestions.filter((_, idx) => idx !== i);
+    setState({ parsedQuestions: questions, currentEditQuestion: Math.min(state.currentEditQuestion, questions.length - 1) });
 }
 
-export function updateQuestion(field, value) {
+export function updateQ(field, value) {
     const state = getState();
     const questions = [...state.parsedQuestions];
     const q = { ...questions[state.currentEditQuestion] };
     
     if (field === 'type' && value !== q.type) {
-        // Reset correct when changing type
-        if (value === 'ordering') {
-            q.correct = q.options.map((_, i) => i);
-        } else {
-            q.correct = [];
-        }
+        q.correct = value === 'ordering' ? q.options.map((_, i) => i) : [];
     }
     
     q[field] = value;
     questions[state.currentEditQuestion] = q;
-    
     setState({ parsedQuestions: questions });
 }
 
-export function updateOption(index, value) {
+export function updateOpt(i, value) {
     const state = getState();
     const questions = [...state.parsedQuestions];
-    const q = { ...questions[state.currentEditQuestion] };
-    
-    q.options = [...q.options];
-    q.options[index] = value;
-    questions[state.currentEditQuestion] = q;
-    
-    setState({ parsedQuestions: questions });
-}
-
-export function addOption() {
-    const state = getState();
-    const questions = [...state.parsedQuestions];
-    const q = { ...questions[state.currentEditQuestion] };
-    
-    q.options = [...q.options, ''];
-    
-    if (q.type === 'ordering') {
-        q.correct = [...q.correct, q.options.length - 1];
-    }
-    
+    const q = { ...questions[state.currentEditQuestion], options: [...questions[state.currentEditQuestion].options] };
+    q.options[i] = value;
     questions[state.currentEditQuestion] = q;
     setState({ parsedQuestions: questions });
 }
 
-export function removeOption(index) {
+export function addOpt() {
     const state = getState();
     const questions = [...state.parsedQuestions];
-    const q = { ...questions[state.currentEditQuestion] };
-    
-    if (q.options.length <= 2) {
-        showToast('Need at least 2 options', 'warning');
-        return;
-    }
-    
-    q.options = q.options.filter((_, i) => i !== index);
-    q.correct = q.correct.filter(c => c !== index).map(c => c > index ? c - 1 : c);
-    
+    const q = { ...questions[state.currentEditQuestion], options: [...questions[state.currentEditQuestion].options, ''] };
+    if (q.type === 'ordering') q.correct = [...q.correct, q.options.length - 1];
     questions[state.currentEditQuestion] = q;
     setState({ parsedQuestions: questions });
 }
 
-export function toggleCorrect(index) {
+export function removeOpt(i) {
+    const state = getState();
+    const q = state.parsedQuestions[state.currentEditQuestion];
+    if (q.options.length <= 2) return showToast('Need at least 2 options', 'warning');
+    
+    const questions = [...state.parsedQuestions];
+    const newQ = { ...q, options: q.options.filter((_, idx) => idx !== i), correct: q.correct.filter(c => c !== i).map(c => c > i ? c - 1 : c) };
+    questions[state.currentEditQuestion] = newQ;
+    setState({ parsedQuestions: questions });
+}
+
+export function toggleCorrect(i) {
     const state = getState();
     const questions = [...state.parsedQuestions];
-    const q = { ...questions[state.currentEditQuestion] };
-    
-    q.correct = [...q.correct];
-    
-    if (q.correct.includes(index)) {
-        q.correct = q.correct.filter(c => c !== index);
-    } else {
-        q.correct.push(index);
-    }
-    
+    const q = { ...questions[state.currentEditQuestion], correct: [...questions[state.currentEditQuestion].correct] };
+    q.correct = q.correct.includes(i) ? q.correct.filter(c => c !== i) : [...q.correct, i];
     questions[state.currentEditQuestion] = q;
     setState({ parsedQuestions: questions });
 }
 
-export async function saveFromVisualEditor() {
+export async function saveVisual() {
     const state = getState();
-    
-    // Validate
-    const invalid = state.parsedQuestions.filter(q =>
-        !q.question.trim() ||
-        (q.type === 'choice' && q.correct.length === 0) ||
-        q.options.filter(o => o.trim()).length < 2
-    );
-    
-    if (invalid.length > 0) {
-        showToast('Some questions are incomplete', 'error');
-        return;
-    }
+    const invalid = state.parsedQuestions.filter(q => !q.question.trim() || (q.type === 'choice' && !q.correct.length) || q.options.filter(o => o.trim()).length < 2);
+    if (invalid.length) return showToast('Some questions incomplete', 'error');
     
     showLoading();
-    
     try {
-        const payload = {
-            title: state.quizTitle,
-            questions: state.parsedQuestions,
-            description: state.quizCategory || '',
-            color: getRandomColor()
-        };
+        const payload = { title: state.quizTitle, questions: state.parsedQuestions, description: state.quizCategory, color: getRandomColor() };
+        if (state.editingQuizId) await updateQuiz(state.editingQuizId, payload);
+        else await createQuiz(payload);
         
-        if (state.editingQuizId) {
-            await updateQuiz(state.editingQuizId, payload);
-        } else {
-            await createQuiz(payload);
-        }
-        
-        setState({
-            view: 'library',
-            quizTitle: '',
-            quizData: '',
-            quizCategory: '',
-            editingQuizId: null,
-            visualEditorMode: false,
-            parsedQuestions: null
-        });
-        
+        setState({ view: 'library', quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null, visualEditorMode: false, parsedQuestions: null });
         hideLoading();
-    } catch (error) {
+    } catch (err) {
         hideLoading();
-        showToast(error.message || 'Failed to save', 'error');
+        showToast(err.message || 'Failed to save', 'error');
     }
 }
-
-export default {
-    renderCreate,
-    updateQuizTitle,
-    updateQuizCategory,
-    updateQuizData,
-    toggleFormatHelp,
-    saveQuiz,
-    editQuiz,
-    openVisualEditor,
-    closeVisualEditor,
-    selectEditQuestion,
-    addQuestion,
-    deleteQuestion,
-    updateQuestion,
-    updateOption,
-    addOption,
-    removeOption,
-    toggleCorrect,
-    saveFromVisualEditor
-};

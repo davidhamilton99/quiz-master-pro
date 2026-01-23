@@ -1,6 +1,4 @@
-/* ============================================
-   QUIZ MASTER PRO - Toast Notifications
-   ============================================ */
+/* Toast Notifications */
 
 export function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
@@ -9,26 +7,14 @@ export function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
-    const icon = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠',
-        info: 'ℹ'
-    }[type] || 'ℹ';
-    
-    toast.innerHTML = `
-        <span style="font-size: 1rem">${icon}</span>
-        <span>${message}</span>
-    `;
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    toast.innerHTML = `<span>${icons[type] || icons.info}</span><span>${message}</span>`;
     
     container.appendChild(toast);
     
-    // Auto-remove after 4 seconds
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(100%)';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+        setTimeout(() => toast.remove(), 200);
+    }, 3500);
 }
-
-export default { showToast };
