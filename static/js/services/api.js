@@ -55,6 +55,8 @@ export async function login(username, password) {
             body: JSON.stringify({ username, password })
         });
         
+        console.log('✅ Login successful:', data); // ADD THIS
+        
         setState({
             token: data.token,
             user: data.user,
@@ -62,6 +64,8 @@ export async function login(username, password) {
             view: 'library',
             loading: false
         });
+        
+        console.log('✅ State updated, view should be:', getState().view); // ADD THIS
         
         saveAuth();
         await loadQuizzes();
@@ -73,7 +77,6 @@ export async function login(username, password) {
         throw error;
     }
 }
-
 export async function register(username, password) {
     try {
         setState({ loading: true });
