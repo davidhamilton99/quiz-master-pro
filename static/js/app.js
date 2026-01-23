@@ -5,7 +5,7 @@ import { ExportService, ImportService, showExportModal, showImportModal } from '
 import { showToast } from './utils/toast.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
-import { renderQuiz, startQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, showQuizOptions, launchQuiz, dragStart, dragOver, dragLeave, drop, dragEnd } from './components/quiz.js';
+import { renderQuiz, startQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, showQuizOptions, launchQuiz, dragStart, dragOver, dragLeave, drop, dragEnd, selectMatchLeft, selectMatchRight, clearMatches } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz } from './components/results.js';
 import { renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz, openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual } from './components/create.js';
 
@@ -27,7 +27,16 @@ async function handleImport(file) {
     catch (e) { showToast(e.message, 'error'); }
 }
 
-window.app = { navigate, setAuthMode, handleAuth, logout, setSearch, setSort, setCategory, toggleMenu, confirmDelete, showExportModal: showExportById, showImportModal, exportAs, handleImport, showQuizOptions, launchQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, dragStart, dragOver, dragLeave, drop, dragEnd, retryQuiz, editQuiz, setTitle, setCat, setData, toggleHelp, saveQuiz, openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual };
+window.app = { 
+    navigate, setAuthMode, handleAuth, logout, 
+    setSearch, setSort, setCategory, toggleMenu, confirmDelete, 
+    showExportModal: showExportById, showImportModal, exportAs, handleImport, 
+    showQuizOptions, launchQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, 
+    dragStart, dragOver, dragLeave, drop, dragEnd,
+    selectMatchLeft, selectMatchRight, clearMatches,  // New matching handlers
+    retryQuiz, editQuiz, setTitle, setCat, setData, toggleHelp, saveQuiz, 
+    openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual 
+};
 
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
