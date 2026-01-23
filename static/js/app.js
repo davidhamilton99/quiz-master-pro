@@ -1,84 +1,92 @@
-/* ============================================
-   QUIZ MASTER PRO - Main Application
-   Entry point and router
-   ============================================ */
+/* Quiz Master Pro - Main Entry Point */
 
-import { getState, setState, subscribe, loadAuth, loadFolders } from './state.js';
-import { loadQuizzes, logout as apiLogout } from './services/api.js';
+import { getState, setState, subscribe, loadAuth } from './state.js';
+import { loadQuizzes, logout } from './services/api.js';
+import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
+import { showToast } from './utils/toast.js';
 
 // Components
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
-import { renderLibrary, setSearchQuery, setSortBy, setCategoryFilter, toggleUserMenu, confirmDeleteQuiz } from './components/library.js';
-import { renderQuiz, startQuiz, selectAnswer, checkStudyAnswer, nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } from './components/quiz.js';
+import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
+import { renderQuiz, startQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz, showQuizOptions, launchQuiz, dragStart, dragOver, dragLeave, drop, dragEnd } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz } from './components/results.js';
-import { showQuizOptions, launchQuiz } from './components/quizOptions.js';
-import { renderCreate, updateQuizTitle, updateQuizCategory, updateQuizData, toggleFormatHelp, saveQuiz, editQuiz, openVisualEditor, closeVisualEditor, selectEditQuestion, addQuestion, deleteQuestion, updateQuestion, updateOption, addOption, removeOption, toggleCorrect, saveFromVisualEditor } from './components/create.js';
+import { renderCreate, setTitle, setCategory as setCat, setData, toggleHelp, saveQuiz, editQuiz, openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt, removeOpt, toggleCorrect, saveVisual } from './components/create.js';
 
-// ========== ROUTER ==========
+// Router
 function render() {
     const state = getState();
     const app = document.getElementById('app');
-    
     if (!app) return;
     
     let html = '';
-    
     switch (state.view) {
-        case 'login':
-            html = renderAuth();
-            break;
-        case 'library':
-            html = renderLibrary();
-            break;
-        case 'quiz':
-            html = renderQuiz();
-            break;
-        case 'results':
-            html = renderResults();
-            break;
-        case 'review':
-            html = renderReview();
-            break;
-        case 'create':
-            html = renderCreate();
-            break;
-        default:
-            html = renderAuth();
+        case 'login': html = renderAuth(); break;
+        case 'library': html = renderLibrary(); break;
+        case 'quiz': html = renderQuiz(); break;
+        case 'results': html = renderResults(); break;
+        case 'review': html = renderReview(); break;
+        case 'create': html = renderCreate(); break;
+        default: html = renderAuth();
     }
     
     app.innerHTML = html;
 }
 
-// Subscribe to state changes
 subscribe(render);
 
-// ========== NAVIGATION ==========
 function navigate(view) {
-    // Clean up current view if needed
-    const state = getState();
-    
     if (view === 'library') {
-        setState({
-            view: 'library',
-            currentQuiz: null,
-            visualEditorMode: false
-        });
-    } else if (view === 'results' && !state.currentQuiz) {
-        setState({ view: 'library' });
+        setState({ view: 'library', currentQuiz: null, visualEditorMode: false });
     } else {
         setState({ view });
     }
 }
 
-// ========== LOGOUT ==========
-function logout() {
-    apiLogout();
+// Export handlers
+async function exportAs(quizId, format) {
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === parseInt(quizId));
+    if (quiz) {
+        ExportService.exportQuiz(quiz, format);
+        document.getElementById('export-modal')?.remove();
+    }
 }
 
-// ========== EXPOSE TO WINDOW ==========
-// This allows onclick handlers in HTML to call functions
+function showExportModalById(quizId) {
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === parseInt(quizId));
+    if (quiz) showExportModal(quiz);
+}
+
+async function handleImportFile(file) {
+    if (!file) return;
+    
+    try {
+        const data = await ImportService.importFile(file);
+        
+        // Close modal
+        document.getElementById('import-modal')?.remove();
+        
+        // Pre-fill create form
+        setState({
+            view: 'create',
+            quizTitle: data.title,
+            quizData: '',
+            quizCategory: data.description,
+            parsedQuestions: data.questions,
+            visualEditorMode: true,
+            currentEditQuestion: 0,
+            editingQuizId: null
+        });
+        
+        showToast(`Imported ${data.questions.length} questions`, 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Expose to window
 window.app = {
-    // Navigation
     navigate,
     
     // Auth
@@ -87,131 +95,98 @@ window.app = {
     logout,
     
     // Library
-    setSearchQuery,
-    setSortBy,
-    setCategoryFilter,
-    toggleUserMenu,
-    confirmDeleteQuiz,
+    setSearch,
+    setSort,
+    setCategory,
+    toggleMenu,
+    confirmDelete,
+    showExportModal: showExportModalById,
+    showImportModal,
+    exportAs,
+    handleImportFile,
     
-    // Quiz options
+    // Quiz
     showQuizOptions,
     launchQuiz,
-    
-    // Quiz taking
-    startQuiz,
-    selectAnswer,
-    checkStudyAnswer,
-    nextQuestion,
-    prevQuestion,
-    goToQuestion,
+    selectOpt,
+    checkAnswer,
+    nextQ,
+    prevQ,
+    goToQ,
     toggleFlag,
     exitQuiz,
     submitQuiz,
-    
-    // Drag & drop
-    handleDragStart,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
-    handleDragEnd,
+    dragStart,
+    dragOver,
+    dragLeave,
+    drop,
+    dragEnd,
     
     // Results
     retryQuiz,
     
-    // Create/Edit
+    // Create
     editQuiz,
-    updateQuizTitle,
-    updateQuizCategory,
-    updateQuizData,
-    toggleFormatHelp,
+    setTitle,
+    setCategory: setCat,
+    setData,
+    toggleHelp,
     saveQuiz,
-    openVisualEditor,
-    closeVisualEditor,
-    selectEditQuestion,
-    addQuestion,
-    deleteQuestion,
-    updateQuestion,
-    updateOption,
-    addOption,
-    removeOption,
+    openVisual,
+    closeVisual,
+    selectQ,
+    addQ,
+    deleteQ,
+    updateQ,
+    updateOpt,
+    addOpt,
+    removeOpt,
     toggleCorrect,
-    saveFromVisualEditor
+    saveVisual
 };
 
-// ========== KEYBOARD SHORTCUTS ==========
-document.addEventListener('keydown', (e) => {
-    // Skip if typing in input
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     
     const state = getState();
-    
     if (state.view === 'quiz') {
         switch (e.key) {
-            case 'ArrowRight':
-            case 'n':
+            case 'ArrowRight': case 'n': e.preventDefault(); nextQ(); break;
+            case 'ArrowLeft': case 'p': e.preventDefault(); prevQ(); break;
+            case 'f': e.preventDefault(); toggleFlag(); break;
+            case '1': case '2': case '3': case '4': case '5':
                 e.preventDefault();
-                nextQuestion();
-                break;
-            case 'ArrowLeft':
-            case 'p':
-                e.preventDefault();
-                prevQuestion();
-                break;
-            case 'f':
-                e.preventDefault();
-                toggleFlag();
-                break;
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-                e.preventDefault();
-                selectAnswer(parseInt(e.key) - 1);
+                selectOpt(parseInt(e.key) - 1);
                 break;
         }
     }
     
     if (e.key === 'Escape') {
-        // Close any open modals
         document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
         document.getElementById('user-menu')?.classList.add('hidden');
     }
 });
 
-// ========== CLICK OUTSIDE HANDLER ==========
-document.addEventListener('click', (e) => {
-    // Close user menu when clicking outside
-    const userMenu = document.getElementById('user-menu');
-    if (userMenu && !userMenu.classList.contains('hidden')) {
-        if (!e.target.closest('.dropdown')) {
-            userMenu.classList.add('hidden');
-        }
+// Close menus on click outside
+document.addEventListener('click', e => {
+    const menu = document.getElementById('user-menu');
+    if (menu && !menu.classList.contains('hidden') && !e.target.closest('.dropdown')) {
+        menu.classList.add('hidden');
     }
 });
 
-// ========== INITIALIZE ==========
+// Init
 async function init() {
-    console.log('🚀 Quiz Master Pro initializing...');
+    console.log('🚀 Quiz Master Pro starting...');
     
-    // Load saved auth
     if (loadAuth()) {
         setState({ view: 'library' });
-        
-        // Load quizzes
-        try {
-            await loadQuizzes();
-            loadFolders();
-        } catch (error) {
-            console.error('Failed to load initial data:', error);
-        }
+        await loadQuizzes();
     }
     
-    // Initial render
     render();
-    
-    console.log('✅ Quiz Master Pro ready!');
+    console.log('✅ Ready!');
 }
 
-// Start the app
 init();

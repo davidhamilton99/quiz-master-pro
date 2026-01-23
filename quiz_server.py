@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""
-Quiz Master Pro - Backend Server
-SQLite database with user authentication and quiz storage
-"""
+"""Quiz Master Pro - Backend Server"""
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import sqlite3
@@ -13,586 +11,275 @@ import os
 from datetime import datetime, timedelta
 from functools import wraps
 
-# ============== Flask App Setup ==============
-# IMPORTANT: static_folder points to where your CSS/JS files are
 app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
 CORS(app)
 
-# Database path
 DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
 
-# ============== STATIC FILE ROUTES ==============
+# === Static Routes ===
 
 @app.route('/')
-def landing():
-    """Serve landing page (if you have one) or redirect to app"""
-    # Option 1: If you have a landing page
-    # return send_from_directory('/home/davidhamilton/quiz-master-pro', 'landing.html')
-    
-    # Option 2: Go straight to the app
+def index():
     return send_from_directory('/home/davidhamilton/quiz-master-pro', 'index.html')
 
 @app.route('/app')
 def app_page():
-    """Serve main app"""
     return send_from_directory('/home/davidhamilton/quiz-master-pro', 'index.html')
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    """Serve static files (CSS, JS)"""
     return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
 
-# ============== Database Setup ==============
+# === Database ===
 
 def get_db():
-    """Get database connection with row factory"""
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """Initialize the database with all required tables"""
     conn = get_db()
-    cursor = conn.cursor()
-
-    # Users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP,
-            is_active BOOLEAN DEFAULT 1
-        )
-    ''')
-
-    # Sessions table for token-based auth
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            token TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    ''')
-
-    # Quizzes table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS quizzes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT,
-            questions TEXT NOT NULL,
-            color TEXT DEFAULT '#6366f1',
-            is_public BOOLEAN DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    ''')
-
-    # Quiz attempts table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            quiz_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            score INTEGER NOT NULL,
-            total INTEGER NOT NULL,
-            percentage INTEGER NOT NULL,
-            answers TEXT NOT NULL,
-            study_mode BOOLEAN DEFAULT 0,
-            timed BOOLEAN DEFAULT 0,
-            max_streak INTEGER DEFAULT 0,
-            time_taken INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-    ''')
-
-    # Create indexes for better query performance
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_quizzes_user ON quizzes(user_id)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_attempts_quiz ON attempts(quiz_id)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_attempts_user ON attempts(user_id)')
-
+    c = conn.cursor()
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP,
+        is_active BOOLEAN DEFAULT 1
+    )''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS quizzes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        questions TEXT NOT NULL,
+        color TEXT DEFAULT '#6366f1',
+        is_public BOOLEAN DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        quiz_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        score INTEGER NOT NULL,
+        total INTEGER NOT NULL,
+        percentage INTEGER NOT NULL,
+        answers TEXT NOT NULL,
+        study_mode BOOLEAN DEFAULT 0,
+        timed BOOLEAN DEFAULT 0,
+        max_streak INTEGER DEFAULT 0,
+        time_taken INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+    
+    c.execute('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_quizzes_user ON quizzes(user_id)')
+    
     conn.commit()
     conn.close()
-    print("Database initialized successfully!")
 
-# ============== Password Hashing ==============
+# === Auth Helpers ===
 
 def hash_password(password, salt=None):
-    """Hash password with salt using SHA-256"""
     if salt is None:
         salt = secrets.token_hex(32)
-    password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
-    return password_hash, salt
+    h = hashlib.sha256((password + salt).encode()).hexdigest()
+    return h, salt
 
-def verify_password(password, password_hash, salt):
-    """Verify password against stored hash"""
-    computed_hash, _ = hash_password(password, salt)
-    return computed_hash == password_hash
-
-# ============== Authentication Middleware ==============
+def verify_password(password, hash, salt):
+    computed, _ = hash_password(password, salt)
+    return computed == hash
 
 def token_required(f):
-    """Decorator to require valid authentication token"""
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if not token:
-            return jsonify({'error': 'Token is missing'}), 401
-
-        # Remove 'Bearer ' prefix if present
+        token = request.headers.get('Authorization', '')
         if token.startswith('Bearer '):
             token = token[7:]
-
+        if not token:
+            return jsonify({'error': 'Token missing'}), 401
+        
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT s.user_id, u.username, u.email
-            FROM sessions s
+        c = conn.cursor()
+        c.execute('''SELECT s.user_id, u.username, u.email FROM sessions s
             JOIN users u ON s.user_id = u.id
-            WHERE s.token = ? AND s.expires_at > ? AND u.is_active = 1
-        ''', (token, datetime.now()))
-
-        session = cursor.fetchone()
+            WHERE s.token = ? AND s.expires_at > ? AND u.is_active = 1''',
+            (token, datetime.now()))
+        session = c.fetchone()
         conn.close()
-
+        
         if not session:
-            return jsonify({'error': 'Invalid or expired token'}), 401
-
-        # Add user info to request context
+            return jsonify({'error': 'Invalid token'}), 401
+        
         request.user_id = session['user_id']
         request.username = session['username']
-        request.email = session['email']
-
         return f(*args, **kwargs)
     return decorated
 
-# ============== Auth Routes ==============
+# === Auth Routes ===
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
-    """Register a new user"""
     data = request.get_json()
-
     username = data.get('username', '').strip()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
-
-    # Validation
+    
     if not username or len(username) < 3:
-        return jsonify({'error': 'Username must be at least 3 characters'}), 400
-    if not email or '@' not in email:
-        return jsonify({'error': 'Valid email is required'}), 400
+        return jsonify({'error': 'Username must be 3+ characters'}), 400
     if not password or len(password) < 4:
-        return jsonify({'error': 'Password must be at least 4 characters'}), 400
-
-    password_hash, salt = hash_password(password)
-
+        return jsonify({'error': 'Password must be 4+ characters'}), 400
+    
+    h, salt = hash_password(password)
     conn = get_db()
-    cursor = conn.cursor()
-
+    c = conn.cursor()
+    
     try:
-        cursor.execute('''
-            INSERT INTO users (username, email, password_hash, salt)
-            VALUES (?, ?, ?, ?)
-        ''', (username, email, password_hash, salt))
-
-        user_id = cursor.lastrowid
-
-        # Create session token
+        c.execute('INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)',
+            (username, email or f'{username}@quiz.local', h, salt))
+        user_id = c.lastrowid
+        
         token = secrets.token_hex(32)
-        expires_at = datetime.now() + timedelta(days=7)
-
-        cursor.execute('''
-            INSERT INTO sessions (user_id, token, expires_at)
-            VALUES (?, ?, ?)
-        ''', (user_id, token, expires_at))
-
+        c.execute('INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)',
+            (user_id, token, datetime.now() + timedelta(days=7)))
+        
         conn.commit()
-        conn.close()
-
-        return jsonify({
-            'message': 'Registration successful',
-            'token': token,
-            'user': {
-                'id': user_id,
-                'username': username,
-                'email': email
-            }
-        }), 201
-
+        return jsonify({'token': token, 'user': {'id': user_id, 'username': username}}), 201
     except sqlite3.IntegrityError as e:
+        return jsonify({'error': 'Username taken'}), 409
+    finally:
         conn.close()
-        if 'username' in str(e):
-            return jsonify({'error': 'Username already taken'}), 409
-        elif 'email' in str(e):
-            return jsonify({'error': 'Email already registered'}), 409
-        return jsonify({'error': 'Registration failed'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    """Login an existing user"""
     data = request.get_json()
-
     username = data.get('username', '').strip()
     password = data.get('password', '')
-
-    if not username or not password:
-        return jsonify({'error': 'Username and password are required'}), 400
-
+    
     conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        SELECT id, username, email, password_hash, salt, is_active
-        FROM users WHERE username = ?
-    ''', (username,))
-
-    user = cursor.fetchone()
-
-    if not user:
+    c = conn.cursor()
+    c.execute('SELECT id, username, password_hash, salt, is_active FROM users WHERE username = ?', (username,))
+    user = c.fetchone()
+    
+    if not user or not user['is_active'] or not verify_password(password, user['password_hash'], user['salt']):
         conn.close()
         return jsonify({'error': 'Invalid credentials'}), 401
-
-    if not user['is_active']:
-        conn.close()
-        return jsonify({'error': 'Account is disabled'}), 401
-
-    if not verify_password(password, user['password_hash'], user['salt']):
-        conn.close()
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    # Create new session token
+    
     token = secrets.token_hex(32)
-    expires_at = datetime.now() + timedelta(days=7)
-
-    cursor.execute('''
-        INSERT INTO sessions (user_id, token, expires_at)
-        VALUES (?, ?, ?)
-    ''', (user['id'], token, expires_at))
-
-    # Update last login
-    cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
-
+    c.execute('INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)',
+        (user['id'], token, datetime.now() + timedelta(days=7)))
+    c.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
     conn.commit()
     conn.close()
+    
+    return jsonify({'token': token, 'user': {'id': user['id'], 'username': user['username']}})
 
-    return jsonify({
-        'message': 'Login successful',
-        'token': token,
-        'user': {
-            'id': user['id'],
-            'username': user['username'],
-            'email': user['email']
-        }
-    })
-
-@app.route('/api/auth/logout', methods=['POST'])
-@token_required
-def logout():
-    """Logout current user (invalidate token)"""
-    token = request.headers.get('Authorization')
-    if token.startswith('Bearer '):
-        token = token[7:]
-
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM sessions WHERE token = ?', (token,))
-    conn.commit()
-    conn.close()
-
-    return jsonify({'message': 'Logged out successfully'})
-
-@app.route('/api/auth/me', methods=['GET'])
-@token_required
-def get_current_user():
-    """Get current user info"""
-    return jsonify({
-        'user': {
-            'id': request.user_id,
-            'username': request.username,
-            'email': request.email
-        }
-    })
-
-# ============== Quiz Routes ==============
+# === Quiz Routes ===
 
 @app.route('/api/quizzes', methods=['GET'])
 @token_required
 def get_quizzes():
-    """Get all quizzes for current user"""
     conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        SELECT id, title, description, questions, color, is_public, created_at, last_modified
-        FROM quizzes WHERE user_id = ?
-        ORDER BY last_modified DESC
-    ''', (request.user_id,))
-
-    quizzes = []
-    for row in cursor.fetchall():
-        quiz = dict(row)
-        quiz['questions'] = json.loads(quiz['questions'])
-        quizzes.append(quiz)
-
+    c = conn.cursor()
+    c.execute('SELECT * FROM quizzes WHERE user_id = ? ORDER BY last_modified DESC', (request.user_id,))
+    quizzes = [dict(r) for r in c.fetchall()]
+    for q in quizzes:
+        q['questions'] = json.loads(q['questions'])
     conn.close()
     return jsonify({'quizzes': quizzes})
 
 @app.route('/api/quizzes', methods=['POST'])
 @token_required
 def create_quiz():
-    """Create a new quiz"""
     data = request.get_json()
-
     title = data.get('title', '').strip()
-    questions = data.get('questions', [])
-    description = data.get('description', '')
-    color = data.get('color', '#6366f1')
-    is_public = data.get('is_public', False)
-
     if not title:
-        return jsonify({'error': 'Quiz title is required'}), 400
-    if not questions:
-        return jsonify({'error': 'Quiz must have at least one question'}), 400
-
+        return jsonify({'error': 'Title required'}), 400
+    
     conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        INSERT INTO quizzes (user_id, title, description, questions, color, is_public)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (request.user_id, title, description, json.dumps(questions), color, is_public))
-
-    quiz_id = cursor.lastrowid
+    c = conn.cursor()
+    c.execute('INSERT INTO quizzes (user_id, title, description, questions, color) VALUES (?, ?, ?, ?, ?)',
+        (request.user_id, title, data.get('description', ''), json.dumps(data.get('questions', [])), data.get('color', '#6366f1')))
     conn.commit()
     conn.close()
+    return jsonify({'message': 'Created', 'quiz_id': c.lastrowid}), 201
 
-    return jsonify({
-        'message': 'Quiz created successfully',
-        'quiz_id': quiz_id
-    }), 201
-
-@app.route('/api/quizzes/<int:quiz_id>', methods=['GET'])
+@app.route('/api/quizzes/<int:id>', methods=['GET'])
 @token_required
-def get_quiz(quiz_id):
-    """Get a specific quiz with attempts"""
+def get_quiz(id):
     conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', (quiz_id, request.user_id))
-    quiz = cursor.fetchone()
-
+    c = conn.cursor()
+    c.execute('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', (id, request.user_id))
+    quiz = c.fetchone()
+    conn.close()
+    
     if not quiz:
-        conn.close()
-        return jsonify({'error': 'Quiz not found'}), 404
+        return jsonify({'error': 'Not found'}), 404
+    
+    q = dict(quiz)
+    q['questions'] = json.loads(q['questions'])
+    return jsonify({'quiz': q})
 
-    quiz_dict = dict(quiz)
-    quiz_dict['questions'] = json.loads(quiz_dict['questions'])
-
-    # Get attempts
-    cursor.execute('''
-        SELECT * FROM attempts WHERE quiz_id = ? AND user_id = ? ORDER BY created_at DESC
-    ''', (quiz_id, request.user_id))
-
-    attempts = []
-    for row in cursor.fetchall():
-        attempt = dict(row)
-        attempt['answers'] = json.loads(attempt['answers'])
-        attempts.append(attempt)
-
-    quiz_dict['attempts'] = attempts
-    conn.close()
-
-    return jsonify({'quiz': quiz_dict})
-
-@app.route('/api/quizzes/<int:quiz_id>', methods=['PUT'])
+@app.route('/api/quizzes/<int:id>', methods=['PUT'])
 @token_required
-def update_quiz(quiz_id):
-    """Update an existing quiz"""
+def update_quiz(id):
     data = request.get_json()
-
     conn = get_db()
-    cursor = conn.cursor()
-
-    # Verify ownership
-    cursor.execute('SELECT id FROM quizzes WHERE id = ? AND user_id = ?', (quiz_id, request.user_id))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Quiz not found'}), 404
-
-    title = data.get('title', '').strip()
-    questions = data.get('questions', [])
-    description = data.get('description', '')
-    color = data.get('color', '#6366f1')
-    is_public = data.get('is_public', False)
-
-    cursor.execute('''
-        UPDATE quizzes
-        SET title = ?, description = ?, questions = ?, color = ?, is_public = ?, last_modified = ?
-        WHERE id = ? AND user_id = ?
-    ''', (title, description, json.dumps(questions), color, is_public, datetime.now(), quiz_id, request.user_id))
-
+    c = conn.cursor()
+    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, last_modified=? WHERE id=? AND user_id=?',
+        (data.get('title'), data.get('description', ''), json.dumps(data.get('questions', [])), data.get('color', '#6366f1'), datetime.now(), id, request.user_id))
     conn.commit()
     conn.close()
+    return jsonify({'message': 'Updated'})
 
-    return jsonify({'message': 'Quiz updated successfully'})
-
-@app.route('/api/quizzes/<int:quiz_id>', methods=['DELETE'])
+@app.route('/api/quizzes/<int:id>', methods=['DELETE'])
 @token_required
-def delete_quiz(quiz_id):
-    """Delete a quiz"""
+def delete_quiz(id):
     conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('DELETE FROM quizzes WHERE id = ? AND user_id = ?', (quiz_id, request.user_id))
-
-    if cursor.rowcount == 0:
-        conn.close()
-        return jsonify({'error': 'Quiz not found'}), 404
-
+    c = conn.cursor()
+    c.execute('DELETE FROM quizzes WHERE id = ? AND user_id = ?', (id, request.user_id))
     conn.commit()
     conn.close()
+    return jsonify({'message': 'Deleted'})
 
-    return jsonify({'message': 'Quiz deleted successfully'})
-
-# ============== Attempt Routes ==============
-
-@app.route('/api/quizzes/<int:quiz_id>/attempts', methods=['POST'])
+@app.route('/api/quizzes/<int:id>/attempts', methods=['POST'])
 @token_required
-def record_attempt(quiz_id):
-    """Record a quiz attempt"""
+def record_attempt(id):
     data = request.get_json()
-
     conn = get_db()
-    cursor = conn.cursor()
-
-    # Verify quiz exists and user has access
-    cursor.execute('SELECT id FROM quizzes WHERE id = ? AND (user_id = ? OR is_public = 1)',
-                   (quiz_id, request.user_id))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Quiz not found'}), 404
-
-    cursor.execute('''
-        INSERT INTO attempts (quiz_id, user_id, score, total, percentage, answers, study_mode, timed, max_streak, time_taken)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        quiz_id,
-        request.user_id,
-        data.get('score', 0),
-        data.get('total', 0),
-        data.get('percentage', 0),
-        json.dumps(data.get('answers', {})),
-        data.get('study_mode', False),
-        data.get('timed', False),
-        data.get('max_streak', 0),
-        data.get('time_taken')
-    ))
-
-    attempt_id = cursor.lastrowid
+    c = conn.cursor()
+    c.execute('''INSERT INTO attempts (quiz_id, user_id, score, total, percentage, answers, study_mode, timed, max_streak, time_taken)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (id, request.user_id, data.get('score', 0), data.get('total', 0), data.get('percentage', 0),
+         json.dumps(data.get('answers', {})), data.get('study_mode', False), data.get('timed', False),
+         data.get('max_streak', 0), data.get('time_taken')))
     conn.commit()
     conn.close()
+    return jsonify({'message': 'Recorded'}), 201
 
-    return jsonify({
-        'message': 'Attempt recorded',
-        'attempt_id': attempt_id
-    }), 201
-
-@app.route('/api/stats', methods=['GET'])
-@token_required
-def get_user_stats():
-    """Get overall user statistics"""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Total quizzes
-    cursor.execute('SELECT COUNT(*) as count FROM quizzes WHERE user_id = ?', (request.user_id,))
-    total_quizzes = cursor.fetchone()['count']
-
-    # Total questions
-    cursor.execute('SELECT questions FROM quizzes WHERE user_id = ?', (request.user_id,))
-    total_questions = sum(len(json.loads(row['questions'])) for row in cursor.fetchall())
-
-    # Attempt stats
-    cursor.execute('''
-        SELECT COUNT(*) as count, AVG(percentage) as avg, MAX(percentage) as best, MAX(max_streak) as streak
-        FROM attempts WHERE user_id = ?
-    ''', (request.user_id,))
-
-    attempt_stats = cursor.fetchone()
-
-    # Recent activity (last 30 days)
-    cursor.execute('''
-        SELECT DATE(created_at) as date, COUNT(*) as count, AVG(percentage) as avg
-        FROM attempts
-        WHERE user_id = ? AND created_at > datetime('now', '-30 days')
-        GROUP BY DATE(created_at)
-        ORDER BY date
-    ''', (request.user_id,))
-
-    activity = [dict(row) for row in cursor.fetchall()]
-
-    conn.close()
-
-    return jsonify({
-        'stats': {
-            'total_quizzes': total_quizzes,
-            'total_questions': total_questions,
-            'total_attempts': attempt_stats['count'] or 0,
-            'average_score': round(attempt_stats['avg'] or 0),
-            'best_score': attempt_stats['best'] or 0,
-            'best_streak': attempt_stats['streak'] or 0,
-            'activity': activity
-        }
-    })
-
-# ============== Public Quiz Routes ==============
-
-@app.route('/api/public/quizzes', methods=['GET'])
-def get_public_quizzes():
-    """Get all public quizzes"""
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        SELECT q.id, q.title, q.description, q.color, q.created_at, u.username,
-               (SELECT COUNT(*) FROM attempts WHERE quiz_id = q.id) as attempt_count
-        FROM quizzes q
-        JOIN users u ON q.user_id = u.id
-        WHERE q.is_public = 1
-        ORDER BY attempt_count DESC, q.created_at DESC
-        LIMIT 50
-    ''')
-
-    quizzes = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-
-    return jsonify({'quizzes': quizzes})
-
-# ============== Health Check ==============
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'database': os.path.exists(DATABASE)})
-
-# ============== Main ==============
+@app.route('/api/health')
+def health():
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
     init_db()
-    print("Starting Quiz Master Pro Server...")
-    print("API available at http://localhost:5000/api")
     app.run(host='0.0.0.0', port=5000, debug=True)

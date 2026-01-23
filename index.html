@@ -3,36 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Quiz Master Pro - The only quiz platform where your code actually runs.">
     <title>Quiz Master Pro</title>
     
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
-    <!-- Styles -->
-    <link rel="stylesheet" href="/static/css/variables.css">
-    <link rel="stylesheet" href="/static/css/base.css">
-    <link rel="stylesheet" href="/static/css/components.css">
-    <link rel="stylesheet" href="/static/css/views.css">
+    <link rel="stylesheet" href="/static/css/app.css">
     
-    <!-- Pyodide for Python execution -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
-    
-    <!-- Firebase for multiplayer -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23FF6B35' rx='20' width='100' height='100'/><text x='50%' y='58%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='55' font-weight='bold'>Q</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%234F46E5' rx='18' width='100' height='100'/><text x='50%' y='58%' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='50' font-weight='bold'>Q</text></svg>">
 </head>
 <body>
     <div id="app"></div>
     <div id="toast-container"></div>
-    <div id="modal-container"></div>
     
-    <!-- App Entry Point -->
     <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>
