@@ -2727,3 +2727,135 @@ h3 { font-size: 1.25rem; }
         flex-wrap: wrap;
     }
 }
+/* ============================================
+   FIX: Selected options stay purple on hover
+   Add this to the END of your app.css file
+   ============================================ */
+
+/* MULTIPLE CHOICE OPTIONS */
+.option {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+    margin-bottom: 0.625rem;
+}
+
+/* Hover - ONLY when NOT selected and NOT revealed */
+.option:not(.selected):not(.revealed):hover {
+    border-color: var(--border-light);
+    background: var(--bg-hover);
+    transform: translateX(4px);
+}
+
+/* Selected state - STAYS PURPLE */
+.option.selected {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Selected + hover - NO CHANGE, stays purple */
+.option.selected:hover {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    transform: none !important;
+}
+
+/* Revealed correct */
+.option.revealed.correct {
+    border-color: var(--success) !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+    cursor: default;
+}
+
+/* Revealed incorrect */
+.option.revealed.incorrect {
+    border-color: var(--error) !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    cursor: default;
+}
+
+/* No hover effects when revealed */
+.option.revealed:hover {
+    transform: none !important;
+}
+
+/* Locked state */
+.options-list.locked .option {
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Option letter stays purple when selected */
+.option.selected .option-letter {
+    background: var(--primary) !important;
+    color: white !important;
+}
+
+/* TRUE/FALSE OPTIONS */
+.tf-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    min-height: 120px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Hover - ONLY when NOT selected and NOT revealed */
+.tf-option:not(.selected):not(.revealed):hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-light);
+}
+
+/* Selected - STAYS PURPLE */
+.tf-option.selected {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Selected + hover - NO CHANGE, stays purple */
+.tf-option.selected:hover {
+    transform: none !important;
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Revealed correct */
+.tf-option.revealed.correct {
+    border-color: var(--success) !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+    cursor: default;
+}
+
+/* Revealed incorrect */
+.tf-option.revealed.incorrect {
+    border-color: var(--error) !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    cursor: default;
+}
+
+/* No hover when revealed */
+.tf-option.revealed:hover {
+    transform: none !important;
+}
+
+/* Locked */
+.tf-options.locked .tf-option {
+    cursor: default;
+    pointer-events: none;
+}
