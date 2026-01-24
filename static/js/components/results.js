@@ -1,60 +1,315 @@
-/* Results Component */
-import { getState, setState } from '../state.js';
+/* Results Component - SPECTACULAR Edition */
+import { getState, setState, getLevelInfo, getUnlockedAchievements } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
-import { startQuiz } from './quiz.js';
 
 export function renderResults() {
-    const state = getState(), quiz = state.currentQuiz;
-    if (!quiz) { setState({ view: 'library' }); return ''; }
-    const score = calcScore(), total = quiz.questions.length, pct = Math.round((score / total) * 100);
-    const msg = pct >= 90 ? '🏆 Outstanding!' : pct >= 80 ? '🌟 Great job!' : pct >= 70 ? '👍 Good work!' : pct >= 60 ? '💪 Not bad!' : '📚 Keep practicing!';
-
-    return `<div class="results-page"><div class="container container-sm">
-        <div class="results-hero">
-            <div class="results-score"><div class="results-score-pct">${pct}%</div><div class="results-score-label">${score} of ${total}</div></div>
-            <h1 class="results-msg">${msg}</h1><p class="text-muted">${escapeHtml(quiz.title)}</p>
-            ${state.maxStreak > 1 ? `<span class="badge badge-primary mt-2">🔥 Streak: ${state.maxStreak}</span>` : ''}
+    const state = getState();
+    const { correct, total, percentage, isPerfect, answers } = state.quizResults || {};
+    const quiz = state.currentQuiz;
+    const profile = state.playerProfile;
+    const levelInfo = getLevelInfo(profile.xp);
+    
+    if (!quiz) {
+        return `<div class="results-page container">
+            <div class="text-center">
+                <h2>No results available</h2>
+                <button class="btn btn-primary mt-4" onclick="window.app.navigate('library')">Back to Library</button>
+            </div>
+        </div>`;
+    }
+    
+    const message = getMessage(percentage);
+    const tierColors = {
+        bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700',
+        platinum: '#e5e4e2', diamond: '#b9f2ff', legendary: '#ff6b6b'
+    };
+    
+    return `
+        <div class="results-page">
+            <div class="container">
+                <div class="results-hero">
+                    ${isPerfect ? '<div class="perfect-banner">🏆 PERFECT SCORE! 🏆</div>' : ''}
+                    
+                    <div class="results-score ${isPerfect ? 'perfect' : ''}" style="--score-color: ${getScoreColor(percentage)}">
+                        <span class="results-score-pct" id="score-counter">0</span>
+                        <span class="results-score-percent">%</span>
+                    </div>
+                    
+                    <h2 class="results-msg">${message.emoji} ${message.text}</h2>
+                    <p class="text-muted">${escapeHtml(quiz.title)}</p>
+                    
+                    <div class="results-stats">
+                        <div class="stat-card">
+                            <div class="stat-value text-success">${correct}</div>
+                            <div class="stat-label">Correct</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value text-error">${total - correct}</div>
+                            <div class="stat-label">Incorrect</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${total}</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                    </div>
+                    
+                    <!-- XP & Progress Section -->
+                    <div class="results-progress card">
+                        <div class="progress-header">
+                            <div class="level-info">
+                                <div class="level-badge-small" style="--tier-color: ${tierColors[levelInfo.tier]}">
+                                    ${levelInfo.level}
+                                </div>
+                                <div>
+                                    <div class="level-title">${escapeHtml(levelInfo.title)}</div>
+                                    <div class="xp-text-small">${profile.xp} XP</div>
+                                </div>
+                            </div>
+                            <div class="streak-info">
+                                ${profile.dailyStreak > 0 ? `
+                                    <span class="streak-badge">🔥 ${profile.dailyStreak} day streak</span>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="xp-bar-large">
+                            <div class="xp-bar-fill" style="width: ${levelInfo.progress * 100}%"></div>
+                            <span class="xp-bar-text">${levelInfo.xpInLevel} / ${levelInfo.xpForNext} XP to level ${levelInfo.level + 1}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="results-actions">
+                        <button class="btn btn-primary btn-lg" onclick="window.app.retryQuiz()">
+                            🔄 Try Again
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.app.reviewQuiz()">
+                            📝 Review Answers
+                        </button>
+                        <button class="btn btn-ghost" onclick="window.app.navigate('library')">
+                            ← Back to Library
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="results-stats">
-            <div class="card stat-card"><div class="stat-value text-success">${score}</div><div class="stat-label">Correct</div></div>
-            <div class="card stat-card"><div class="stat-value text-error">${total - score}</div><div class="stat-label">Incorrect</div></div>
-            <div class="card stat-card"><div class="stat-value">${state.flaggedQuestions.size}</div><div class="stat-label">Flagged</div></div>
-        </div>
-        <div class="results-actions">
-            <button class="btn btn-primary btn-lg" onclick="window.app.navigate('review')">📝 Review</button>
-            <button class="btn btn-secondary btn-lg" onclick="window.app.retryQuiz()">🔄 Retry</button>
-            <button class="btn btn-ghost btn-lg" onclick="window.app.navigate('library')">← Library</button>
-        </div>
-    </div></div>`;
+    `;
 }
 
 export function renderReview() {
-    const state = getState(), quiz = state.currentQuiz;
-    if (!quiz) { setState({ view: 'library' }); return ''; }
-    return `<nav class="navbar"><div class="container"><div class="navbar-inner"><button class="btn btn-ghost" onclick="window.app.navigate('results')">← Results</button><h2 style="font-size:1rem">Review</h2><div style="width:80px"></div></div></div></nav>
-    <main class="container container-sm" style="padding:2rem 1rem">
-        ${quiz.questions.map((q, i) => renderReviewItem(q, i)).join('')}
-        <div class="flex gap-3 mt-6"><button class="btn btn-primary flex-1" onclick="window.app.retryQuiz()">🔄 Retry</button><button class="btn btn-ghost flex-1" onclick="window.app.navigate('library')">Library</button></div>
-    </main>`;
+    const state = getState();
+    const quiz = state.currentQuiz;
+    const answers = state.quizResults?.answers || [];
+    
+    if (!quiz) return '';
+    
+    return `
+        <div class="review-page">
+            <header class="quiz-header">
+                <button class="btn btn-ghost" onclick="window.app.navigate('results')">← Back to Results</button>
+                <h2>${escapeHtml(quiz.title)} - Review</h2>
+                <div></div>
+            </header>
+            <main class="quiz-main">
+                <div class="container">
+                    <div class="review-filters mb-4">
+                        <button class="btn btn-sm ${state.reviewFilter === 'all' ? 'btn-primary' : 'btn-secondary'}" 
+                            onclick="window.app.setReviewFilter('all')">All</button>
+                        <button class="btn btn-sm ${state.reviewFilter === 'incorrect' ? 'btn-primary' : 'btn-secondary'}" 
+                            onclick="window.app.setReviewFilter('incorrect')">❌ Incorrect Only</button>
+                        <button class="btn btn-sm ${state.reviewFilter === 'correct' ? 'btn-primary' : 'btn-secondary'}" 
+                            onclick="window.app.setReviewFilter('correct')">✓ Correct Only</button>
+                    </div>
+                    
+                    ${quiz.questions.map((q, i) => {
+                        const userAnswer = answers[i];
+                        const isCorrect = checkIfCorrect(userAnswer, q);
+                        
+                        // Filter
+                        if (state.reviewFilter === 'incorrect' && isCorrect) return '';
+                        if (state.reviewFilter === 'correct' && !isCorrect) return '';
+                        
+                        return `
+                            <div class="review-item card ${isCorrect ? 'correct' : 'incorrect'}">
+                                <div class="review-header">
+                                    <span class="review-status">${isCorrect ? '✓' : '✗'}</span>
+                                    <span class="review-question">Q${i + 1}: ${escapeHtml(q.question)}</span>
+                                </div>
+                                ${q.code ? `<pre class="code-block"><code>${escapeHtml(q.code)}</code></pre>` : ''}
+                                ${renderReviewAnswer(q, userAnswer, isCorrect)}
+                                ${q.explanation ? `<div class="explanation mt-3"><strong>💡</strong> ${escapeHtml(q.explanation)}</div>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </main>
+        </div>
+    `;
 }
 
-function renderReviewItem(q, i) {
-    const state = getState(), ans = state.answers[i] || [], correct = checkCorrect(q, ans);
-    return `<div class="card review-item mb-4" style="${!correct ? 'border-left:4px solid var(--error)' : ''}">
-        <div class="review-header"><span>${correct ? '✅' : '❌'}</span><span class="badge ${correct ? 'badge-success' : 'badge-error'}">${correct ? 'Correct' : 'Incorrect'}</span><span class="text-sm text-muted">Q${i + 1}</span></div>
-        <h3 class="mb-4">${escapeHtml(q.question)}</h3>
-        ${q.code ? `<div class="code-block mb-4"><pre class="code-body">${escapeHtml(q.code)}</pre></div>` : ''}
-        ${q.type === 'ordering' ? q.correct.map((ci, pos) => `<div class="review-opt ${ans[pos] === ci ? 'correct' : 'wrong'}">${pos + 1}. ${escapeHtml(q.options[ci])}</div>`).join('') :
-        q.options.map((opt, j) => { const sel = ans.includes(j), cor = q.correct.includes(j); return `<div class="review-opt${cor ? ' correct' : ''}${sel && !cor ? ' wrong' : ''}">${String.fromCharCode(65 + j)}. ${escapeHtml(opt)}${cor && sel ? ' ✓' : cor ? ' (correct)' : sel ? ' ✗' : ''}</div>`; }).join('')}
-        ${q.explanation ? `<div class="explanation mt-4">💡 ${escapeHtml(q.explanation)}</div>` : ''}
-    </div>`;
+function renderReviewAnswer(q, userAnswer, isCorrect) {
+    switch (q.type) {
+        case 'truefalse':
+            const correctBool = q.correct === true || q.correct === 'true';
+            return `
+                <div class="review-tf">
+                    <div class="review-answer ${userAnswer === correctBool ? 'correct' : 'user-wrong'}">
+                        Your answer: <strong>${userAnswer === true ? 'True' : userAnswer === false ? 'False' : 'Not answered'}</strong>
+                    </div>
+                    ${!isCorrect ? `
+                        <div class="review-answer correct">
+                            Correct answer: <strong>${correctBool ? 'True' : 'False'}</strong>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+        case 'matching':
+            return `
+                <div class="review-matching">
+                    ${q.pairs.map((pair, i) => {
+                        const userMatch = userAnswer?.[i];
+                        const isMatchCorrect = userMatch === i;
+                        const userMatchText = userMatch !== undefined ? q.pairs[userMatch]?.right : 'Not matched';
+                        return `
+                            <div class="review-match-row ${isMatchCorrect ? 'correct' : 'incorrect'}">
+                                <span class="match-left">${escapeHtml(pair.left)}</span>
+                                <span class="match-arrow">→</span>
+                                <span class="match-right ${isMatchCorrect ? '' : 'wrong'}">${escapeHtml(userMatchText)}</span>
+                                ${!isMatchCorrect ? `<span class="match-correct">✓ ${escapeHtml(pair.right)}</span>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            
+        case 'ordering':
+            return `
+                <div class="review-ordering">
+                    <div class="order-comparison">
+                        <div class="order-col">
+                            <div class="order-header">Your Order</div>
+                            ${(userAnswer || q.items.map((t, i) => ({ text: t, origIndex: i }))).map((item, i) => `
+                                <div class="order-item ${item.origIndex === i ? 'correct' : 'incorrect'}">
+                                    ${i + 1}. ${escapeHtml(item.text)}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="order-col">
+                            <div class="order-header">Correct Order</div>
+                            ${q.items.map((item, i) => `
+                                <div class="order-item correct">
+                                    ${i + 1}. ${escapeHtml(item)}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+        default:
+            const isMulti = Array.isArray(q.correct);
+            return `
+                <div class="review-options">
+                    ${q.options.map((opt, i) => {
+                        const letter = String.fromCharCode(65 + i);
+                        const isSelected = isMulti ? (userAnswer || []).includes(i) : userAnswer === i;
+                        const isCorrectOpt = isMulti ? q.correct.includes(i) : q.correct === i;
+                        
+                        let cls = 'review-opt';
+                        if (isCorrectOpt) cls += ' correct';
+                        if (isSelected && !isCorrectOpt) cls += ' wrong';
+                        
+                        return `
+                            <div class="${cls}">
+                                <span class="opt-letter">${letter}</span>
+                                <span class="opt-text">${escapeHtml(opt)}</span>
+                                ${isSelected ? '<span class="opt-marker">Your answer</span>' : ''}
+                                ${isCorrectOpt ? '<span class="opt-marker correct">✓ Correct</span>' : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+    }
 }
 
-function calcScore() { const s = getState(); return s.currentQuiz.questions.filter((q, i) => checkCorrect(q, s.answers[i] || [])).length; }
-function checkCorrect(q, ans) {
-    if (!ans || !ans.length) return false;
-    if (q.type === 'ordering') return JSON.stringify(ans) === JSON.stringify(q.correct);
-    return new Set(ans).size === new Set(q.correct).size && ans.every(a => q.correct.includes(a));
+function checkIfCorrect(answer, question) {
+    switch (question.type) {
+        case 'truefalse':
+            const correctBool = question.correct === true || question.correct === 'true';
+            return answer === correctBool;
+        case 'matching':
+            if (!answer) return false;
+            return Object.entries(answer).every(([left, right]) => parseInt(left) === parseInt(right));
+        case 'ordering':
+            if (!answer) return false;
+            return answer.every((item, idx) => item.origIndex === idx);
+        default:
+            if (Array.isArray(question.correct)) {
+                const ans = answer || [];
+                return question.correct.length === ans.length && 
+                       question.correct.every(c => ans.includes(c));
+            }
+            return answer === question.correct;
+    }
 }
 
-export function retryQuiz() { const s = getState(); if (s.currentQuiz) startQuiz(s.currentQuiz.id, { fresh: true, study: s.studyMode }); }
+function getMessage(percentage) {
+    if (percentage === 100) return { emoji: '🏆', text: 'PERFECT!' };
+    if (percentage >= 90) return { emoji: '🌟', text: 'Outstanding!' };
+    if (percentage >= 80) return { emoji: '🎉', text: 'Great job!' };
+    if (percentage >= 70) return { emoji: '👍', text: 'Good work!' };
+    if (percentage >= 60) return { emoji: '📚', text: 'Keep practicing!' };
+    if (percentage >= 50) return { emoji: '💪', text: 'You can do better!' };
+    return { emoji: '📖', text: 'Time to study more!' };
+}
+
+function getScoreColor(percentage) {
+    if (percentage >= 90) return '#10b981';
+    if (percentage >= 70) return '#8b5cf6';
+    if (percentage >= 50) return '#f59e0b';
+    return '#ef4444';
+}
+
+// Animate score counter
+export function animateScoreCounter() {
+    const counter = document.getElementById('score-counter');
+    if (!counter) return;
+    
+    const state = getState();
+    const target = state.quizResults?.percentage || 0;
+    const duration = 1500;
+    const start = performance.now();
+    
+    function update(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = Math.round(eased * target);
+        
+        counter.textContent = current;
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+    
+    requestAnimationFrame(update);
+}
+
+// Actions
+export function retryQuiz() {
+    const state = getState();
+    if (state.currentQuiz) {
+        window.app.startQuiz(state.currentQuiz.id, { restart: true });
+    }
+}
+
+export function reviewQuiz() {
+    setState({ view: 'review', reviewFilter: 'all' });
+}
+
+export function setReviewFilter(filter) {
+    setState({ reviewFilter: filter });
+}

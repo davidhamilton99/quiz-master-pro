@@ -1,17 +1,25 @@
-/* Quiz Component - with Drag & Drop Matching */
-import { getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress } from '../state.js';
+/* Quiz Component - SPECTACULAR Edition */
+import { 
+    getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
+    recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
+    getLevelInfo, clearPendingRewards
+} from '../state.js';
 import { getQuiz, saveAttempt } from '../services/api.js';
-import { escapeHtml, shuffleArray, showLoading, hideLoading, showConfetti } from '../utils/dom.js';
+import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
-
+import { renderQuizStreakDisplay } from '../utils/playerHud.js';
+import * as sounds from '../utils/sounds.js';
+import * as animations from '../utils/animations.js';
+import { renderQuizStreakDisplay, renderPlayerHUD } from '../utils/playerHud.js';
 let timerInterval = null;
-let draggedItem = null;
 
 export function renderQuiz() {
     const state = getState();
     const quiz = state.currentQuiz;
     if (!quiz) return '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh"><div class="spinner"></div></div>';
-    const q = quiz.questions[state.currentQuestionIndex], total = quiz.questions.length;
+    
+    const q = quiz.questions[state.currentQuestionIndex];
+    const total = quiz.questions.length;
 
     return `<div class="quiz-page">
         <header class="quiz-header">
@@ -25,7 +33,9 @@ export function renderQuiz() {
                 <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
             </div>
         </header>
+        ${renderPlayerHUD()}
         <main class="quiz-main"><div class="quiz-content">
+            ${renderQuizStreakDisplay(state.quizStreak)}
             <div class="question-header">
                 <div class="question-num">
                     Question ${state.currentQuestionIndex + 1}
@@ -78,261 +88,454 @@ function renderQuestionType(q, idx) {
     switch (q.type) {
         case 'truefalse': return renderTrueFalse(q, ans, state.showAnswer);
         case 'matching': return renderMatching(q, ans, idx, state.showAnswer);
-        case 'ordering': return renderOrdering(q, ans, state.showAnswer);
-        default: return renderMultipleChoice(q, ans, state.showAnswer, state.studyMode);
+        case 'ordering': return renderOrdering(q, ans, idx, state.showAnswer);
+        default: return renderMultipleChoice(q, ans, state.showAnswer);
     }
 }
 
-// ==================== TRUE/FALSE ====================
+function renderMultipleChoice(q, ans, showAnswer) {
+    const isMulti = Array.isArray(q.correct);
+    return `<div class="options-list" id="options-container">
+        ${q.options.map((opt, i) => {
+            const letter = String.fromCharCode(65 + i);
+            const isSelected = isMulti ? (ans || []).includes(i) : ans === i;
+            const isCorrect = isMulti ? q.correct.includes(i) : q.correct === i;
+            let cls = 'option';
+            if (isSelected) cls += ' selected';
+            if (showAnswer && isCorrect) cls += ' correct';
+            if (showAnswer && isSelected && !isCorrect) cls += ' incorrect';
+            
+            return `<div class="${cls}" data-index="${i}" onclick="window.app.selectOption(${i})">
+                <span class="option-letter">${letter}</span>
+                <span class="option-text">${escapeHtml(opt)}</span>
+                ${showAnswer && isCorrect ? renderCheckmark() : ''}
+                ${showAnswer && isSelected && !isCorrect ? renderXMark() : ''}
+            </div>`;
+        }).join('')}
+    </div>
+    ${isMulti ? '<p class="helper-text mt-2">Select all that apply</p>' : ''}`;
+}
+
 function renderTrueFalse(q, ans, showAnswer) {
+    const correctVal = q.correct === true || q.correct === 'true';
     return `<div class="tf-options">
-        ${['True', 'False'].map((opt, i) => {
-            const selected = Array.isArray(ans) && ans.includes(i);
-            const correct = showAnswer && q.correct.includes(i);
-            const wrong = showAnswer && selected && !q.correct.includes(i);
-            return `<div class="tf-option${selected ? ' selected' : ''}${correct ? ' correct' : ''}${wrong ? ' incorrect' : ''}" 
-                onclick="window.app.selectOpt(${i})">
-                <span class="tf-icon">${i === 0 ? '✓' : '✗'}</span>
-                <span class="option-text">${opt}</span>
+        ${[true, false].map(val => {
+            let cls = 'tf-option';
+            const isSelected = ans === val;
+            const isCorrect = val === correctVal;
+            if (isSelected) cls += ' selected';
+            if (showAnswer && isCorrect) cls += ' correct';
+            if (showAnswer && isSelected && !isCorrect) cls += ' incorrect';
+            
+            return `<div class="${cls}" onclick="window.app.selectTF(${val})">
+                <span class="tf-icon">${val ? '✓' : '✗'}</span>
+                <span class="tf-label">${val ? 'True' : 'False'}</span>
+                ${showAnswer && isCorrect ? renderCheckmark() : ''}
             </div>`;
         }).join('')}
     </div>`;
 }
 
-// ==================== MATCHING (Drag & Drop) ====================
-function renderMatching(q, ans, idx, showAnswer) {
+function renderMatching(q, ans, qIdx, showAnswer) {
     const state = getState();
     const userMatches = ans || {};
     
-    // Get shuffled right options (stored in state to persist during quiz)
-    let rightOptions = state.matchingShuffled?.[idx];
-    if (!rightOptions) {
-        rightOptions = shuffleArray([...q.pairs.map((p, i) => ({ text: p.right, originalIdx: i }))]);
-        // Store in state
-        const shuffled = { ...(state.matchingShuffled || {}), [idx]: rightOptions };
+    // Initialize shuffled options for this question if not exists
+    if (!state.matchingShuffled[qIdx]) {
+        const shuffled = { ...state.matchingShuffled };
+        shuffled[qIdx] = shuffleArray([...q.pairs.map((p, i) => ({ text: p.right, origIndex: i }))]);
         setState({ matchingShuffled: shuffled });
     }
+    const shuffledRight = state.matchingShuffled[qIdx] || q.pairs.map((p, i) => ({ text: p.right, origIndex: i }));
+    
+    // Find which right items are already matched
+    const usedRightIndices = new Set(Object.values(userMatches));
     
     return `<div class="matching-container">
-        <div class="matching-instructions">
-            Drag items from the right to match with terms on the left
-        </div>
+        <div class="matching-instructions">Drag items from the right to match with terms on the left</div>
         <div class="matching-columns">
             <div class="matching-left">
                 <div class="matching-header">Terms</div>
                 ${q.pairs.map((pair, i) => {
                     const matchedIdx = userMatches[i];
-                    const matchedItem = matchedIdx !== undefined ? rightOptions.find(r => r.originalIdx === matchedIdx) : null;
-                    const isCorrect = showAnswer && matchedIdx === i;
-                    const isWrong = showAnswer && matchedIdx !== undefined && matchedIdx !== i;
+                    const hasMatch = matchedIdx !== undefined;
+                    const matchedText = hasMatch ? q.pairs.find((_, idx) => shuffledRight.find(s => s.origIndex === matchedIdx)?.origIndex === matchedIdx)?.right || shuffledRight.find(s => s.origIndex === matchedIdx)?.text : null;
                     
-                    return `<div class="match-item left${isCorrect ? ' correct' : ''}${isWrong ? ' incorrect' : ''}"
-                        ondragover="window.app.matchDragOver(event)" 
+                    let cls = 'match-item left';
+                    if (showAnswer) {
+                        const isCorrect = matchedIdx === i;
+                        cls += isCorrect ? ' correct' : (hasMatch ? ' incorrect' : '');
+                    }
+                    
+                    return `<div class="${cls}" 
+                        data-left-index="${i}"
+                        ondragover="window.app.matchDragOver(event)"
                         ondragleave="window.app.matchDragLeave(event)"
-                        ondrop="window.app.matchDrop(event, ${i})"
-                        data-term="${i}">
+                        ondrop="window.app.matchDrop(event, ${i})">
                         <span class="match-letter">${String.fromCharCode(65 + i)}</span>
                         <span class="match-text">${escapeHtml(pair.left)}</span>
-                        ${matchedItem ? `
-                            <div class="match-answer" draggable="true" 
-                                ondragstart="window.app.matchDragStart(event, ${matchedItem.originalIdx})"
-                                ondragend="window.app.matchDragEnd(event)">
-                                ${escapeHtml(matchedItem.text)}
-                                <button class="match-remove" onclick="window.app.removeMatch(${i})">✕</button>
-                            </div>
-                        ` : '<div class="match-dropzone">Drop here</div>'}
+                        ${hasMatch 
+                            ? `<div class="match-answer" draggable="true" ondragstart="window.app.matchDragStart(event, ${matchedIdx}, ${i})">
+                                ${escapeHtml(matchedText || shuffledRight.find(s => s.origIndex === matchedIdx)?.text || '')}
+                                <button class="match-remove" onclick="window.app.removeMatch(${i})">×</button>
+                               </div>`
+                            : `<div class="match-dropzone">Drop here</div>`
+                        }
                     </div>`;
                 }).join('')}
             </div>
             <div class="matching-right">
                 <div class="matching-header">Definitions</div>
-                <div class="match-options" id="match-options">
-                    ${rightOptions.map((item, i) => {
-                        const isUsed = Object.values(userMatches).includes(item.originalIdx);
-                        if (isUsed) return '';
-                        return `<div class="match-draggable" draggable="true"
-                            ondragstart="window.app.matchDragStart(event, ${item.originalIdx})"
-                            ondragend="window.app.matchDragEnd(event)"
-                            data-idx="${item.originalIdx}">
-                            ${escapeHtml(item.text)}
-                        </div>`;
-                    }).join('')}
-                </div>
+                ${shuffledRight.filter(item => !usedRightIndices.has(item.origIndex)).map(item => {
+                    return `<div class="match-draggable" 
+                        draggable="true" 
+                        data-orig-index="${item.origIndex}"
+                        ondragstart="window.app.matchDragStart(event, ${item.origIndex})">
+                        ${escapeHtml(item.text)}
+                    </div>`;
+                }).join('')}
+                ${shuffledRight.filter(item => !usedRightIndices.has(item.origIndex)).length === 0 
+                    ? '<div class="text-center text-muted mt-2">All items matched!</div>' : ''}
             </div>
         </div>
-        ${getState().studyMode && !showAnswer && Object.keys(userMatches).length === q.pairs.length ? 
-            `<button class="btn btn-primary mt-4" style="width:100%" onclick="window.app.checkAnswer()">Check Matches</button>` : ''}
     </div>`;
 }
 
-// ==================== ORDERING ====================
-function renderOrdering(q, ans, showAnswer) {
-    const order = ans || q.options.map((_, i) => i);
+function renderOrdering(q, ans, qIdx, showAnswer) {
+    const items = ans || q.items.map((item, i) => ({ text: item, origIndex: i }));
     
-    return `<div class="options-list ordering-list" id="ordering-list">
-        ${order.map((optIdx, pos) => {
-            const isCorrect = showAnswer && q.correct[pos] === optIdx;
-            const isWrong = showAnswer && q.correct[pos] !== optIdx;
-            return `<div class="option ordering-item${isCorrect ? ' correct' : ''}${isWrong ? ' incorrect' : ''}" 
-                draggable="true"
-                ondragstart="window.app.orderDragStart(event, ${pos})"
-                ondragover="window.app.orderDragOver(event)"
-                ondragleave="window.app.orderDragLeave(event)"
-                ondrop="window.app.orderDrop(event, ${pos})"
-                ondragend="window.app.orderDragEnd(event)"
-                data-pos="${pos}">
-                <span class="option-letter">${pos + 1}</span>
-                <span class="option-text">${escapeHtml(q.options[optIdx])}</span>
-                <span class="drag-handle">⋮⋮</span>
-            </div>`;
-        }).join('')}
-    </div>
-    ${getState().studyMode && !showAnswer ? `<button class="btn btn-primary mt-4" style="width:100%" onclick="window.app.checkAnswer()">Check Order</button>` : ''}`;
+    return `<div class="ordering-container">
+        <p class="helper-text mb-3">Drag to reorder the items</p>
+        <div class="ordering-list" id="ordering-list">
+            ${items.map((item, i) => {
+                let cls = 'match-item ordering-item';
+                if (showAnswer) {
+                    cls += item.origIndex === i ? ' correct' : ' incorrect';
+                }
+                return `<div class="${cls}" 
+                    draggable="true" 
+                    data-index="${i}"
+                    ondragstart="window.app.orderDragStart(event, ${i})"
+                    ondragover="window.app.orderDragOver(event)"
+                    ondragleave="window.app.orderDragLeave(event)"
+                    ondrop="window.app.orderDrop(event, ${i})"
+                    ondragend="window.app.orderDragEnd(event)">
+                    <span class="match-num">${i + 1}</span>
+                    <span class="match-text">${escapeHtml(item.text)}</span>
+                    <span class="drag-handle">⋮⋮</span>
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
 }
 
-// ==================== MULTIPLE CHOICE ====================
-function renderMultipleChoice(q, ans, showAnswer, studyMode) {
-    const selected = ans || [];
-    const isMulti = q.correct.length > 1;
-    
-    return `<div class="options-list">
-        ${q.options.map((opt, i) => {
-            const sel = selected.includes(i);
-            const correct = showAnswer && q.correct.includes(i);
-            const wrong = showAnswer && sel && !q.correct.includes(i);
-            return `<div class="option${sel ? ' selected' : ''}${correct ? ' correct' : ''}${wrong ? ' incorrect' : ''}" 
-                onclick="window.app.selectOpt(${i})">
-                <span class="option-letter">${String.fromCharCode(65 + i)}</span>
-                <span class="option-text">${escapeHtml(opt)}</span>
-                ${correct ? '<span style="margin-left:auto;color:var(--success)">✓</span>' : ''}
-                ${wrong ? '<span style="margin-left:auto;color:var(--error)">✗</span>' : ''}
-            </div>`;
-        }).join('')}
-    </div>
-    ${studyMode && !showAnswer && isMulti ? `<button class="btn btn-primary mt-4" style="width:100%" onclick="window.app.checkAnswer()">Check Answer</button>` : ''}`;
+function renderCheckmark() {
+    return `<span class="answer-check">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+    </span>`;
+}
+
+function renderXMark() {
+    return `<span class="answer-check answer-x">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+    </span>`;
 }
 
 function renderDots() {
-    const state = getState(), total = state.currentQuiz.questions.length, max = 10;
-    let start = total > max ? Math.max(0, Math.min(state.currentQuestionIndex - 4, total - max)) : 0;
-    let html = '';
-    for (let i = 0; i < Math.min(total, max); i++) {
-        const idx = start + i;
-        const answered = state.answers[idx] !== null && state.answers[idx] !== undefined && 
-            (Array.isArray(state.answers[idx]) ? state.answers[idx].length > 0 : Object.keys(state.answers[idx] || {}).length > 0);
-        html += `<button class="q-dot${idx === state.currentQuestionIndex ? ' current' : ''}${answered ? ' answered' : ''}${state.flaggedQuestions.has(idx) ? ' flagged' : ''}" 
-            onclick="window.app.goToQ(${idx})">${idx + 1}</button>`;
-    }
-    return html;
+    const state = getState();
+    const total = state.currentQuiz.questions.length;
+    return Array.from({ length: total }, (_, i) => {
+        let cls = 'q-dot';
+        if (i === state.currentQuestionIndex) cls += ' current';
+        if (state.answers[i] !== undefined) cls += ' answered';
+        if (state.flaggedQuestions.has(i)) cls += ' flagged';
+        return `<button class="${cls}" onclick="window.app.goToQ(${i})">${i + 1}</button>`;
+    }).join('');
 }
 
-function formatTime(s) { return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; }
+function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
-// ==================== QUIZ CONTROL ====================
-export async function startQuiz(id, opts = {}) {
+// ==================== QUIZ ACTIONS ====================
+
+export async function startQuiz(quizId, options = {}) {
     showLoading();
-    const saved = loadQuizProgress(id);
-    
-    if (saved && !opts.fresh) {
-        try {
-            const quiz = await getQuiz(id);
-            setState({ 
-                view: 'quiz', 
-                currentQuiz: { id, title: quiz.title, questions: quiz.questions }, 
-                currentQuestionIndex: saved.questionIndex, 
-                answers: saved.answers, 
-                flaggedQuestions: new Set(saved.flagged || []), 
-                studyMode: saved.studyMode, 
-                timerEnabled: saved.timerEnabled, 
-                timeRemaining: saved.timeRemaining, 
-                streak: saved.streak || 0, 
-                maxStreak: saved.maxStreak || 0, 
-                showAnswer: false,
-                matchingShuffled: saved.matchingShuffled || {}
-            });
-            if (saved.timerEnabled && saved.timeRemaining > 0) startTimer();
-            hideLoading(); 
-            showToast('Progress restored', 'info'); 
-            return;
-        } catch { hideLoading(); showToast('Failed to load', 'error'); return; }
-    }
-    
-    if (saved) clearQuizProgress(id);
-    
     try {
-        const quiz = await getQuiz(id);
-        let questions = quiz.questions;
-        if (opts.shuffle) questions = shuffleArray(questions);
+        const quiz = await getQuiz(quizId);
         
-        const answers = questions.map(q => {
-            if (q.type === 'ordering') return shuffleArray(q.options.map((_, i) => i));
-            if (q.type === 'matching') return {};
-            return null;
+        // Check for saved progress
+        const saved = loadQuizProgress(quizId);
+        if (saved && !options.restart) {
+            const resume = confirm(`Resume from question ${saved.questionIndex + 1}?`);
+            if (resume) {
+                setState({
+                    view: 'quiz',
+                    currentQuiz: quiz,
+                    currentQuestionIndex: saved.questionIndex,
+                    answers: saved.answers,
+                    flaggedQuestions: new Set(saved.flagged || []),
+                    studyMode: saved.studyMode,
+                    timerEnabled: saved.timerEnabled,
+                    timeRemaining: saved.timeRemaining,
+                    quizStreak: saved.quizStreak || 0,
+                    maxQuizStreak: saved.maxQuizStreak || 0,
+                    matchingShuffled: saved.matchingShuffled || {},
+                    showAnswer: false,
+                    quizStartTime: Date.now()
+                });
+                if (saved.timerEnabled) startTimer();
+                hideLoading();
+                
+                // Update daily streak
+                updateDailyStreak();
+                sounds.playQuizStart();
+                return;
+            }
+        }
+        
+        // Fresh start
+        setState({
+            view: 'quiz',
+            currentQuiz: quiz,
+            currentQuestionIndex: 0,
+            answers: [],
+            flaggedQuestions: new Set(),
+            studyMode: options.studyMode || false,
+            timerEnabled: options.timed || false,
+            timeRemaining: (options.minutes || 15) * 60,
+            quizStreak: 0,
+            maxQuizStreak: 0,
+            matchingShuffled: {},
+            showAnswer: false,
+            quizStartTime: Date.now()
         });
         
-        setState({ 
-            view: 'quiz', 
-            currentQuiz: { id, title: quiz.title, questions }, 
-            currentQuestionIndex: 0, 
-            answers, 
-            studyMode: opts.study || false, 
-            timerEnabled: opts.timer || false, 
-            timerMinutes: opts.minutes || 15, 
-            timeRemaining: opts.timer ? (opts.minutes || 15) * 60 : 0, 
-            showAnswer: false, 
-            flaggedQuestions: new Set(), 
-            streak: 0, 
-            maxStreak: 0,
-            matchingShuffled: {}
-        });
+        if (options.timed) startTimer();
         
-        if (opts.timer) startTimer();
-        saveQuizProgress(); 
-        hideLoading();
-    } catch { hideLoading(); showToast('Failed to load', 'error'); }
+        // Update daily streak when starting a quiz
+        updateDailyStreak();
+        sounds.playQuizStart();
+        
+    } catch (e) {
+        showToast('Failed to load quiz', 'error');
+    }
+    hideLoading();
 }
 
-// ==================== ANSWER HANDLERS ====================
-export function selectOpt(i) {
+export function selectOption(index) {
     const state = getState();
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const isMulti = Array.isArray(q.correct);
     
-    if (q.type === 'truefalse') {
-        const newAns = [...state.answers];
-        newAns[state.currentQuestionIndex] = [i];
-        setState({ answers: newAns });
-        saveQuizProgress();
-        if (state.studyMode) checkAnswer();
-        return;
-    }
-    
-    // Multiple choice
-    let ans = state.answers[state.currentQuestionIndex] || [];
-    if (q.correct.length > 1) {
-        ans = ans.includes(i) ? ans.filter(x => x !== i) : [...ans, i];
+    let newAnswer;
+    if (isMulti) {
+        const current = state.answers[state.currentQuestionIndex] || [];
+        newAnswer = current.includes(index) 
+            ? current.filter(i => i !== index)
+            : [...current, index];
     } else {
-        ans = [i];
+        newAnswer = index;
     }
     
-    const newAns = [...state.answers];
-    newAns[state.currentQuestionIndex] = ans;
-    setState({ answers: newAns });
+    const newAnswers = [...state.answers];
+    newAnswers[state.currentQuestionIndex] = newAnswer;
+    setState({ answers: newAnswers });
+    
+    // Study mode: check answer immediately
+    if (state.studyMode && !isMulti) {
+        checkAnswer(newAnswer, q);
+    }
+    
+    saveQuizProgress();
+}
+
+export function selectTF(value) {
+    const state = getState();
+    const newAnswers = [...state.answers];
+    newAnswers[state.currentQuestionIndex] = value;
+    setState({ answers: newAnswers });
+    
+    if (state.studyMode) {
+        const q = state.currentQuiz.questions[state.currentQuestionIndex];
+        checkAnswer(value, q);
+    }
+    
+    saveQuizProgress();
+}
+
+function checkAnswer(answer, question) {
+    const state = getState();
+    const isCorrect = checkIfCorrect(answer, question);
+    
+    // Get the selected element for animations
+    const optionsContainer = document.getElementById('options-container') || document.querySelector('.tf-options');
+    const selectedEl = optionsContainer?.querySelector('.selected');
+    
+    if (isCorrect) {
+        // Correct answer!
+        const result = recordCorrectAnswer();
+        sounds.playCorrect(result.streak);
+        
+        if (selectedEl) {
+            animations.burstCorrect(selectedEl);
+        }
+        
+        // Check for streak milestones
+        if (result.streak === 5 || result.streak === 10 || result.streak === 15 || result.streak === 20) {
+            sounds.playStreakMilestone(result.streak);
+            animations.burstStreak(selectedEl, result.streak);
+        }
+        
+        // Show floating XP
+        if (selectedEl) {
+            animations.showXPGain(selectedEl, result.xp);
+        }
+        
+    } else {
+        // Wrong answer
+        recordWrongAnswer();
+        sounds.playWrong();
+        
+        if (selectedEl) {
+            animations.burstWrong(selectedEl);
+            animations.addShakeAnimation(selectedEl);
+        }
+    }
+    
+    setState({ showAnswer: true });
     saveQuizProgress();
     
-    if (state.studyMode && q.correct.length === 1) checkAnswer();
+    // Check for pending level ups or achievements
+    setTimeout(() => showPendingRewards(), 500);
 }
 
-// Matching drag handlers
-export function matchDragStart(e, idx) {
-    draggedItem = idx;
+function checkIfCorrect(answer, question) {
+    switch (question.type) {
+        case 'truefalse':
+            const correctBool = question.correct === true || question.correct === 'true';
+            return answer === correctBool;
+        case 'matching':
+            if (!answer) return false;
+            return Object.entries(answer).every(([left, right]) => parseInt(left) === parseInt(right));
+        case 'ordering':
+            if (!answer) return false;
+            return answer.every((item, idx) => item.origIndex === idx);
+        default:
+            if (Array.isArray(question.correct)) {
+                const ans = answer || [];
+                return question.correct.length === ans.length && 
+                       question.correct.every(c => ans.includes(c));
+            }
+            return answer === question.correct;
+    }
+}
+
+function showPendingRewards() {
+    const state = getState();
+    
+    // Show level up modal
+    if (state.pendingLevelUp) {
+        sounds.playLevelUp();
+        animations.showLevelUpEffect();
+        
+        const modal = document.createElement('div');
+        modal.innerHTML = renderLevelUpModal(state.pendingLevelUp);
+        document.body.appendChild(modal.firstElementChild);
+        
+        setState({ pendingLevelUp: null });
+    }
+    
+    // Show achievement modals
+    if (state.pendingAchievements.length > 0) {
+        const achievement = state.pendingAchievements[0];
+        sounds.playAchievement();
+        animations.showAchievementEffect();
+        
+        const modal = document.createElement('div');
+        modal.innerHTML = renderAchievementUnlock(achievement);
+        document.body.appendChild(modal.firstElementChild);
+        
+        setState({ 
+            pendingAchievements: state.pendingAchievements.slice(1)
+        });
+    }
+}
+
+function renderLevelUpModal(levelInfo) {
+    const tierColors = {
+        bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700',
+        platinum: '#e5e4e2', diamond: '#b9f2ff', legendary: '#ff6b6b'
+    };
+    const tierColor = tierColors[levelInfo.tier] || tierColors.bronze;
+    
+    return `
+        <div class="modal-overlay level-up-modal" onclick="this.remove()">
+            <div class="level-up-content" onclick="event.stopPropagation()">
+                <div class="level-up-glow" style="--tier-color: ${tierColor}"></div>
+                <div class="level-up-badge" style="--tier-color: ${tierColor}">
+                    <span class="level-up-number">${levelInfo.level}</span>
+                </div>
+                <h2 class="level-up-title">Level Up!</h2>
+                <p class="level-up-subtitle">You are now a</p>
+                <h3 class="level-up-rank" style="color: ${tierColor}">${escapeHtml(levelInfo.title)}</h3>
+                <div class="level-up-rewards">
+                    <div class="reward-item">
+                        <span class="reward-icon">💎</span>
+                        <span class="reward-text">+${levelInfo.level * 5} Gems</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">
+                    Continue
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function renderAchievementUnlock(achievement) {
+    return `
+        <div class="modal-overlay achievement-modal" onclick="this.remove()">
+            <div class="achievement-content" onclick="event.stopPropagation()">
+                <div class="achievement-glow"></div>
+                <div class="achievement-icon-large">${achievement.icon}</div>
+                <h3 class="achievement-name">${escapeHtml(achievement.name)}</h3>
+                <p class="achievement-desc">${escapeHtml(achievement.desc)}</p>
+                <div class="achievement-rewards">
+                    <span class="reward-item">
+                        <span class="reward-icon">✨</span>
+                        <span>+${achievement.xp} XP</span>
+                    </span>
+                    <span class="reward-item">
+                        <span class="reward-icon">💎</span>
+                        <span>+10 Gems</span>
+                    </span>
+                </div>
+                <button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">
+                    Awesome!
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// ==================== MATCHING DRAG & DROP ====================
+
+let draggedMatchIndex = null;
+let draggedFromLeft = null;
+
+export function matchDragStart(e, origIndex, fromLeftIndex = null) {
+    draggedMatchIndex = origIndex;
+    draggedFromLeft = fromLeftIndex;
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-}
-
-export function matchDragEnd(e) {
-    e.target.classList.remove('dragging');
-    draggedItem = null;
-    document.querySelectorAll('.match-item').forEach(el => el.classList.remove('drag-over'));
 }
 
 export function matchDragOver(e) {
@@ -344,298 +547,277 @@ export function matchDragLeave(e) {
     e.currentTarget.classList.remove('drag-over');
 }
 
-export function matchDrop(e, termIdx) {
+export function matchDrop(e, leftIndex) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
     
-    if (draggedItem === null) return;
+    if (draggedMatchIndex === null) return;
     
     const state = getState();
-    const newAns = [...state.answers];
-    const matches = { ...(newAns[state.currentQuestionIndex] || {}) };
+    const currentAnswers = state.answers[state.currentQuestionIndex] || {};
+    const newAnswers = { ...currentAnswers };
     
-    // Remove if this definition was matched elsewhere
-    Object.keys(matches).forEach(key => {
-        if (matches[key] === draggedItem) delete matches[key];
-    });
-    
-    matches[termIdx] = draggedItem;
-    newAns[state.currentQuestionIndex] = matches;
-    setState({ answers: newAns });
-    saveQuizProgress();
-    
-    // Auto-check in study mode when all matched
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    if (state.studyMode && Object.keys(matches).length === q.pairs.length) {
-        setTimeout(() => checkAnswer(), 300);
+    // If dragged from another left slot, remove from there
+    if (draggedFromLeft !== null && draggedFromLeft !== leftIndex) {
+        delete newAnswers[draggedFromLeft];
     }
-}
-
-export function removeMatch(termIdx) {
-    const state = getState();
-    const newAns = [...state.answers];
-    const matches = { ...(newAns[state.currentQuestionIndex] || {}) };
-    delete matches[termIdx];
-    newAns[state.currentQuestionIndex] = matches;
-    setState({ answers: newAns });
+    
+    // If this left slot already has a match, swap or clear
+    if (newAnswers[leftIndex] !== undefined && draggedFromLeft !== null) {
+        newAnswers[draggedFromLeft] = newAnswers[leftIndex];
+    }
+    
+    newAnswers[leftIndex] = draggedMatchIndex;
+    
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = newAnswers;
+    setState({ answers });
+    
+    draggedMatchIndex = null;
+    draggedFromLeft = null;
+    
+    // Auto-check in study mode when all pairs matched
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    if (state.studyMode && Object.keys(newAnswers).length === q.pairs.length) {
+        setTimeout(() => {
+            checkAnswer(newAnswers, q);
+        }, 300);
+    }
+    
     saveQuizProgress();
 }
 
-// Ordering drag handlers
-let orderDraggedPos = null;
+export function removeMatch(leftIndex) {
+    const state = getState();
+    const currentAnswers = { ...(state.answers[state.currentQuestionIndex] || {}) };
+    delete currentAnswers[leftIndex];
+    
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = currentAnswers;
+    setState({ answers });
+    saveQuizProgress();
+}
 
-export function orderDragStart(e, pos) {
-    orderDraggedPos = pos;
+export function matchDragEnd(e) {
+    e.target.classList.remove('dragging');
+    draggedMatchIndex = null;
+    draggedFromLeft = null;
+}
+
+// ==================== ORDERING DRAG & DROP ====================
+
+let draggedOrderIndex = null;
+
+export function orderDragStart(e, index) {
+    draggedOrderIndex = index;
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
 }
 
 export function orderDragOver(e) {
     e.preventDefault();
-    e.currentTarget.classList.add('drag-over');
+    if (draggedOrderIndex !== null) {
+        e.currentTarget.classList.add('drag-over');
+    }
 }
 
 export function orderDragLeave(e) {
     e.currentTarget.classList.remove('drag-over');
 }
 
-export function orderDrop(e, targetPos) {
+export function orderDrop(e, targetIndex) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
     
-    if (orderDraggedPos === null || orderDraggedPos === targetPos) return;
+    if (draggedOrderIndex === null || draggedOrderIndex === targetIndex) return;
     
     const state = getState();
-    const newAns = [...state.answers];
-    const order = [...newAns[state.currentQuestionIndex]];
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const currentOrder = state.answers[state.currentQuestionIndex] || 
+        q.items.map((text, i) => ({ text, origIndex: i }));
     
-    const [item] = order.splice(orderDraggedPos, 1);
-    order.splice(targetPos, 0, item);
+    const newOrder = [...currentOrder];
+    const [removed] = newOrder.splice(draggedOrderIndex, 1);
+    newOrder.splice(targetIndex, 0, removed);
     
-    newAns[state.currentQuestionIndex] = order;
-    setState({ answers: newAns });
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = newOrder;
+    setState({ answers });
+    
+    draggedOrderIndex = null;
     saveQuizProgress();
 }
 
 export function orderDragEnd(e) {
     e.target.classList.remove('dragging');
-    orderDraggedPos = null;
-    document.querySelectorAll('.ordering-item').forEach(el => el.classList.remove('drag-over'));
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    draggedOrderIndex = null;
 }
 
-// Legacy drag handlers (for compatibility)
-export function dragStart(e, i) { orderDragStart(e, i); }
-export function dragOver(e) { orderDragOver(e); }
-export function dragLeave(e) { orderDragLeave(e); }
-export function drop(e, i) { orderDrop(e, i); }
-export function dragEnd(e) { orderDragEnd(e); }
+// ==================== NAVIGATION ====================
 
-export function checkAnswer() {
+export function nextQuestion() {
     const state = getState();
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    const ans = state.answers[state.currentQuestionIndex];
-    
-    let correct = false;
-    
-    if (q.type === 'ordering') {
-        correct = JSON.stringify(ans) === JSON.stringify(q.correct);
-    } else if (q.type === 'matching') {
-        const matches = ans || {};
-        correct = q.pairs.every((_, i) => matches[i] === i);
-    } else if (q.type === 'truefalse') {
-        correct = ans && ans[0] === q.correct[0];
+    if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
+        setState({ 
+            currentQuestionIndex: state.currentQuestionIndex + 1,
+            showAnswer: false
+        });
+        saveQuizProgress();
+    }
+}
+
+export function prevQuestion() {
+    const state = getState();
+    if (state.currentQuestionIndex > 0) {
+        setState({ 
+            currentQuestionIndex: state.currentQuestionIndex - 1,
+            showAnswer: false
+        });
+        saveQuizProgress();
+    }
+}
+
+export function goToQuestion(index) {
+    const state = getState();
+    if (index >= 0 && index < state.currentQuiz.questions.length) {
+        setState({ 
+            currentQuestionIndex: index,
+            showAnswer: false
+        });
+        saveQuizProgress();
+    }
+}
+
+export function toggleFlag() {
+    const state = getState();
+    const flagged = new Set(state.flaggedQuestions);
+    if (flagged.has(state.currentQuestionIndex)) {
+        flagged.delete(state.currentQuestionIndex);
     } else {
-        const ansArr = ans || [];
-        correct = new Set(ansArr).size === new Set(q.correct).size && ansArr.every(a => q.correct.includes(a));
+        flagged.add(state.currentQuestionIndex);
     }
-    
-    setState({ 
-        showAnswer: true, 
-        streak: correct ? state.streak + 1 : 0, 
-        maxStreak: Math.max(state.maxStreak, correct ? state.streak + 1 : state.maxStreak) 
-    });
+    setState({ flaggedQuestions: flagged });
     saveQuizProgress();
-    showToast(correct ? 'Correct! 🎉' : 'Incorrect', correct ? 'success' : 'error');
 }
 
-export function nextQ() { 
-    const s = getState(); 
-    if (s.currentQuestionIndex < s.currentQuiz.questions.length - 1) { 
-        setState({ currentQuestionIndex: s.currentQuestionIndex + 1, showAnswer: false }); 
-        saveQuizProgress(); 
-    } 
+// ==================== TIMER ====================
+
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    
+    timerInterval = setInterval(() => {
+        const state = getState();
+        if (state.timeRemaining <= 0) {
+            clearInterval(timerInterval);
+            submitQuiz();
+            return;
+        }
+        
+        // Warning sounds
+        if (state.timeRemaining === 60) {
+            sounds.playTimerWarning();
+        } else if (state.timeRemaining <= 10) {
+            sounds.playTimerUrgent();
+        }
+        
+        setState({ timeRemaining: state.timeRemaining - 1 });
+    }, 1000);
 }
 
-export function prevQ() { 
-    const s = getState(); 
-    if (s.currentQuestionIndex > 0) {
-        setState({ currentQuestionIndex: s.currentQuestionIndex - 1, showAnswer: false }); 
+export function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
     }
 }
 
-export function goToQ(i) { setState({ currentQuestionIndex: i, showAnswer: false }); }
-
-export function toggleFlag() { 
-    const s = getState();
-    const f = new Set(s.flaggedQuestions); 
-    f.has(s.currentQuestionIndex) ? f.delete(s.currentQuestionIndex) : f.add(s.currentQuestionIndex); 
-    setState({ flaggedQuestions: f }); 
-    saveQuizProgress(); 
-}
-
-export function exitQuiz() { 
-    stopTimer(); 
-    saveQuizProgress(); 
-    setState({ view: 'library', currentQuiz: null, matchingShuffled: {} }); 
-    showToast('Progress saved', 'info'); 
-}
+// ==================== SUBMIT ====================
 
 export async function submitQuiz() {
     stopTimer();
     const state = getState();
-    const score = calcScore();
-    const total = state.currentQuiz.questions.length;
-    const pct = Math.round((score / total) * 100);
+    const quiz = state.currentQuiz;
     
-    await saveAttempt(state.currentQuiz.id, { 
-        score, total, percentage: pct, answers: state.answers, 
-        study_mode: state.studyMode, timed: state.timerEnabled, max_streak: state.maxStreak 
+    // Calculate score
+    let correct = 0;
+    quiz.questions.forEach((q, i) => {
+        if (checkIfCorrect(state.answers[i], q)) {
+            correct++;
+        }
     });
     
-    clearQuizProgress(state.currentQuiz.id); 
-    setState({ view: 'results', matchingShuffled: {} });
-    if (pct === 100) setTimeout(showConfetti, 100);
-}
-
-function calcScore() {
-    const s = getState();
-    let score = 0;
-    s.currentQuiz.questions.forEach((q, i) => {
-        const a = s.answers[i];
-        if (!a) return;
-        if (q.type === 'ordering') { if (JSON.stringify(a) === JSON.stringify(q.correct)) score++; }
-        else if (q.type === 'matching') { if (q.pairs.every((_, j) => a[j] === j)) score++; }
-        else if (q.type === 'truefalse') { if (a[0] === q.correct[0]) score++; }
-        else if (new Set(a).size === new Set(q.correct).size && a.every(x => q.correct.includes(x))) score++;
+    const total = quiz.questions.length;
+    const percentage = Math.round((correct / total) * 100);
+    const isPerfect = correct === total;
+    
+    // Record completion
+    const result = recordQuizComplete(correct, total);
+    
+    // Celebrations
+    if (isPerfect) {
+        sounds.playPerfectScore();
+        setTimeout(() => animations.showFireworks(), 300);
+    } else if (percentage >= 75) {
+        animations.showConfetti(true);
+    } else if (percentage >= 50) {
+        animations.showConfetti(false);
+    }
+    
+    // Save attempt
+    try {
+        await saveAttempt(quiz.id, {
+            score: correct,
+            total,
+            answers: state.answers,
+            timeSpent: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) : null
+        });
+    } catch (e) {
+        console.error('Failed to save attempt:', e);
+    }
+    
+    clearQuizProgress(quiz.id);
+    
+    setState({
+        view: 'results',
+        quizResults: { correct, total, percentage, isPerfect, answers: state.answers }
     });
-    return score;
+    
+    // Show pending rewards
+    setTimeout(() => showPendingRewards(), 1000);
 }
 
-function startTimer() { 
-    stopTimer(); 
-    timerInterval = setInterval(() => { 
-        const s = getState(); 
-        if (s.timeRemaining <= 1) { 
-            stopTimer(); 
-            submitQuiz(); 
-            showToast("Time's up!", 'warning'); 
-        } else { 
-            setState({ timeRemaining: s.timeRemaining - 1 }); 
-            const el = document.getElementById('timer'); 
-            if (el) { 
-                el.textContent = formatTime(s.timeRemaining - 1); 
-                if (s.timeRemaining <= 61) el.classList.add('urgent'); 
-            } 
-        } 
-    }, 1000); 
-}
-
-function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
-
-// ==================== QUIZ OPTIONS MODAL ====================
-export function showQuizOptions(quizId) {
+export function exitQuiz() {
     const state = getState();
-    const quiz = state.quizzes.find(q => q.id === quizId);
-    if (!quiz) return;
-    
-    const progress = loadQuizProgress(quizId);
-    const m = document.createElement('div');
-    m.className = 'modal-overlay';
-    m.id = 'quiz-opts';
-    m.onclick = e => { if (e.target === m) m.remove(); };
-    
-    m.innerHTML = `<div class="modal">
-        <div class="modal-header">
-            <h2>Start Quiz</h2>
-            <button class="btn btn-icon btn-ghost" onclick="document.getElementById('quiz-opts').remove()">✕</button>
-        </div>
-        <div class="modal-body">
-            <h3 style="margin-bottom:0.5rem">${escapeHtml(quiz.title)}</h3>
-            <p class="text-muted mb-4">${quiz.questions?.length || 0} questions</p>
-            
-            ${progress ? `<div class="card mb-4" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.5)">
-                <p class="font-medium" style="color:var(--warning-light)">⏸ Progress saved</p>
-                <p class="text-sm text-muted">Question ${progress.questionIndex + 1} of ${quiz.questions?.length}</p>
-            </div>` : ''}
-            
-            <div class="form-group">
-                <label class="flex items-center gap-3" style="cursor:pointer">
-                    <input type="checkbox" id="opt-study" style="width:20px;height:20px;accent-color:var(--primary)">
-                    <div>
-                        <div class="font-medium">📖 Study Mode</div>
-                        <div class="text-sm text-muted">See answers after each question</div>
-                    </div>
-                </label>
-            </div>
-            
-            <div class="form-group">
-                <label class="flex items-center gap-3" style="cursor:pointer">
-                    <input type="checkbox" id="opt-shuffle" style="width:20px;height:20px;accent-color:var(--primary)">
-                    <div>
-                        <div class="font-medium">🔀 Shuffle Questions</div>
-                        <div class="text-sm text-muted">Randomize question order</div>
-                    </div>
-                </label>
-            </div>
-            
-            <div class="form-group">
-                <label class="flex items-center gap-3" style="cursor:pointer">
-                    <input type="checkbox" id="opt-timer" onchange="document.getElementById('timer-opts').style.display=this.checked?'flex':'none'" style="width:20px;height:20px;accent-color:var(--primary)">
-                    <div>
-                        <div class="font-medium">⏱️ Timer</div>
-                        <div class="text-sm text-muted">Set a time limit</div>
-                    </div>
-                </label>
-            </div>
-            
-            <div id="timer-opts" style="display:none;margin-left:2.5rem;align-items:center;gap:0.5rem">
-                <select id="opt-mins" class="input" style="width:auto">
-                    <option value="5">5 minutes</option>
-                    <option value="10">10 minutes</option>
-                    <option value="15" selected>15 minutes</option>
-                    <option value="20">20 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60">60 minutes</option>
-                </select>
-            </div>
-        </div>
-        <div class="modal-footer">
-            ${progress ? `<button class="btn btn-secondary flex-1" onclick="window.app.launchQuiz(${quizId}, true)">Start Fresh</button>` : ''}
-            <button class="btn btn-primary flex-1" onclick="window.app.launchQuiz(${quizId}, false)">${progress ? 'Resume' : 'Start Quiz'}</button>
-        </div>
-    </div>`;
-    
-    document.body.appendChild(m);
-}
-
-export function launchQuiz(id, fresh) {
-    const study = document.getElementById('opt-study')?.checked;
-    const shuffle = document.getElementById('opt-shuffle')?.checked;
-    const timer = document.getElementById('opt-timer')?.checked;
-    const mins = parseInt(document.getElementById('opt-mins')?.value || '15');
-    
-    document.getElementById('quiz-opts')?.remove();
-    startQuiz(id, { study, shuffle, timer, minutes: mins, fresh });
-}
-
-// Keep for compatibility
-export function selectMatchLeft() {}
-export function selectMatchRight() {}
-export function clearMatches() {
-    const state = getState();
-    const newAns = [...state.answers];
-    newAns[state.currentQuestionIndex] = {};
-    setState({ answers: newAns });
+    if (state.answers.some(a => a !== undefined)) {
+        if (!confirm('Your progress will be saved. Exit quiz?')) return;
+    }
+    stopTimer();
     saveQuizProgress();
+    setState({ view: 'library', currentQuiz: null });
 }
+
+// ==================== EXPORTS ====================
+
+export {
+    startQuiz,
+    selectOption,
+    selectTF,
+    nextQuestion as nextQ,
+    prevQuestion as prevQ,
+    goToQuestion as goToQ,
+    toggleFlag,
+    submitQuiz,
+    exitQuiz,
+    matchDragStart,
+    matchDragOver,
+    matchDragLeave,
+    matchDrop,
+    matchDragEnd,
+    removeMatch,
+    orderDragStart,
+    orderDragOver,
+    orderDragLeave,
+    orderDrop,
+    orderDragEnd
+};

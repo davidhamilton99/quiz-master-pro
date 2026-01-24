@@ -20,7 +20,10 @@ import {
     toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
     saveField, changeType, savePair, saveOption
 } from './components/create.js';
-
+import * as sounds from './utils/sounds.js';
+import * as animations from './utils/animations.js';
+import { renderPlayerHUD } from './utils/playerHud.js';
+sounds.initAudio();
 // Render based on state
 function render() {
     const state = getState();

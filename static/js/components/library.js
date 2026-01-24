@@ -3,7 +3,7 @@ import { getState, setState, getProgressList } from '../state.js';
 import { logout, deleteQuiz } from '../services/api.js';
 import { showExportModal, showImportModal } from '../services/export.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
-
+import { renderPlayerHUD } from '../utils/playerHud.js';
 export function renderLibrary() {
     const state = getState();
     const quizzes = getFilteredQuizzes();
@@ -24,6 +24,7 @@ export function renderLibrary() {
             </div>
         </div>
     </div></div></nav>
+    ${renderPlayerHUD()}
     <main class="container" style="padding-bottom:3rem">
         <div class="library-header"><div><h1>My Quizzes</h1><p class="text-muted text-sm">${state.quizzes.length} quizzes · ${total} questions</p></div></div>
         <div class="library-toolbar">

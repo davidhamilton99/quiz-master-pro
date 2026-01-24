@@ -834,3 +834,682 @@ h3 { font-size: 1.25rem; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
 ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+/* ============================================
+   SPECTACULAR STYLES
+   XP, Levels, Achievements, Animations
+   ============================================ */
+
+/* ==================== PLAYER HUD ==================== */
+
+.player-hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+}
+
+.hud-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.level-badge {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--tier-color), color-mix(in srgb, var(--tier-color) 70%, black));
+    border-radius: 50%;
+    box-shadow: 0 0 20px color-mix(in srgb, var(--tier-color) 50%, transparent);
+    position: relative;
+}
+
+.level-badge::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--tier-color), transparent);
+    z-index: -1;
+    opacity: 0.5;
+}
+
+.level-number {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.xp-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 120px;
+}
+
+.level-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.xp-bar-container {
+    position: relative;
+    height: 18px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.xp-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    border-radius: var(--radius-full);
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.xp-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: xpShimmer 2s infinite;
+}
+
+@keyframes xpShimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.xp-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.hud-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.streak-display {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2));
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-full);
+}
+
+.streak-fire {
+    font-size: 1rem;
+    animation: fireFlicker 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes fireFlicker {
+    0% { transform: scale(1) rotate(-5deg); }
+    100% { transform: scale(1.1) rotate(5deg); }
+}
+
+.streak-count {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--warning-light);
+}
+
+.gems-display {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    border-radius: var(--radius-full);
+}
+
+.gem-icon {
+    font-size: 0.875rem;
+}
+
+.gem-count {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--accent-light);
+}
+
+/* ==================== QUIZ STREAK INDICATOR ==================== */
+
+.streak-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.15));
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.5rem;
+    animation: streakPulse 1s ease-in-out infinite;
+}
+
+@keyframes streakPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+    50% { transform: scale(1.02); box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); }
+}
+
+.streak-indicator.on-fire {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(245, 158, 11, 0.2));
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.streak-indicator.unstoppable {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(239, 68, 68, 0.2));
+    border-color: rgba(139, 92, 246, 0.5);
+    animation: unstoppablePulse 0.8s ease-in-out infinite;
+}
+
+@keyframes unstoppablePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+    50% { transform: scale(1.03); box-shadow: 0 0 30px rgba(139, 92, 246, 0.5); }
+}
+
+.streak-indicator.legendary {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.25));
+    border-color: rgba(251, 191, 36, 0.6);
+    animation: legendaryPulse 0.6s ease-in-out infinite;
+}
+
+@keyframes legendaryPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(251, 191, 36, 0.4); }
+    50% { transform: scale(1.04); box-shadow: 0 0 50px rgba(251, 191, 36, 0.6); }
+}
+
+.streak-flames {
+    font-size: 1.25rem;
+    animation: fireFlicker 0.3s ease-in-out infinite alternate;
+}
+
+.streak-message {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--warning-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.streak-indicator.unstoppable .streak-message { color: var(--primary-light); }
+.streak-indicator.legendary .streak-message { color: #fbbf24; }
+
+.streak-number {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+/* ==================== XP NOTIFICATION ==================== */
+
+.xp-notification {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(6, 182, 212, 0.9));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    animation: xpNotifyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 1000;
+}
+
+@keyframes xpNotifyIn {
+    0% { opacity: 0; transform: translateX(100px) scale(0.5); }
+    100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.xp-amount {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: white;
+}
+
+.xp-reason {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* ==================== LEVEL UP MODAL ==================== */
+
+.level-up-modal {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.level-up-content {
+    text-align: center;
+    padding: 3rem 2rem;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    max-width: 400px;
+}
+
+.level-up-glow {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, var(--tier-color) 0%, transparent 70%);
+    opacity: 0.2;
+    animation: levelUpGlow 3s ease-in-out infinite;
+}
+
+@keyframes levelUpGlow {
+    0%, 100% { transform: scale(1); opacity: 0.2; }
+    50% { transform: scale(1.2); opacity: 0.3; }
+}
+
+.level-up-badge {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--tier-color), color-mix(in srgb, var(--tier-color) 60%, black));
+    border-radius: 50%;
+    box-shadow: 
+        0 0 40px var(--tier-color),
+        0 0 80px color-mix(in srgb, var(--tier-color) 50%, transparent);
+    animation: levelUpBadge 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes levelUpBadge {
+    0% { transform: scale(0) rotate(-180deg); }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+.level-up-number {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: white;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.level-up-title {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    animation: levelUpText 0.5s ease-out 0.3s backwards;
+}
+
+.level-up-subtitle {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+    animation: levelUpText 0.5s ease-out 0.4s backwards;
+}
+
+.level-up-rank {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    animation: levelUpText 0.5s ease-out 0.5s backwards;
+}
+
+@keyframes levelUpText {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.level-up-rewards {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.reward-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+}
+
+.reward-icon {
+    font-size: 1.125rem;
+}
+
+.reward-text {
+    font-weight: 600;
+}
+
+/* ==================== ACHIEVEMENT MODAL ==================== */
+
+.achievement-modal {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.achievement-content {
+    text-align: center;
+    padding: 3rem 2rem;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    max-width: 360px;
+}
+
+.achievement-glow {
+    position: absolute;
+    top: -30%;
+    left: -30%;
+    width: 160%;
+    height: 160%;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.3) 0%, transparent 60%);
+    animation: achievementGlow 2s ease-in-out infinite;
+}
+
+@keyframes achievementGlow {
+    0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.3; }
+    50% { transform: scale(1.1) rotate(180deg); opacity: 0.5; }
+}
+
+.achievement-icon-large {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    animation: achievementIcon 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes achievementIcon {
+    0% { transform: scale(0) rotate(-20deg); }
+    60% { transform: scale(1.2) rotate(10deg); }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+.achievement-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fbbf24;
+    margin-bottom: 0.5rem;
+}
+
+.achievement-desc {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.25rem;
+}
+
+.achievement-rewards {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+}
+
+/* ==================== STATS CARD ==================== */
+
+.stats-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+}
+
+.stats-card h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ==================== ANSWER ANIMATIONS ==================== */
+
+.option.correct {
+    animation: correctAnswer 0.5s ease-out;
+}
+
+@keyframes correctAnswer {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.03); }
+    100% { transform: scale(1); }
+}
+
+.option.incorrect {
+    animation: incorrectAnswer 0.5s ease-out;
+}
+
+@keyframes incorrectAnswer {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+}
+
+/* Checkmark animation */
+.answer-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-left: auto;
+}
+
+.answer-check svg {
+    stroke-dasharray: 50;
+    stroke-dashoffset: 50;
+    animation: drawCheck 0.5s ease-out forwards;
+}
+
+@keyframes drawCheck {
+    to { stroke-dashoffset: 0; }
+}
+
+.answer-x svg {
+    stroke-dasharray: 50;
+    stroke-dashoffset: 50;
+    animation: drawX 0.5s ease-out forwards;
+}
+
+@keyframes drawX {
+    to { stroke-dashoffset: 0; }
+}
+
+/* ==================== FLOATING XP ==================== */
+
+.xp-floater {
+    position: fixed;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fbbf24;
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+    pointer-events: none;
+    z-index: 10000;
+    animation: xpFloat 1.5s ease-out forwards;
+}
+
+@keyframes xpFloat {
+    0% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    50% { opacity: 1; transform: translateX(-50%) translateY(-40px) scale(1.1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-80px) scale(0.8); }
+}
+
+/* ==================== TIER COLORS ==================== */
+
+.tier-bronze { --tier-color: #cd7f32; }
+.tier-silver { --tier-color: #c0c0c0; }
+.tier-gold { --tier-color: #ffd700; }
+.tier-platinum { --tier-color: #e5e4e2; }
+.tier-diamond { --tier-color: #b9f2ff; }
+.tier-legendary { --tier-color: #ff6b6b; }
+
+/* ==================== HEAT MAP CALENDAR ==================== */
+
+.heat-map {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+}
+
+.heat-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: var(--bg-tertiary);
+}
+
+.heat-cell.level-1 { background: rgba(139, 92, 246, 0.2); }
+.heat-cell.level-2 { background: rgba(139, 92, 246, 0.4); }
+.heat-cell.level-3 { background: rgba(139, 92, 246, 0.6); }
+.heat-cell.level-4 { background: rgba(139, 92, 246, 0.8); }
+.heat-cell.level-5 { background: var(--primary); }
+
+/* ==================== ACHIEVEMENTS PAGE ==================== */
+
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.achievement-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.25rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    transition: all var(--transition-base);
+}
+
+.achievement-card:not(.unlocked) {
+    opacity: 0.5;
+    filter: grayscale(1);
+}
+
+.achievement-card.unlocked {
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.achievement-card.unlocked:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0 30px rgba(251, 191, 36, 0.2);
+}
+
+.achievement-card .icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+}
+
+.achievement-card .name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.achievement-card .desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.achievement-card.secret:not(.unlocked) .icon::after {
+    content: '?';
+    font-size: 2rem;
+}
+
+.achievement-card.secret:not(.unlocked) .name {
+    color: var(--text-muted);
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 640px) {
+    .player-hud {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .hud-left {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .xp-info {
+        min-width: 0;
+        flex: 1;
+    }
+    
+    .level-badge {
+        width: 38px;
+        height: 38px;
+    }
+    
+    .level-number {
+        font-size: 1rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
