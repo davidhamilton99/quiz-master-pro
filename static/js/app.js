@@ -6,12 +6,10 @@ import { showToast } from './utils/toast.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import { 
-    renderQuiz, startQuiz, selectOpt, checkAnswer, nextQ, prevQ, goToQ, 
-    toggleFlag, exitQuiz, submitQuiz, showQuizOptions, launchQuiz,
-    dragStart, dragOver, dragLeave, drop, dragEnd,
+    renderQuiz, startQuiz, selectOption, selectTF, nextQuestion, prevQuestion, goToQuestion, 
+    toggleFlag, exitQuiz, submitQuiz,
     matchDragStart, matchDragEnd, matchDragOver, matchDragLeave, matchDrop, removeMatch,
-    orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd,
-    selectMatchLeft, selectMatchRight, clearMatches
+    orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz } from './components/results.js';
 import { 
@@ -23,7 +21,9 @@ import {
 import * as sounds from './utils/sounds.js';
 import * as animations from './utils/animations.js';
 import { renderPlayerHUD } from './utils/playerHud.js';
+
 sounds.initAudio();
+
 // Render based on state
 function render() {
     const state = getState();
@@ -50,6 +50,39 @@ function navigate(view) {
         ? { view: 'library', currentQuiz: null, visualEditorMode: false } 
         : { view }
     ); 
+}
+
+// Quiz options modal
+function showQuizOptions(quizId) {
+    const quiz = getState().quizzes.find(q => q.id === quizId);
+    if (!quiz) return;
+    
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="this.remove()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <h2>${quiz.title}</h2>
+                <p class="text-muted">${quiz.questions?.length || 0} questions</p>
+                <div class="flex flex-col gap-2 mt-4">
+                    <button class="btn btn-primary" onclick="window.app.launchQuiz(${quizId}, false, false); this.closest('.modal-overlay').remove()">
+                        ▶️ Normal Mode
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.app.launchQuiz(${quizId}, true, false); this.closest('.modal-overlay').remove()">
+                        📚 Study Mode
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.app.launchQuiz(${quizId}, false, true); this.closest('.modal-overlay').remove()">
+                        ⏱️ Timed Mode (15 min)
+                    </button>
+                </div>
+                <button class="btn btn-ghost mt-3" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal.firstElementChild);
+}
+
+function launchQuiz(quizId, studyMode, timed) {
+    startQuiz(quizId, { studyMode, timed, minutes: 15 });
 }
 
 // Export helpers
@@ -100,16 +133,18 @@ window.app = {
     showExportModal: showExportById, showImportModal, exportAs, handleImport,
     
     // Quiz
-    showQuizOptions, launchQuiz, selectOpt, checkAnswer, 
-    nextQ, prevQ, goToQ, toggleFlag, exitQuiz, submitQuiz,
+    showQuizOptions, launchQuiz, 
+    selectOption, selectTF,
+    nextQ: nextQuestion, 
+    prevQ: prevQuestion, 
+    goToQ: goToQuestion, 
+    toggleFlag, exitQuiz, submitQuiz,
     
     // Drag & drop (ordering)
-    dragStart, dragOver, dragLeave, drop, dragEnd,
     orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd,
     
     // Drag & drop (matching)
     matchDragStart, matchDragEnd, matchDragOver, matchDragLeave, matchDrop, removeMatch,
-    selectMatchLeft, selectMatchRight, clearMatches,
     
     // Results
     retryQuiz,
@@ -133,12 +168,12 @@ document.addEventListener('keydown', e => {
             case 'ArrowRight':
             case 'n':
                 e.preventDefault();
-                nextQ();
+                nextQuestion();
                 break;
             case 'ArrowLeft':
             case 'p':
                 e.preventDefault();
-                prevQ();
+                prevQuestion();
                 break;
             case 'f':
                 e.preventDefault();
@@ -146,17 +181,17 @@ document.addEventListener('keydown', e => {
                 break;
             case '1': case '2': case '3': case '4': case '5':
                 e.preventDefault();
-                selectOpt(parseInt(e.key) - 1);
+                selectOption(parseInt(e.key) - 1);
                 break;
             case 't':
             case 'T':
                 e.preventDefault();
-                selectOpt(0); // True
+                selectTF(true);
                 break;
             case 'y':
             case 'Y':
                 e.preventDefault();
-                selectOpt(1); // False
+                selectTF(false);
                 break;
         }
     }
