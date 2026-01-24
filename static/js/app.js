@@ -2856,31 +2856,7 @@ function showSaveIndicator(status = 'saving') {
 }
 
 // ========== 3. IMPROVED TOAST (Dismissible) ==========
-function showToast(msg, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    const id = 'toast-' + Date.now();
-    toast.id = id;
-    toast.className = `toast ${type}`;
-    
-    const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠',
-        info: 'ℹ'
-    };
-    
-    toast.innerHTML = `
-        <span class="toast-icon">${icons[type] || icons.info}</span>
-        <span style="flex: 1">${msg}</span>
-        <button class="toast-close" onclick="dismissToast('${id}')">×</button>
-    `;
-    
-    container.appendChild(toast);
-    
-    // Auto-dismiss after 4 seconds
-    setTimeout(() => dismissToast(id), 4000);
-}
+// showToast is already defined at line 34, using dismissToast for enhanced functionality
 
 function dismissToast(id) {
     const toast = document.getElementById(id);
