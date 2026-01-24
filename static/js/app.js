@@ -1,4 +1,4 @@
-/* Quiz Master Pro - Main Entry Point - FIXED with PlayerHUD */
+/* Quiz Master Pro - Main Entry Point - FIXED with checkMultipleChoiceAnswer */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings } from './state.js';
 import { loadQuizzes, logout } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
@@ -6,7 +6,7 @@ import { showToast } from './utils/toast.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import {
-    renderQuiz, startQuiz, selectOption, selectTF, nextQuestion, prevQuestion,
+    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, nextQuestion, prevQuestion,
     goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
     matchDragStart, matchDragEnd, matchDragOver, matchDragLeave, matchDrop, removeMatch,
     orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd
@@ -268,6 +268,7 @@ window.app = {
     startQuiz,
     selectOption,
     selectTF,
+    checkMultipleChoiceAnswer,  // <<<< ADDED THIS LINE
     nextQuestion,
     prevQuestion,
     goToQuestion,
