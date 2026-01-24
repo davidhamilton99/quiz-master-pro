@@ -6364,3 +6364,15 @@ if (loadAuth()) {
 } else { 
     render(); 
 }
+// ========== EXPORTS ==========
+// Export functions needed by other modules
+window.login = login;
+window.register = register;
+window.logout = logout;
+window.apiCall = apiCall;
+window.loadQuizzes = loadQuizzes;
+window.getQuiz = async (id) => await apiCall(`/quizzes/${id}`);
+window.createQuiz = async (payload) => await apiCall('/quizzes', { method: 'POST', body: JSON.stringify(payload) });
+window.updateQuiz = async (id, payload) => await apiCall(`/quizzes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+window.deleteQuiz = deleteQuiz;
+window.saveAttempt = async (quizId, data) => await apiCall(`/quizzes/${quizId}/attempts`, { method: 'POST', body: JSON.stringify(data) });
