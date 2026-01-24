@@ -2343,3 +2343,387 @@ h3 { font-size: 1.25rem; }
         grid-template-columns: repeat(2, 1fr);
     }
 }
+/* ============================================
+   STUDY MODE FEEDBACK STYLES
+   ============================================ */
+
+/* Study Feedback Box */
+.study-feedback {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    border-radius: var(--radius-lg);
+    animation: feedbackSlideIn 0.3s ease-out;
+}
+
+@keyframes feedbackSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.study-feedback.correct {
+    background: rgba(16, 185, 129, 0.15);
+    border: 2px solid var(--success);
+}
+
+.study-feedback.incorrect {
+    background: rgba(239, 68, 68, 0.15);
+    border: 2px solid var(--error);
+}
+
+.feedback-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.feedback-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.study-feedback.correct .feedback-icon {
+    background: var(--success);
+    color: white;
+}
+
+.study-feedback.incorrect .feedback-icon {
+    background: var(--error);
+    color: white;
+}
+
+.feedback-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.study-feedback.correct .feedback-text {
+    color: var(--success-light);
+}
+
+.study-feedback.incorrect .feedback-text {
+    color: var(--error-light);
+}
+
+/* Correct Answer Reveal */
+.correct-answer-reveal {
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+}
+
+.correct-answer-reveal strong {
+    color: var(--text-primary);
+}
+
+.correct-list {
+    margin: 0.5rem 0 0 1.25rem;
+    padding: 0;
+}
+
+.correct-list li {
+    margin: 0.25rem 0;
+    color: var(--text-secondary);
+}
+
+/* Explanation in feedback */
+.study-feedback .explanation {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border-left: 4px solid var(--primary);
+    margin-top: 0;
+}
+
+/* ============================================
+   FIX OPTION SELECTION - NO FLICKER
+   ============================================ */
+
+/* Base option state */
+.option {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+    margin-bottom: 0.625rem;
+}
+
+/* Hover - only when not selected and not revealed */
+.option:not(.selected):not(.revealed):hover {
+    border-color: var(--border-light);
+    background: var(--bg-hover);
+    transform: translateX(4px);
+}
+
+/* Selected state - PERSISTENT purple */
+.option.selected {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.15);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+/* Selected + hover - keep the same, no change */
+.option.selected:hover {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.15);
+    transform: none;
+}
+
+/* Revealed correct */
+.option.revealed.correct {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.15);
+    cursor: default;
+}
+
+/* Revealed incorrect (your wrong selection) */
+.option.revealed.incorrect {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.15);
+    cursor: default;
+}
+
+/* Revealed but not selected and not correct - dim it */
+.option.revealed:not(.selected):not(.correct) {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* No hover effects when revealed */
+.option.revealed:hover {
+    transform: none;
+}
+
+/* Locked state (can't click) */
+.options-list.locked .option {
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Option letter states */
+.option-letter {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.option.selected .option-letter {
+    background: var(--primary);
+    color: white;
+}
+
+.option.revealed.correct .option-letter {
+    background: var(--success);
+    color: white;
+}
+
+.option.revealed.incorrect .option-letter {
+    background: var(--error);
+    color: white;
+}
+
+/* Answer icons */
+.answer-icon {
+    margin-left: auto;
+    font-size: 1.25rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.answer-icon:not(.wrong) {
+    color: var(--success);
+}
+
+.answer-icon.wrong {
+    color: var(--error);
+}
+
+/* ============================================
+   TRUE/FALSE SELECTION - NO FLICKER
+   ============================================ */
+
+.tf-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.tf-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.5rem;
+    min-height: 120px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Hover - only when not selected and not revealed */
+.tf-option:not(.selected):not(.revealed):hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-light);
+}
+
+/* Selected - PERSISTENT */
+.tf-option.selected {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.15);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+/* Selected + hover - no change */
+.tf-option.selected:hover {
+    transform: none;
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.15);
+}
+
+/* Revealed correct */
+.tf-option.revealed.correct {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.15);
+    cursor: default;
+}
+
+/* Revealed incorrect */
+.tf-option.revealed.incorrect {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.15);
+    cursor: default;
+}
+
+/* Revealed not selected not correct - dim */
+.tf-option.revealed:not(.selected):not(.correct) {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* No hover when revealed */
+.tf-option.revealed:hover {
+    transform: none;
+}
+
+/* Locked */
+.tf-options.locked .tf-option {
+    cursor: default;
+    pointer-events: none;
+}
+
+.tf-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.tf-option:first-child .tf-icon {
+    color: var(--success);
+}
+
+.tf-option:last-child .tf-icon {
+    color: var(--error);
+}
+
+.tf-label {
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+/* TF Answer icon */
+.tf-option .answer-icon {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+}
+
+.tf-option {
+    position: relative;
+}
+
+/* ============================================
+   MATCHING & ORDERING LOCKED STATES
+   ============================================ */
+
+.matching-container.locked,
+.ordering-container.locked {
+    pointer-events: none;
+}
+
+.matching-container.locked .match-item.correct {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.matching-container.locked .match-item.incorrect {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.ordering-container.locked .ordering-item.correct {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.ordering-container.locked .ordering-item.incorrect {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================
+   MOBILE RESPONSIVE
+   ============================================ */
+
+@media (max-width: 480px) {
+    .tf-options {
+        grid-template-columns: 1fr;
+    }
+    
+    .tf-option {
+        padding: 1.5rem;
+        min-height: 80px;
+        flex-direction: row;
+        gap: 1rem;
+    }
+    
+    .tf-icon {
+        font-size: 1.75rem;
+        margin-bottom: 0;
+    }
+    
+    .study-feedback {
+        padding: 1rem;
+    }
+    
+    .feedback-header {
+        flex-wrap: wrap;
+    }
+}
