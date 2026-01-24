@@ -1,4 +1,4 @@
-/* Quiz Component - SPECTACULAR Edition - STUDY MODE FIXED */
+/* Quiz Component - SPECTACULAR Edition - STUDY MODE FIXED WITH MULTI-SELECT */
 import { 
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
@@ -224,6 +224,7 @@ function renderMultipleChoice(q, ans, showAnswer) {
     const isMulti = Array.isArray(q.correct);
     const state = getState();
     const isLocked = state.studyMode && state.showAnswer;
+    const hasSelection = ans && (isMulti ? ans.length > 0 : ans !== undefined);
     
     return `<div class="options-list ${isLocked ? 'locked' : ''}" id="options-container">
         ${q.options.map((opt, i) => {
@@ -247,7 +248,16 @@ function renderMultipleChoice(q, ans, showAnswer) {
             </div>`;
         }).join('')}
     </div>
-    ${isMulti && !showAnswer ? '<p class="helper-text mt-2">Select all that apply</p>' : ''}`;
+    ${isMulti && !showAnswer ? `
+        <p class="helper-text mt-2">Select all that apply</p>
+        ${state.studyMode ? `
+            <button class="btn btn-primary mt-3" 
+                onclick="window.app.checkMultipleChoiceAnswer()"
+                ${!hasSelection ? 'disabled' : ''}>
+                Check Answer
+            </button>
+        ` : ''}
+    ` : ''}`;
 }
 
 function renderTrueFalse(q, ans, showAnswer) {
@@ -542,12 +552,30 @@ export function selectOption(index) {
     newAnswers[state.currentQuestionIndex] = newAnswer;
     setState({ answers: newAnswers });
     
-    // Study mode: check answer immediately for single choice
+    // Study mode: check answer immediately for single choice only
     if (state.studyMode && !isMulti) {
         handleStudyModeCheck(newAnswer, q);
     }
     
     saveQuizProgress();
+}
+
+export function checkMultipleChoiceAnswer() {
+    const state = getState();
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const answer = state.answers[state.currentQuestionIndex];
+    
+    if (!state.studyMode || state.showAnswer) return;
+    if (!Array.isArray(q.correct)) return; // Not a multi-select
+    
+    // Check if at least one option is selected
+    if (!answer || answer.length === 0) {
+        if (window.sounds) window.sounds.playWrong();
+        showToast('Please select at least one answer', 'warning');
+        return;
+    }
+    
+    handleStudyModeCheck(answer, q);
 }
 
 export function selectTF(value) {
