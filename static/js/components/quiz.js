@@ -797,26 +797,3 @@ export function exitQuiz() {
 }
 
 // ==================== EXPORTS ====================
-
-export {
-    startQuiz,
-    selectOption,
-    selectTF,
-    nextQuestion as nextQ,
-    prevQuestion as prevQ,
-    goToQuestion as goToQ,
-    toggleFlag,
-    submitQuiz,
-    exitQuiz,
-    matchDragStart,
-    matchDragOver,
-    matchDragLeave,
-    matchDrop,
-    matchDragEnd,
-    removeMatch,
-    orderDragStart,
-    orderDragOver,
-    orderDragLeave,
-    orderDrop,
-    orderDragEnd
-};
