@@ -1,5 +1,5 @@
 /* Library Component */
-import { getState, setState, getProgressList } from '../state.js';
+import { getState, setState, getAllInProgressQuizzes } from '../state.js';
 import { logout, deleteQuiz } from '../services/api.js';
 import { showExportModal, showImportModal } from '../services/export.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
@@ -9,7 +9,7 @@ export function renderLibrary() {
     const quizzes = getFilteredQuizzes();
     const categories = [...new Set(state.quizzes.filter(q => q.description).map(q => q.description))].sort();
     const total = state.quizzes.reduce((s, q) => s + (q.questions?.length || 0), 0);
-    const progressList = getProgressList();
+    const progressList = getAllInProgressQuizzes();
 
     return `<nav class="navbar"><div class="container"><div class="navbar-inner">
         <div class="navbar-brand"><div class="navbar-logo">Q</div><span class="hide-mobile">Quiz Master Pro</span></div>
