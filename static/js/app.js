@@ -3476,7 +3476,7 @@ function clearCreationState() {
 }
         function startTimer() { stopTimer(); state.timerInterval = setInterval(() => { state.timeRemaining--; updateTimerDisplay(); if (state.timeRemaining <= 0) { state.timeExpired = true; stopTimer(); submitQuiz(); } }, 1000); }
         function stopTimer() { if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; } }
-        function updateTimerDisplay() { const el = document.getElementById('timer'); if (el) { el.textContent = `${Math.floor(state.timeRemaining / 60)}:${(state.timeRemaining % 60).toString().padStart(2, '0')}`; if (state.timeRemaining <= 60) el.classList.add('timer-urgent'); } }
+        // updateTimerDisplay already defined above at line 3095
         
         function selectAnswer(idx) {
     // Don't allow changes if answer already revealed in study mode
