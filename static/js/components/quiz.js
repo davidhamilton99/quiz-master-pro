@@ -10,7 +10,7 @@ import { showToast } from '../utils/toast.js';
 import { renderQuizStreakDisplay } from '../utils/playerHud.js';
 import * as sounds from '../utils/sounds.js';
 import * as animations from '../utils/animations.js';
-import { renderQuizStreakDisplay, renderPlayerHUD } from '../utils/playerHud.js';
+
 let timerInterval = null;
 
 export function renderQuiz() {
@@ -33,7 +33,6 @@ export function renderQuiz() {
                 <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
             </div>
         </header>
-        ${renderPlayerHUD()}
         <main class="quiz-main"><div class="quiz-content">
             ${renderQuizStreakDisplay(state.quizStreak)}
             <div class="question-header">
