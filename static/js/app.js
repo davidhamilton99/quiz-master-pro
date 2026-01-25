@@ -1,8 +1,9 @@
-/* Quiz Master Pro - Main Entry Point - FIXED with checkMultipleChoiceAnswer */
+/* Quiz Master Pro - Main Entry Point - FIXED with Export */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings } from './state.js';
-import { loadQuizzes, logout } from './services/api.js';
+import { loadQuizzes, logout, createQuiz } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
 import { showToast } from './utils/toast.js';
+import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import {
@@ -32,6 +33,50 @@ window.animations = animations;
 sounds.initAudio();
 
 const app = document.getElementById('app');
+
+// ==================== EXPORT/IMPORT HANDLERS ====================
+
+async function exportAs(quizId, format) {
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === quizId);
+    if (!quiz) {
+        showToast('Quiz not found', 'error');
+        return;
+    }
+    
+    try {
+        ExportService.export(quiz, format);
+        // Close the modal after export
+        const modal = document.getElementById('export-modal');
+        if (modal) modal.remove();
+    } catch (error) {
+        console.error('Export failed:', error);
+        showToast('Export failed', 'error');
+    }
+}
+
+async function handleImport(file) {
+    if (!file) return;
+    
+    try {
+        showLoading();
+        const quizData = await ImportService.fromFile(file);
+        
+        // Create the quiz
+        await createQuiz(quizData);
+        
+        // Close modal
+        const modal = document.getElementById('import-modal');
+        if (modal) modal.remove();
+        
+        hideLoading();
+        showToast('Quiz imported successfully!', 'success');
+    } catch (error) {
+        hideLoading();
+        console.error('Import failed:', error);
+        showToast('Import failed: ' + error.message, 'error');
+    }
+}
 
 // ==================== QUIZ OPTIONS MODAL ====================
 
@@ -259,8 +304,16 @@ window.app = {
     setCategory,
     toggleMenu,
     confirmDelete,
-    showExportModal,
+    
+    // Export/Import - FIXED
+    showExportModal: (quizId) => {
+        const state = getState();
+        const quiz = state.quizzes.find(q => q.id === quizId);
+        if (quiz) showExportModal(quiz);
+    },
     showImportModal,
+    exportAs,
+    handleImport,
     
     // Quiz
     showQuizOptions,
@@ -268,7 +321,7 @@ window.app = {
     startQuiz,
     selectOption,
     selectTF,
-    checkMultipleChoiceAnswer,  // <<<< ADDED THIS LINE
+    checkMultipleChoiceAnswer,
     nextQuestion,
     prevQuestion,
     goToQuestion,

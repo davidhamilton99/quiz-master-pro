@@ -221,7 +221,8 @@ function renderQuestionType(q, idx) {
 }
 
 function renderMultipleChoice(q, ans, showAnswer) {
-    const isMulti = Array.isArray(q.correct);
+       // FIX: Only multi-select if MULTIPLE correct answers
+    const isMulti = Array.isArray(q.correct) && q.correct.length > 1;
     const state = getState();
     const isLocked = state.studyMode && state.showAnswer;
     const hasSelection = ans && (isMulti ? ans.length > 0 : ans !== undefined);
@@ -400,20 +401,31 @@ function formatTime(seconds) {
 function checkIfCorrect(answer, question) {
     switch (question.type) {
         case 'truefalse':
-            const correctBool = question.correct === true || question.correct === 'true';
+            const correctBool = question.correct === true || question.correct === 'true' || 
+                               (Array.isArray(question.correct) && question.correct[0] === 0);
             return answer === correctBool;
+            
         case 'matching':
             if (!answer) return false;
             return Object.entries(answer).every(([left, right]) => parseInt(left) === parseInt(right));
+            
         case 'ordering':
             if (!answer) return false;
             return answer.every((item, idx) => item.origIndex === idx);
+            
         default:
+            // Multiple choice handling
             if (Array.isArray(question.correct)) {
-                const ans = answer || [];
+                // If only one correct answer, treat as single choice
+                if (question.correct.length === 1) {
+                    return answer === question.correct[0];
+                }
+                // Multiple correct answers
+                const ans = Array.isArray(answer) ? answer : [answer];
                 return question.correct.length === ans.length && 
                        question.correct.every(c => ans.includes(c));
             }
+            // Single correct answer as number
             return answer === question.correct;
     }
 }
@@ -533,7 +545,9 @@ export async function startQuiz(quizId, options = {}) {
 export function selectOption(index) {
     const state = getState();
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    const isMulti = Array.isArray(q.correct);
+    
+    // FIX: Only multi-select if MULTIPLE correct answers
+    const isMulti = Array.isArray(q.correct) && q.correct.length > 1;
     
     // Don't allow changes if answer already shown in study mode
     if (state.studyMode && state.showAnswer) return;
@@ -545,6 +559,7 @@ export function selectOption(index) {
             ? current.filter(i => i !== index)
             : [...current, index];
     } else {
+        // Single choice - just set the index directly
         newAnswer = index;
     }
     
