@@ -221,8 +221,9 @@ function renderQuestionType(q, idx) {
 }
 
 function renderMultipleChoice(q, ans, showAnswer) {
-       // FIX: Only multi-select if MULTIPLE correct answers
+    // Only multi-select if MULTIPLE correct answers
     const isMulti = Array.isArray(q.correct) && q.correct.length > 1;
+    
     const state = getState();
     const isLocked = state.studyMode && state.showAnswer;
     const hasSelection = ans && (isMulti ? ans.length > 0 : ans !== undefined);
@@ -231,14 +232,30 @@ function renderMultipleChoice(q, ans, showAnswer) {
         ${q.options.map((opt, i) => {
             const letter = String.fromCharCode(65 + i);
             const isSelected = isMulti ? (ans || []).includes(i) : ans === i;
-            const isCorrect = isMulti ? q.correct.includes(i) : q.correct === i;
+            
+            // FIX: Determine if this option is actually correct
+            const isCorrect = isMulti ? q.correct.includes(i) : 
+                             (Array.isArray(q.correct) ? q.correct.includes(i) : q.correct === i);
             
             let cls = 'option';
-            if (isSelected) cls += ' selected';
+            
+            // Show as selected FIRST
+            if (isSelected) {
+                cls += ' selected';
+            }
+            
+            // ONLY add correct/incorrect styling if answer is revealed
             if (showAnswer) {
                 cls += ' revealed';
-                if (isCorrect) cls += ' correct';
-                if (isSelected && !isCorrect) cls += ' incorrect';
+                
+                // Show green ONLY if this option is actually correct
+                if (isCorrect) {
+                    cls += ' correct';
+                }
+                // Show red ONLY if user selected it AND it's wrong
+                else if (isSelected) {
+                    cls += ' incorrect';
+                }
             }
             
             return `<div class="${cls}" data-index="${i}" onclick="window.app.selectOption(${i})">
@@ -249,9 +266,9 @@ function renderMultipleChoice(q, ans, showAnswer) {
             </div>`;
         }).join('')}
     </div>
-    ${isMulti && !showAnswer ? `
+    ${isMulti ? `
         <p class="helper-text mt-2">Select all that apply</p>
-        ${state.studyMode ? `
+        ${state.studyMode && !showAnswer ? `
             <button class="btn btn-primary mt-3" 
                 onclick="window.app.checkMultipleChoiceAnswer()"
                 ${!hasSelection ? 'disabled' : ''}>
@@ -262,7 +279,10 @@ function renderMultipleChoice(q, ans, showAnswer) {
 }
 
 function renderTrueFalse(q, ans, showAnswer) {
-    const correctVal = q.correct === true || q.correct === 'true';
+    // Handle both formats: boolean or array with index
+    const correctVal = q.correct === true || q.correct === 'true' || 
+                       (Array.isArray(q.correct) && q.correct[0] === 0);
+    
     const state = getState();
     const isLocked = state.studyMode && state.showAnswer;
     
@@ -272,17 +292,26 @@ function renderTrueFalse(q, ans, showAnswer) {
             const isSelected = ans === val;
             const isCorrect = val === correctVal;
             
-            if (isSelected) cls += ' selected';
+            // Show as selected FIRST
+            if (isSelected) {
+                cls += ' selected';
+            }
+            
+            // ONLY add correct/incorrect styling if answer is revealed
             if (showAnswer) {
                 cls += ' revealed';
-                if (isCorrect) cls += ' correct';
-                if (isSelected && !isCorrect) cls += ' incorrect';
+                if (isCorrect) {
+                    cls += ' correct';
+                } else if (isSelected) {
+                    cls += ' incorrect';
+                }
             }
             
             return `<div class="${cls}" onclick="window.app.selectTF(${val})">
                 <span class="tf-icon">${val ? '✓' : '✗'}</span>
                 <span class="tf-label">${val ? 'True' : 'False'}</span>
                 ${showAnswer && isCorrect ? '<span class="answer-icon">✓</span>' : ''}
+                ${showAnswer && isSelected && !isCorrect ? '<span class="answer-icon wrong">✗</span>' : ''}
             </div>`;
         }).join('')}
     </div>`;
