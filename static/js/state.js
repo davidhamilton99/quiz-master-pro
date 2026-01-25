@@ -93,7 +93,8 @@ const initialState = {
     user: null,
     token: null,
     authMode: 'login',
-    
+    randomizeOptions: false,  // NEW: Add this
+    optionShuffles: {},       // NEW: Stores shuffle mapping per question
     // Player Profile
     playerProfile: {
         xp: 0,
@@ -534,6 +535,8 @@ export function saveQuizProgress() {
         quizStreak: state.quizStreak,
         maxQuizStreak: state.maxQuizStreak,
         matchingShuffled: state.matchingShuffled,
+        randomizeOptions: state.randomizeOptions,   // NEW
+        optionShuffles: state.optionShuffles,       // NEW
         timestamp: Date.now()
     };
     
@@ -542,9 +545,21 @@ export function saveQuizProgress() {
     const allProgress = getAllInProgressQuizzes();
     const existing = allProgress.findIndex(p => p.quizId === state.currentQuiz.id);
     if (existing >= 0) {
-        allProgress[existing] = { quizId: progress.quizId, quizTitle: progress.quizTitle, timestamp: progress.timestamp, questionIndex: progress.questionIndex, total: state.currentQuiz.questions.length };
+        allProgress[existing] = { 
+            quizId: progress.quizId, 
+            quizTitle: progress.quizTitle, 
+            timestamp: progress.timestamp, 
+            questionIndex: progress.questionIndex, 
+            total: state.currentQuiz.questions.length 
+        };
     } else {
-        allProgress.push({ quizId: progress.quizId, quizTitle: progress.quizTitle, timestamp: progress.timestamp, questionIndex: progress.questionIndex, total: state.currentQuiz.questions.length });
+        allProgress.push({ 
+            quizId: progress.quizId, 
+            quizTitle: progress.quizTitle, 
+            timestamp: progress.timestamp, 
+            questionIndex: progress.questionIndex, 
+            total: state.currentQuiz.questions.length 
+        });
     }
     localStorage.setItem('qmp_all_progress', JSON.stringify(allProgress));
 }

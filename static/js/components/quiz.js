@@ -11,6 +11,40 @@ import { showToast } from '../utils/toast.js';
 let timerInterval = null;
 
 // ==================== RENDER FUNCTIONS ====================
+function shuffleOptionsWithMapping(options, correctAnswer) {
+    // Create array of indices with their values
+    const indexedOptions = options.map((opt, i) => ({ 
+        originalIndex: i, 
+        text: opt 
+    }));
+    
+    // Shuffle the array
+    for (let i = indexedOptions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexedOptions[i], indexedOptions[j]] = [indexedOptions[j], indexedOptions[i]];
+    }
+    
+    // Create mapping from new position to original index
+    const mapping = {};
+    indexedOptions.forEach((item, newIndex) => {
+        mapping[newIndex] = item.originalIndex;
+    });
+    
+    // Get shuffled options
+    const shuffledOptions = indexedOptions.map(item => item.text);
+    
+    // Map correct answer(s) to new positions
+    let newCorrect;
+    if (Array.isArray(correctAnswer)) {
+        newCorrect = correctAnswer.map(oldIdx => {
+            return indexedOptions.findIndex(item => item.originalIndex === oldIdx);
+        });
+    } else {
+        newCorrect = indexedOptions.findIndex(item => item.originalIndex === correctAnswer);
+    }
+    
+    return { shuffledOptions, newCorrect, mapping };
+}
 
 export function renderQuiz() {
     const state = getState();
@@ -533,6 +567,8 @@ export async function startQuiz(quizId, options = {}) {
                     quizStreak: saved.quizStreak || 0,
                     maxQuizStreak: saved.maxQuizStreak || 0,
                     matchingShuffled: saved.matchingShuffled || {},
+                    randomizeOptions: saved.randomizeOptions || false,  // NEW
+                    optionShuffles: saved.optionShuffles || {},        // NEW
                     showAnswer: false,
                     quizStartTime: Date.now()
                 });
@@ -544,9 +580,35 @@ export async function startQuiz(quizId, options = {}) {
             }
         }
         
+        // NEW: Randomize options if enabled
+        let processedQuiz = quiz;
+        let optionShuffles = {};
+        
+        if (options.randomizeOptions) {
+            processedQuiz = {
+                ...quiz,
+                questions: quiz.questions.map((q, qIdx) => {
+                    // Only randomize multiple choice questions
+                    if (q.type === 'choice' || (!q.type && q.options)) {
+                        const { shuffledOptions, newCorrect, mapping } = 
+                            shuffleOptionsWithMapping(q.options, q.correct);
+                        
+                        optionShuffles[qIdx] = mapping;
+                        
+                        return {
+                            ...q,
+                            options: shuffledOptions,
+                            correct: newCorrect
+                        };
+                    }
+                    return q;
+                })
+            };
+        }
+        
         setState({
             view: 'quiz',
-            currentQuiz: quiz,
+            currentQuiz: processedQuiz,  // Use processed quiz with shuffled options
             currentQuestionIndex: 0,
             answers: [],
             flaggedQuestions: new Set(),
@@ -556,6 +618,8 @@ export async function startQuiz(quizId, options = {}) {
             quizStreak: 0,
             maxQuizStreak: 0,
             matchingShuffled: {},
+            randomizeOptions: options.randomizeOptions || false,  // NEW
+            optionShuffles: optionShuffles,                       // NEW
             showAnswer: false,
             quizStartTime: Date.now()
         });

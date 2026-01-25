@@ -107,6 +107,14 @@ function showQuizOptions(quizId) {
                 
                 <div class="form-group">
                     <label class="flex items-center gap-2">
+                        <input type="checkbox" id="randomize-toggle">
+                        <span>Randomize Options</span>
+                    </label>
+                    <p class="helper-text">Shuffle answer choices to prevent memorizing positions</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="flex items-center gap-2">
                         <input type="checkbox" id="timer-toggle">
                         <span>Enable Timer</span>
                     </label>
@@ -142,12 +150,13 @@ function showQuizOptions(quizId) {
 function launchQuiz(quizId) {
     const modal = document.querySelector('.modal-overlay');
     const studyMode = modal?.querySelector('#study-mode-toggle')?.checked ?? true;
+    const randomizeOptions = modal?.querySelector('#randomize-toggle')?.checked ?? false;  // NEW
     const timed = modal?.querySelector('#timer-toggle')?.checked ?? false;
     const minutes = parseInt(modal?.querySelector('#timer-minutes')?.value) || 15;
     
     if (modal) modal.remove();
     
-    startQuiz(quizId, { studyMode, timed, minutes });
+    startQuiz(quizId, { studyMode, randomizeOptions, timed, minutes });  // Pass new option
 }
 
 // ==================== PENDING REWARDS ====================
