@@ -2,7 +2,7 @@
 
 import { getState, setState, saveAuth, clearAuth } from '../state.js';
 import { showToast } from '../utils/toast.js';
-import { API } from '../constants.js';
+import { API } from '../utils/constants.js';
 
 const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
 
