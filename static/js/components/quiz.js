@@ -1,4 +1,4 @@
-/* Quiz Component - SPECTACULAR Edition - STUDY MODE FIXED WITH MULTI-SELECT */
+/* Quiz Component - COMPLETE FIX: Mobile Support + Randomization + All Improvements */
 import { 
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
@@ -7,33 +7,134 @@ import {
 import { getQuiz, saveAttempt } from '../services/api.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
+import { TIME, STREAK, QUIZ } from '../constants.js';
 
 let timerInterval = null;
 
-// ==================== RENDER FUNCTIONS ====================
+// ==================== MOBILE TOUCH SUPPORT ====================
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchedElement = null;
+let isTouchDragging = false;
+
+function initTouchSupport() {
+    // Add touch event listeners for drag-and-drop on mobile
+    document.addEventListener('touchstart', handleTouchStart, { passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd, { passive: false });
+}
+
+function handleTouchStart(e) {
+    const target = e.target.closest('[data-touch-draggable]');
+    if (!target) return;
+    
+    e.preventDefault();
+    touchedElement = target;
+    isTouchDragging = false;
+    
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    
+    target.classList.add('touch-active');
+}
+
+function handleTouchMove(e) {
+    if (!touchedElement) return;
+    
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartX);
+    const deltaY = Math.abs(touch.clientY - touchStartY);
+    
+    // If moved more than 10px, consider it a drag
+    if (deltaX > 10 || deltaY > 10) {
+        isTouchDragging = true;
+        e.preventDefault();
+        
+        // Visual feedback - move the element with finger
+        touchedElement.style.transform = `translate(${touch.clientX - touchStartX}px, ${touch.clientY - touchStartY}px)`;
+        touchedElement.style.opacity = '0.7';
+        touchedElement.classList.add('dragging');
+    }
+}
+
+function handleTouchEnd(e) {
+    if (!touchedElement) return;
+    
+    const touch = e.changedTouches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    // Reset visual state
+    touchedElement.style.transform = '';
+    touchedElement.style.opacity = '';
+    touchedElement.classList.remove('touch-active', 'dragging');
+    
+    if (isTouchDragging && target) {
+        // Handle different drop zones
+        const dropZone = target.closest('[data-touch-drop-zone]');
+        if (dropZone) {
+            e.preventDefault();
+            handleTouchDrop(touchedElement, dropZone);
+        }
+    } else if (!isTouchDragging) {
+        // It was a tap, not a drag - handle as click
+        touchedElement.click();
+    }
+    
+    touchedElement = null;
+    isTouchDragging = false;
+}
+
+function handleTouchDrop(dragged, dropZone) {
+    const dragType = dragged.dataset.touchDraggable;
+    const dropType = dropZone.dataset.touchDropZone;
+    
+    if (dragType === 'match-left') {
+        const leftIndex = parseInt(dragged.dataset.index);
+        const rightIndex = parseInt(dropZone.dataset.index);
+        if (!isNaN(leftIndex) && !isNaN(rightIndex)) {
+            matchDropTouchHandler(leftIndex, rightIndex);
+        }
+    } else if (dragType === 'order-item') {
+        const fromIndex = parseInt(dragged.dataset.index);
+        const toIndex = parseInt(dropZone.dataset.index);
+        if (!isNaN(fromIndex) && !isNaN(toIndex)) {
+            orderDropTouchHandler(fromIndex, toIndex);
+        }
+    }
+}
+
+// Initialize touch support when module loads
+if (typeof window !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTouchSupport);
+    } else {
+        initTouchSupport();
+    }
+}
+
+// ==================== OPTION SHUFFLING (FIX) ====================
+
 function shuffleOptionsWithMapping(options, correctAnswer) {
-    // Create array of indices with their values
     const indexedOptions = options.map((opt, i) => ({ 
         originalIndex: i, 
         text: opt 
     }));
     
-    // Shuffle the array
+    // Fisher-Yates shuffle
     for (let i = indexedOptions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [indexedOptions[i], indexedOptions[j]] = [indexedOptions[j], indexedOptions[i]];
     }
     
-    // Create mapping from new position to original index
     const mapping = {};
     indexedOptions.forEach((item, newIndex) => {
         mapping[newIndex] = item.originalIndex;
     });
     
-    // Get shuffled options
     const shuffledOptions = indexedOptions.map(item => item.text);
     
-    // Map correct answer(s) to new positions
     let newCorrect;
     if (Array.isArray(correctAnswer)) {
         newCorrect = correctAnswer.map(oldIdx => {
@@ -45,6 +146,8 @@ function shuffleOptionsWithMapping(options, correctAnswer) {
     
     return { shuffledOptions, newCorrect, mapping };
 }
+
+// ==================== RENDER FUNCTIONS ====================
 
 export function renderQuiz() {
     const state = getState();
@@ -65,7 +168,7 @@ export function renderQuiz() {
                 ${state.studyMode ? '<span class="badge badge-success">Study Mode</span>' : ''}
             </div>
             <div class="flex items-center gap-2">
-                ${state.timerEnabled ? `<div id="timer" class="quiz-timer ${state.timeRemaining <= 60 ? 'urgent' : ''}">${formatTime(state.timeRemaining)}</div>` : ''}
+                ${state.timerEnabled ? `<div id="timer" class="quiz-timer ${state.timeRemaining <= TIME.TIMER_WARNING_SECONDS ? 'urgent' : ''}">${formatTime(state.timeRemaining)}</div>` : ''}
                 <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
             </div>
         </header>
@@ -97,7 +200,7 @@ function renderStudyModeFeedback(q, state) {
     if (!state.studyMode || !state.showAnswer) return '';
     
     const userAnswer = state.answers[state.currentQuestionIndex];
-    const isCorrect = checkIfCorrect(userAnswer, q);
+    const isCorrect = checkIfCorrect(userAnswer, q, state.currentQuestionIndex);
     
     let feedbackHtml = `
         <div class="study-feedback ${isCorrect ? 'correct' : 'incorrect'}">
@@ -107,13 +210,12 @@ function renderStudyModeFeedback(q, state) {
             </div>
     `;
     
-    // Show correct answer if wrong
     if (!isCorrect) {
         feedbackHtml += `<div class="correct-answer-reveal">`;
         
         switch (q.type) {
             case 'truefalse':
-                const correctBool = q.correct === true || q.correct === 'true';
+                const correctBool = q.correct[0] === 0;
                 feedbackHtml += `<strong>Correct answer:</strong> ${correctBool ? 'True' : 'False'}`;
                 break;
             case 'matching':
@@ -125,24 +227,25 @@ function renderStudyModeFeedback(q, state) {
                 break;
             case 'ordering':
                 feedbackHtml += `<strong>Correct order:</strong><ol class="correct-list">`;
-                q.items.forEach((item, i) => {
-                    feedbackHtml += `<li>${escapeHtml(item)}</li>`;
+                q.options.forEach((item, i) => {
+                    const actualItem = q.options[q.correct[i]];
+                    feedbackHtml += `<li>${escapeHtml(actualItem)}</li>`;
                 });
                 feedbackHtml += `</ol>`;
                 break;
             default:
-                if (Array.isArray(q.correct)) {
-                    feedbackHtml += `<strong>Correct answers:</strong> `;
-                    feedbackHtml += q.correct.map(idx => `${String.fromCharCode(65 + idx)}. ${escapeHtml(q.options[idx])}`).join(', ');
+                // Get actual correct options (handle randomization)
+                const correctOptions = getCorrectOptionsForDisplay(q, state.currentQuestionIndex);
+                if (Array.isArray(correctOptions)) {
+                    feedbackHtml += `<strong>Correct answers:</strong> ${correctOptions.join(', ')}`;
                 } else {
-                    feedbackHtml += `<strong>Correct answer:</strong> ${String.fromCharCode(65 + q.correct)}. ${escapeHtml(q.options[q.correct])}`;
+                    feedbackHtml += `<strong>Correct answer:</strong> ${correctOptions}`;
                 }
         }
         
         feedbackHtml += `</div>`;
     }
     
-    // Show explanation if available
     if (q.explanation) {
         feedbackHtml += `<div class="explanation"><strong>💡 Explanation:</strong> ${escapeHtml(q.explanation)}</div>`;
     }
@@ -150,6 +253,28 @@ function renderStudyModeFeedback(q, state) {
     feedbackHtml += `</div>`;
     
     return feedbackHtml;
+}
+
+function getCorrectOptionsForDisplay(q, questionIndex) {
+    const state = getState();
+    
+    // Get displayed options and correct indices
+    let displayOptions = q.options;
+    let displayCorrect = q.correct;
+    
+    if (state.randomizeOptions && state.optionShuffles[questionIndex]) {
+        const shuffle = state.optionShuffles[questionIndex];
+        displayOptions = shuffle.shuffledOptions;
+        displayCorrect = shuffle.newCorrect;
+    }
+    
+    if (Array.isArray(displayCorrect)) {
+        return displayCorrect.map(idx => 
+            `${String.fromCharCode(65 + idx)}. ${escapeHtml(displayOptions[idx])}`
+        );
+    } else {
+        return `${String.fromCharCode(65 + displayCorrect)}. ${escapeHtml(displayOptions[displayCorrect])}`;
+    }
 }
 
 function renderStreakDisplay(streak) {
@@ -161,16 +286,16 @@ function renderStreakDisplay(streak) {
     let message = '';
     let className = 'streak-indicator';
     
-    if (streak >= 20) {
+    if (streak >= STREAK.LEGENDARY) {
         message = 'LEGENDARY!';
         className += ' legendary';
-    } else if (streak >= 15) {
+    } else if (streak >= STREAK.UNSTOPPABLE) {
         message = 'UNSTOPPABLE!';
         className += ' unstoppable';
-    } else if (streak >= 10) {
+    } else if (streak >= STREAK.ON_FIRE) {
         message = 'ON FIRE!';
         className += ' on-fire';
-    } else if (streak >= 5) {
+    } else if (streak >= STREAK.NICE) {
         message = 'Nice streak!';
         className += ' nice';
     } else {
@@ -187,7 +312,7 @@ function renderStreakDisplay(streak) {
 }
 
 function renderQuestionNav(total, current) {
-    if (total > 20) {
+    if (total > QUIZ.MAX_COMPACT_NAV_QUESTIONS) {
         return `
             <div class="question-nav-compact">
                 <input type="number" 
@@ -221,236 +346,16 @@ function renderDots() {
 
 function getTypeBadge(type) {
     const badges = {
-        'ordering': '<span class="badge badge-primary">↕️ Ordering</span>',
-        'matching': '<span class="badge badge-primary">🔗 Matching</span>',
-        'truefalse': '<span class="badge badge-primary">⚡ True/False</span>'
+        choice: '<span class="badge badge-info">Multiple Choice</span>',
+        truefalse: '<span class="badge badge-success">True/False</span>',
+        matching: '<span class="badge badge-warning">Matching</span>',
+        ordering: '<span class="badge badge-primary">Ordering</span>'
     };
     return badges[type] || '';
 }
 
 function renderCodeBlock(code) {
-    return `<div class="code-block">
-        <div class="code-header">
-            <div class="code-dots">
-                <div class="code-dot red"></div>
-                <div class="code-dot yellow"></div>
-                <div class="code-dot green"></div>
-            </div>
-        </div>
-        <pre class="code-body">${escapeHtml(code)}</pre>
-    </div>`;
-}
-
-function renderQuestionType(q, idx) {
-    const state = getState();
-    const ans = state.answers[idx];
-    const showAnswer = state.studyMode && state.showAnswer;
-    
-    switch (q.type) {
-        case 'truefalse': return renderTrueFalse(q, ans, showAnswer);
-        case 'matching': return renderMatching(q, ans, idx, showAnswer);
-        case 'ordering': return renderOrdering(q, ans, idx, showAnswer);
-        default: return renderMultipleChoice(q, ans, showAnswer);
-    }
-}
-
-function renderMultipleChoice(q, ans, showAnswer) {
-    // Only multi-select if MULTIPLE correct answers
-    const isMulti = Array.isArray(q.correct) && q.correct.length > 1;
-    
-    const state = getState();
-    const isLocked = state.studyMode && state.showAnswer;
-    const hasSelection = ans && (isMulti ? ans.length > 0 : ans !== undefined);
-    
-    return `<div class="options-list ${isLocked ? 'locked' : ''}" id="options-container">
-        ${q.options.map((opt, i) => {
-            const letter = String.fromCharCode(65 + i);
-            const isSelected = isMulti ? (ans || []).includes(i) : ans === i;
-            
-            // FIX: Determine if this option is actually correct
-            const isCorrect = isMulti ? q.correct.includes(i) : 
-                             (Array.isArray(q.correct) ? q.correct.includes(i) : q.correct === i);
-            
-            let cls = 'option';
-            
-            // Show as selected FIRST
-            if (isSelected) {
-                cls += ' selected';
-            }
-            
-            // ONLY add correct/incorrect styling if answer is revealed
-            if (showAnswer) {
-                cls += ' revealed';
-                
-                // Show green ONLY if this option is actually correct
-                if (isCorrect) {
-                    cls += ' correct';
-                }
-                // Show red ONLY if user selected it AND it's wrong
-                else if (isSelected) {
-                    cls += ' incorrect';
-                }
-            }
-            
-            return `<div class="${cls}" data-index="${i}" onclick="window.app.selectOption(${i})">
-                <span class="option-letter">${letter}</span>
-                <span class="option-text">${escapeHtml(opt)}</span>
-                ${showAnswer && isCorrect ? '<span class="answer-icon">✓</span>' : ''}
-                ${showAnswer && isSelected && !isCorrect ? '<span class="answer-icon wrong">✗</span>' : ''}
-            </div>`;
-        }).join('')}
-    </div>
-    ${isMulti ? `
-        <p class="helper-text mt-2">Select all that apply</p>
-        ${state.studyMode && !showAnswer ? `
-            <button class="btn btn-primary mt-3" 
-                onclick="window.app.checkMultipleChoiceAnswer()"
-                ${!hasSelection ? 'disabled' : ''}>
-                Check Answer
-            </button>
-        ` : ''}
-    ` : ''}`;
-}
-
-function renderTrueFalse(q, ans, showAnswer) {
-    // Handle both formats: boolean or array with index
-    const correctVal = q.correct === true || q.correct === 'true' || 
-                       (Array.isArray(q.correct) && q.correct[0] === 0);
-    
-    const state = getState();
-    const isLocked = state.studyMode && state.showAnswer;
-    
-    return `<div class="tf-options ${isLocked ? 'locked' : ''}">
-        ${[true, false].map(val => {
-            let cls = 'tf-option';
-            const isSelected = ans === val;
-            const isCorrect = val === correctVal;
-            
-            // Show as selected FIRST
-            if (isSelected) {
-                cls += ' selected';
-            }
-            
-            // ONLY add correct/incorrect styling if answer is revealed
-            if (showAnswer) {
-                cls += ' revealed';
-                if (isCorrect) {
-                    cls += ' correct';
-                } else if (isSelected) {
-                    cls += ' incorrect';
-                }
-            }
-            
-            return `<div class="${cls}" onclick="window.app.selectTF(${val})">
-                <span class="tf-icon">${val ? '✓' : '✗'}</span>
-                <span class="tf-label">${val ? 'True' : 'False'}</span>
-                ${showAnswer && isCorrect ? '<span class="answer-icon">✓</span>' : ''}
-                ${showAnswer && isSelected && !isCorrect ? '<span class="answer-icon wrong">✗</span>' : ''}
-            </div>`;
-        }).join('')}
-    </div>`;
-}
-
-function renderMatching(q, ans, qIdx, showAnswer) {
-    const state = getState();
-    const userMatches = ans || {};
-    const isLocked = state.studyMode && state.showAnswer;
-    
-    if (!state.matchingShuffled) {
-        setState({ matchingShuffled: {} });
-    }
-    
-    if (!state.matchingShuffled[qIdx]) {
-        const shuffled = { ...state.matchingShuffled };
-        shuffled[qIdx] = shuffleArray([...q.pairs.map((p, i) => ({ text: p.right, origIndex: i }))]);
-        setState({ matchingShuffled: shuffled });
-    }
-    const shuffledRight = state.matchingShuffled[qIdx] || q.pairs.map((p, i) => ({ text: p.right, origIndex: i }));
-    
-    const usedRightIndices = new Set(Object.values(userMatches));
-    
-    return `<div class="matching-container ${isLocked ? 'locked' : ''}">
-        <div class="matching-instructions">${isLocked ? 'Review your matches below' : 'Drag items from the right to match with terms on the left'}</div>
-        <div class="matching-columns">
-            <div class="matching-left">
-                <div class="matching-header">Terms</div>
-                ${q.pairs.map((pair, i) => {
-                    const matchedIdx = userMatches[i];
-                    const hasMatch = matchedIdx !== undefined;
-                    const matchedItem = shuffledRight.find(s => s.origIndex === matchedIdx);
-                    const matchedText = matchedItem ? matchedItem.text : '';
-                    
-                    let cls = 'match-item left';
-                    if (showAnswer) {
-                        cls += ' revealed';
-                        const isMatchCorrect = matchedIdx === i;
-                        cls += isMatchCorrect ? ' correct' : (hasMatch ? ' incorrect' : ' incorrect');
-                    }
-                    
-                    return `<div class="${cls}" 
-                        data-left-index="${i}"
-                        ${!isLocked ? `ondragover="window.app.matchDragOver(event)"
-                        ondragleave="window.app.matchDragLeave(event)"
-                        ondrop="window.app.matchDrop(event, ${i})"` : ''}>
-                        <span class="match-letter">${String.fromCharCode(65 + i)}</span>
-                        <span class="match-text">${escapeHtml(pair.left)}</span>
-                        ${hasMatch 
-                            ? `<div class="match-answer" ${!isLocked ? `draggable="true" ondragstart="window.app.matchDragStart(event, ${matchedIdx}, ${i})"` : ''}>
-                                ${escapeHtml(matchedText)}
-                                ${!isLocked ? `<button class="match-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})">×</button>` : ''}
-                               </div>`
-                            : `<div class="match-dropzone">${isLocked ? '(not matched)' : 'Drop here'}</div>`
-                        }
-                    </div>`;
-                }).join('')}
-            </div>
-            ${!isLocked ? `
-            <div class="matching-right">
-                <div class="matching-header">Definitions</div>
-                ${shuffledRight.filter(item => !usedRightIndices.has(item.origIndex)).map(item => {
-                    return `<div class="match-draggable" 
-                        draggable="true" 
-                        data-orig-index="${item.origIndex}"
-                        ondragstart="window.app.matchDragStart(event, ${item.origIndex})">
-                        ${escapeHtml(item.text)}
-                    </div>`;
-                }).join('')}
-                ${shuffledRight.filter(item => !usedRightIndices.has(item.origIndex)).length === 0 
-                    ? '<div class="text-center text-muted mt-2">All items matched!</div>' : ''}
-            </div>` : ''}
-        </div>
-    </div>`;
-}
-
-function renderOrdering(q, ans, qIdx, showAnswer) {
-    const items = ans || q.items.map((item, i) => ({ text: item, origIndex: i }));
-    const state = getState();
-    const isLocked = state.studyMode && state.showAnswer;
-    
-    return `<div class="ordering-container ${isLocked ? 'locked' : ''}">
-        <p class="helper-text mb-3">${isLocked ? 'Review your order below' : 'Drag to reorder the items'}</p>
-        <div class="ordering-list" id="ordering-list">
-            ${items.map((item, i) => {
-                let cls = 'match-item ordering-item';
-                if (showAnswer) {
-                    cls += ' revealed';
-                    cls += item.origIndex === i ? ' correct' : ' incorrect';
-                }
-                return `<div class="${cls}" 
-                    ${!isLocked ? `draggable="true" 
-                    data-index="${i}"
-                    ondragstart="window.app.orderDragStart(event, ${i})"
-                    ondragover="window.app.orderDragOver(event)"
-                    ondragleave="window.app.orderDragLeave(event)"
-                    ondrop="window.app.orderDrop(event, ${i})"
-                    ondragend="window.app.orderDragEnd(event)"` : ''}>
-                    <span class="match-num">${i + 1}</span>
-                    <span class="match-text">${escapeHtml(item.text)}</span>
-                    ${!isLocked ? '<span class="drag-handle">⋮⋮</span>' : ''}
-                </div>`;
-            }).join('')}
-        </div>
-    </div>`;
+    return `<pre class="code-block"><code>${escapeHtml(code)}</code></pre>`;
 }
 
 function formatTime(seconds) {
@@ -459,210 +364,313 @@ function formatTime(seconds) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ==================== ANSWER CHECKING ====================
-
-function checkIfCorrect(answer, question) {
-    switch (question.type) {
-        case 'truefalse':
-            const correctBool = question.correct === true || question.correct === 'true' || 
-                               (Array.isArray(question.correct) && question.correct[0] === 0);
-            return answer === correctBool;
-            
-        case 'matching':
-            if (!answer) return false;
-            return Object.entries(answer).every(([left, right]) => parseInt(left) === parseInt(right));
-            
-        case 'ordering':
-            if (!answer) return false;
-            return answer.every((item, idx) => item.origIndex === idx);
-            
-        default:
-            // Multiple choice handling
-            if (Array.isArray(question.correct)) {
-                // If only one correct answer, treat as single choice
-                if (question.correct.length === 1) {
-                    return answer === question.correct[0];
-                }
-                // Multiple correct answers
-                const ans = Array.isArray(answer) ? answer : [answer];
-                return question.correct.length === ans.length && 
-                       question.correct.every(c => ans.includes(c));
-            }
-            // Single correct answer as number
-            return answer === question.correct;
+function renderQuestionType(q, questionIndex) {
+    switch (q.type) {
+        case 'truefalse': return renderTrueFalse(q, questionIndex);
+        case 'matching': return renderMatching(q, questionIndex);
+        case 'ordering': return renderOrdering(q, questionIndex);
+        default: return renderMultipleChoice(q, questionIndex);
     }
 }
 
-function handleStudyModeCheck(answer, question) {
+// ==================== MULTIPLE CHOICE (WITH RANDOMIZATION FIX) ====================
+
+function renderMultipleChoice(q, questionIndex) {
     const state = getState();
-    if (!state.studyMode) return;
+    const userAnswer = state.answers[questionIndex];
+    const hasAnswered = userAnswer !== undefined;
+    const showingAnswer = state.studyMode && state.showAnswer;
     
-    const isCorrect = checkIfCorrect(answer, question);
+    // ===== RANDOMIZATION FIX =====
+    let displayOptions = q.options;
+    let displayCorrect = q.correct;
     
-    // Play sounds via window if available
-    if (window.sounds) {
-        if (isCorrect) {
-            const newStreak = (state.quizStreak || 0) + 1;
-            window.sounds.playCorrect(newStreak);
-            if (newStreak === 5 || newStreak === 10 || newStreak === 15 || newStreak === 20) {
-                window.sounds.playStreakMilestone(newStreak);
-            }
+    if (state.randomizeOptions) {
+        if (!state.optionShuffles[questionIndex]) {
+            // First time - shuffle and store
+            const result = shuffleOptionsWithMapping(q.options, q.correct);
+            const shuffles = { ...state.optionShuffles };
+            shuffles[questionIndex] = result;
+            setState({ optionShuffles: shuffles });
+            
+            displayOptions = result.shuffledOptions;
+            displayCorrect = result.newCorrect;
         } else {
-            window.sounds.playWrong();
+            // Use stored shuffle
+            const stored = state.optionShuffles[questionIndex];
+            displayOptions = stored.shuffledOptions;
+            displayCorrect = stored.newCorrect;
         }
     }
+    // ===== END RANDOMIZATION FIX =====
     
-    // Update state - this will trigger re-render with showAnswer: true
-    if (isCorrect) {
-        recordCorrectAnswer();
-        setState({ 
-            showAnswer: true,
-            quizStreak: (state.quizStreak || 0) + 1,
-            maxQuizStreak: Math.max(state.maxQuizStreak || 0, (state.quizStreak || 0) + 1)
-        });
+    const isMulti = Array.isArray(displayCorrect);
+    const disabled = showingAnswer ? 'disabled' : '';
+    
+    let html = '<div class="options-grid">';
+    displayOptions.forEach((opt, i) => {
+        const letter = String.fromCharCode(65 + i);
+        const isSelected = isMulti 
+            ? (userAnswer || []).includes(i) 
+            : userAnswer === i;
+        const isCorrectOpt = isMulti 
+            ? displayCorrect.includes(i) 
+            : displayCorrect === i;
+        
+        let cls = 'option';
+        if (showingAnswer) {
+            if (isCorrectOpt) cls += ' correct-opt';
+            if (isSelected && !isCorrectOpt) cls += ' wrong-opt';
+        } else if (isSelected) {
+            cls += ' selected';
+        }
+        
+        const checkType = isMulti ? 'checkbox' : 'radio';
+        const checked = isSelected ? 'checked' : '';
+        
+        html += `
+            <label class="${cls}">
+                <input type="${checkType}" 
+                    name="q${questionIndex}" 
+                    value="${i}" 
+                    ${checked} 
+                    ${disabled}
+                    onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
+                <span class="option-letter">${letter}</span>
+                <span class="option-text">${escapeHtml(opt)}</span>
+                ${showingAnswer && isCorrectOpt ? '<span class="option-check">✓</span>' : ''}
+            </label>
+        `;
+    });
+    html += '</div>';
+    
+    if (isMulti && !showingAnswer) {
+        html += `<div class="mt-4"><button class="btn btn-primary" onclick="window.app.checkMultipleChoiceAnswer()">Check Answer</button></div>`;
+    }
+    
+    return html;
+}
+
+// New function for multi-select toggle
+export function toggleMultiSelect(index) {
+    const state = getState();
+    if (state.studyMode && state.showAnswer) return;
+    
+    const currentAnswer = state.answers[state.currentQuestionIndex] || [];
+    let newAnswer;
+    
+    if (currentAnswer.includes(index)) {
+        newAnswer = currentAnswer.filter(i => i !== index);
     } else {
-        recordWrongAnswer();
-        setState({ 
-            showAnswer: true,
-            quizStreak: 0 
-        });
+        newAnswer = [...currentAnswer, index];
     }
     
-    // Animations after DOM updates
-    setTimeout(() => {
-        const selectedEl = document.querySelector('.option.selected, .tf-option.selected');
-        if (window.animations && selectedEl) {
-            if (isCorrect) {
-                window.animations.burstCorrect(selectedEl);
-            } else {
-                window.animations.burstWrong(selectedEl);
-                window.animations.addShakeAnimation(selectedEl);
-            }
-        }
-    }, 50);
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = newAnswer;
+    setState({ answers });
+    saveQuizProgress();
+}
+
+// ==================== TRUE/FALSE ====================
+
+function renderTrueFalse(q, questionIndex) {
+    const state = getState();
+    const userAnswer = state.answers[questionIndex];
+    const showingAnswer = state.studyMode && state.showAnswer;
+    const disabled = showingAnswer ? 'disabled' : '';
+    
+    const correctAnswer = q.correct[0] === 0;
+    
+    const trueClass = showingAnswer 
+        ? (correctAnswer ? 'option correct-opt' : userAnswer === true ? 'option wrong-opt' : 'option')
+        : userAnswer === true ? 'option selected' : 'option';
+    
+    const falseClass = showingAnswer 
+        ? (!correctAnswer ? 'option correct-opt' : userAnswer === false ? 'option wrong-opt' : 'option')
+        : userAnswer === false ? 'option selected' : 'option';
+    
+    return `
+        <div class="tf-options">
+            <button class="${trueClass}" onclick="window.app.selectTF(true)" ${disabled}>
+                <span class="tf-icon">✓</span>
+                <span class="tf-label">True</span>
+                ${showingAnswer && correctAnswer ? '<span class="option-check">✓</span>' : ''}
+            </button>
+            <button class="${falseClass}" onclick="window.app.selectTF(false)" ${disabled}>
+                <span class="tf-icon">✗</span>
+                <span class="tf-label">False</span>
+                ${showingAnswer && !correctAnswer ? '<span class="option-check">✓</span>' : ''}
+            </button>
+        </div>
+    `;
+}
+
+// ==================== MATCHING (WITH MOBILE SUPPORT) ====================
+
+function renderMatching(q, questionIndex) {
+    const state = getState();
+    const userAnswer = state.answers[questionIndex] || {};
+    const showingAnswer = state.studyMode && state.showAnswer;
+    
+    // Get or create shuffled right items
+    let shuffledRight = state.matchingShuffled[questionIndex];
+    if (!shuffledRight) {
+        shuffledRight = shuffleArray(q.pairs.map((p, i) => ({ text: p.right, origIndex: i })));
+        const newShuffled = { ...state.matchingShuffled };
+        newShuffled[questionIndex] = shuffledRight;
+        setState({ matchingShuffled: newShuffled });
+    }
+    
+    const isMobile = 'ontouchstart' in window;
+    
+    return `
+        <div class="matching-container">
+            <p class="helper-text mb-4">${isMobile ? 'Tap left items, then tap matching right items' : 'Drag left items to matching right items'}</p>
+            
+            <div class="matching-grid">
+                <div class="matching-column">
+                    <div class="matching-header">Terms</div>
+                    ${q.pairs.map((pair, i) => {
+                        const isMatched = userAnswer[i] !== undefined;
+                        const matchedWith = isMatched ? shuffledRight[userAnswer[i]].text : '';
+                        
+                        return `
+                            <div class="match-item left ${isMatched ? 'matched' : ''} ${showingAnswer ? 'disabled' : ''}"
+                                data-touch-draggable="match-left"
+                                data-index="${i}"
+                                draggable="${!showingAnswer}"
+                                ondragstart="window.app.matchDragStart(event, ${i}, true)"
+                                ondragend="window.app.matchDragEnd(event)"
+                                onclick="window.app.selectMatchLeft(${i})">
+                                <span class="match-letter">${String.fromCharCode(65 + i)}</span>
+                                <span class="match-text">${escapeHtml(pair.left)}</span>
+                                ${isMatched ? `
+                                    <div class="match-preview">
+                                        → ${escapeHtml(matchedWith)}
+                                        ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})">✕</button>` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <div class="matching-column">
+                    <div class="matching-header">Definitions</div>
+                    ${shuffledRight.map((item, i) => {
+                        const isUsed = Object.values(userAnswer).includes(i);
+                        const isCorrect = showingAnswer && userAnswer[item.origIndex] === i;
+                        const isWrong = showingAnswer && Object.entries(userAnswer).some(([left, right]) => right === i && parseInt(left) !== item.origIndex);
+                        
+                        return `
+                            <div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'correct-match' : ''} ${isWrong ? 'wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}"
+                                data-touch-drop-zone="match-right"
+                                data-index="${i}"
+                                ondragover="window.app.matchDragOver(event)"
+                                ondragleave="window.app.matchDragLeave(event)"
+                                ondrop="window.app.matchDrop(event, ${i})"
+                                onclick="window.app.selectMatchRight(${i})">
+                                <span class="match-number">${i + 1}</span>
+                                <span class="match-text">${escapeHtml(item.text)}</span>
+                                ${showingAnswer && isCorrect ? '<span class="match-check">✓</span>' : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `
+                <div class="mt-4">
+                    <button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">Clear All</button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// ==================== ORDERING (WITH MOBILE SUPPORT) ====================
+
+function renderOrdering(q, questionIndex) {
+    const state = getState();
+    const showingAnswer = state.studyMode && state.showAnswer;
+    
+    let currentOrder = state.answers[questionIndex];
+    if (!currentOrder) {
+        // Initialize with shuffled order
+        currentOrder = shuffleArray(q.options.map((text, i) => ({ 
+            text, 
+            origIndex: q.correct[i] 
+        })));
+        const answers = [...state.answers];
+        answers[questionIndex] = currentOrder;
+        setState({ answers });
+    }
+    
+    const isMobile = 'ontouchstart' in window;
+    
+    return `
+        <div class="ordering-container">
+            <p class="helper-text mb-4">${isMobile ? 'Tap and drag items to reorder them' : 'Drag items to reorder them'}</p>
+            
+            <div class="ordering-list">
+                ${currentOrder.map((item, i) => {
+                    const isCorrect = showingAnswer && item.origIndex === i;
+                    const isWrong = showingAnswer && item.origIndex !== i;
+                    
+                    return `
+                        <div class="order-item ${isCorrect ? 'correct-order' : ''} ${isWrong ? 'wrong-order' : ''} ${showingAnswer ? 'disabled' : ''}"
+                            data-touch-draggable="order-item"
+                            data-touch-drop-zone="order-item"
+                            data-index="${i}"
+                            draggable="${!showingAnswer}"
+                            ondragstart="window.app.orderDragStart(event, ${i})"
+                            ondragover="window.app.orderDragOver(event)"
+                            ondragleave="window.app.orderDragLeave(event)"
+                            ondrop="window.app.orderDrop(event, ${i})"
+                            ondragend="window.app.orderDragEnd(event)">
+                            <span class="order-handle">${showingAnswer ? (isCorrect ? '✓' : '✗') : '☰'}</span>
+                            <span class="order-number">${i + 1}</span>
+                            <span class="order-text">${escapeHtml(item.text)}</span>
+                            ${showingAnswer && isCorrect ? '<span class="order-check">✓</span>' : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// ==================== ANSWER HANDLING ====================
+
+export function selectOption(index) {
+    const state = getState();
+    if (state.studyMode && state.showAnswer) return;
+    
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = index;
+    
+    setState({ answers });
+    
+    if (state.studyMode) {
+        setTimeout(() => handleStudyModeCheck(index, q), 300);
+    }
     
     saveQuizProgress();
 }
 
-// ==================== QUIZ ACTIONS ====================
-
-export async function startQuiz(quizId, options = {}) {
-    showLoading();
-    try {
-        const quiz = await getQuiz(quizId);
-        
-        const saved = loadQuizProgress(quizId);
-        if (saved && !options.restart) {
-            const resume = confirm(`Resume from question ${saved.questionIndex + 1}?`);
-            if (resume) {
-                setState({
-                    view: 'quiz',
-                    currentQuiz: quiz,
-                    currentQuestionIndex: saved.questionIndex,
-                    answers: saved.answers,
-                    flaggedQuestions: new Set(saved.flagged || []),
-                    studyMode: saved.studyMode,
-                    timerEnabled: saved.timerEnabled,
-                    timeRemaining: saved.timeRemaining,
-                    quizStreak: saved.quizStreak || 0,
-                    maxQuizStreak: saved.maxQuizStreak || 0,
-                    matchingShuffled: saved.matchingShuffled || {},
-                    randomizeOptions: saved.randomizeOptions || false,  // NEW
-                    optionShuffles: saved.optionShuffles || {},        // NEW
-                    showAnswer: false,
-                    quizStartTime: Date.now()
-                });
-                if (saved.timerEnabled) startTimer();
-                hideLoading();
-                updateDailyStreak();
-                if (window.sounds) window.sounds.playQuizStart();
-                return;
-            }
-        }
-        
-        // NEW: Randomize options if enabled
-        let processedQuiz = quiz;
-        let optionShuffles = {};
-        
-        if (options.randomizeOptions) {
-            processedQuiz = {
-                ...quiz,
-                questions: quiz.questions.map((q, qIdx) => {
-                    // Only randomize multiple choice questions
-                    if (q.type === 'choice' || (!q.type && q.options)) {
-                        const { shuffledOptions, newCorrect, mapping } = 
-                            shuffleOptionsWithMapping(q.options, q.correct);
-                        
-                        optionShuffles[qIdx] = mapping;
-                        
-                        return {
-                            ...q,
-                            options: shuffledOptions,
-                            correct: newCorrect
-                        };
-                    }
-                    return q;
-                })
-            };
-        }
-        
-        setState({
-            view: 'quiz',
-            currentQuiz: processedQuiz,  // Use processed quiz with shuffled options
-            currentQuestionIndex: 0,
-            answers: [],
-            flaggedQuestions: new Set(),
-            studyMode: options.studyMode || false,
-            timerEnabled: options.timed || false,
-            timeRemaining: (options.minutes || 15) * 60,
-            quizStreak: 0,
-            maxQuizStreak: 0,
-            matchingShuffled: {},
-            randomizeOptions: options.randomizeOptions || false,  // NEW
-            optionShuffles: optionShuffles,                       // NEW
-            showAnswer: false,
-            quizStartTime: Date.now()
-        });
-        
-        if (options.timed) startTimer();
-        updateDailyStreak();
-        if (window.sounds) window.sounds.playQuizStart();
-        
-    } catch (e) {
-        showToast('Failed to load quiz', 'error');
-        console.error(e);
-    }
-    hideLoading();
-}
-
-export function selectOption(index) {
+export function selectTF(value) {
     const state = getState();
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    
-    // FIX: Only multi-select if MULTIPLE correct answers
-    const isMulti = Array.isArray(q.correct) && q.correct.length > 1;
-    
-    // Don't allow changes if answer already shown in study mode
     if (state.studyMode && state.showAnswer) return;
     
-    let newAnswer;
-    if (isMulti) {
-        const current = state.answers[state.currentQuestionIndex] || [];
-        newAnswer = current.includes(index) 
-            ? current.filter(i => i !== index)
-            : [...current, index];
-    } else {
-        // Single choice - just set the index directly
-        newAnswer = index;
-    }
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = value;
     
-    const newAnswers = [...state.answers];
-    newAnswers[state.currentQuestionIndex] = newAnswer;
-    setState({ answers: newAnswers });
+    setState({ answers });
     
-    // Study mode: check answer immediately for single choice only
-    if (state.studyMode && !isMulti) {
-        handleStudyModeCheck(newAnswer, q);
+    if (state.studyMode) {
+        setTimeout(() => handleStudyModeCheck(value, q), 300);
     }
     
     saveQuizProgress();
@@ -671,106 +679,165 @@ export function selectOption(index) {
 export function checkMultipleChoiceAnswer() {
     const state = getState();
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    const answer = state.answers[state.currentQuestionIndex];
+    const userAnswer = state.answers[state.currentQuestionIndex];
     
-    if (!state.studyMode || state.showAnswer) return;
-    if (!Array.isArray(q.correct)) return; // Not a multi-select
-    
-    // Check if at least one option is selected
-    if (!answer || answer.length === 0) {
-        if (window.sounds) window.sounds.playWrong();
+    if (!userAnswer || userAnswer.length === 0) {
         showToast('Please select at least one answer', 'warning');
         return;
     }
     
-    handleStudyModeCheck(answer, q);
+    if (state.studyMode) {
+        handleStudyModeCheck(userAnswer, q);
+    }
 }
 
-export function selectTF(value) {
+function handleStudyModeCheck(userAnswer, question) {
     const state = getState();
+    const isCorrect = checkIfCorrect(userAnswer, question, state.currentQuestionIndex);
     
-    // Don't allow changes if answer already shown in study mode
-    if (state.studyMode && state.showAnswer) return;
-    
-    const newAnswers = [...state.answers];
-    newAnswers[state.currentQuestionIndex] = value;
-    setState({ answers: newAnswers });
-    
-    if (state.studyMode) {
-        const q = state.currentQuiz.questions[state.currentQuestionIndex];
-        handleStudyModeCheck(value, q);
+    if (isCorrect) {
+        recordCorrectAnswer();
+        if (window.sounds) window.sounds.playCorrect(state.quizStreak);
+        if (window.animations) {
+            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
+            if (answerEl) window.animations.burstCorrect(answerEl);
+        }
+    } else {
+        recordWrongAnswer();
+        if (window.sounds) window.sounds.playWrong();
+        if (window.animations) {
+            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
+            if (answerEl) window.animations.burstWrong(answerEl);
+        }
     }
     
-    saveQuizProgress();
+    setState({ showAnswer: true });
 }
 
-// ==================== MATCHING DRAG & DROP ====================
+function checkIfCorrect(answer, question, questionIndex = null) {
+    const state = getState();
+    
+    // Get correct answer (handle randomization)
+    let correctAnswer = question.correct;
+    if (questionIndex !== null && state.randomizeOptions && state.optionShuffles[questionIndex]) {
+        correctAnswer = state.optionShuffles[questionIndex].newCorrect;
+    }
+    
+    switch (question.type) {
+        case 'truefalse':
+            const correctBool = correctAnswer[0] === 0;
+            return answer === correctBool;
+            
+        case 'matching':
+            if (!answer || typeof answer !== 'object') return false;
+            return Object.entries(answer).every(([left, right]) => 
+                parseInt(left) === parseInt(right)
+            );
+            
+        case 'ordering':
+            if (!answer || !Array.isArray(answer)) return false;
+            return answer.every((item, idx) => item.origIndex === idx);
+            
+        default:
+            if (Array.isArray(correctAnswer)) {
+                const ans = answer || [];
+                return correctAnswer.length === ans.length && 
+                       correctAnswer.every(c => ans.includes(c));
+            }
+            return answer === correctAnswer;
+    }
+}
+
+// ==================== MATCHING HANDLERS ====================
 
 let draggedMatchIndex = null;
 let draggedFromLeft = null;
+let selectedMatchLeft = null; // For mobile tap-to-match
 
-export function matchDragStart(e, origIndex, fromLeftIndex = null) {
-    draggedMatchIndex = origIndex;
-    draggedFromLeft = fromLeftIndex;
+export function matchDragStart(e, index, fromLeft) {
+    draggedMatchIndex = index;
+    draggedFromLeft = fromLeft;
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
 }
 
 export function matchDragOver(e) {
     e.preventDefault();
-    e.currentTarget.classList.add('drag-over');
+    if (draggedMatchIndex !== null && draggedFromLeft) {
+        e.currentTarget.classList.add('drag-over');
+    }
 }
 
 export function matchDragLeave(e) {
     e.currentTarget.classList.remove('drag-over');
 }
 
-export function matchDrop(e, leftIndex) {
+export function matchDrop(e, rightIndex) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
     
-    if (draggedMatchIndex === null) return;
+    if (draggedMatchIndex === null || !draggedFromLeft) return;
     
     const state = getState();
-    
-    // Don't allow changes if answer already shown in study mode
     if (state.studyMode && state.showAnswer) return;
     
-    const currentAnswers = state.answers[state.currentQuestionIndex] || {};
-    const newAnswers = { ...currentAnswers };
+    matchDropHandler(draggedMatchIndex, rightIndex);
+}
+
+function matchDropHandler(leftIndex, rightIndex) {
+    const state = getState();
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const currentAnswers = { ...(state.answers[state.currentQuestionIndex] || {}) };
     
-    if (draggedFromLeft !== null && draggedFromLeft !== leftIndex) {
-        delete newAnswers[draggedFromLeft];
-    }
-    
-    if (newAnswers[leftIndex] !== undefined && draggedFromLeft !== null) {
-        newAnswers[draggedFromLeft] = newAnswers[leftIndex];
-    }
-    
-    newAnswers[leftIndex] = draggedMatchIndex;
+    currentAnswers[leftIndex] = rightIndex;
     
     const answers = [...state.answers];
-    answers[state.currentQuestionIndex] = newAnswers;
+    answers[state.currentQuestionIndex] = currentAnswers;
     setState({ answers });
     
-    draggedMatchIndex = null;
-    draggedFromLeft = null;
-    
-    // Auto-check in study mode when all pairs matched
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    if (state.studyMode && Object.keys(newAnswers).length === q.pairs.length) {
+    if (state.studyMode && Object.keys(currentAnswers).length === q.pairs.length) {
         setTimeout(() => {
-            handleStudyModeCheck(newAnswers, q);
+            handleStudyModeCheck(currentAnswers, q);
         }, 300);
     }
     
     saveQuizProgress();
 }
 
+// Touch handler for matching
+function matchDropTouchHandler(leftIndex, rightIndex) {
+    matchDropHandler(leftIndex, rightIndex);
+}
+
+// Mobile tap-to-match support
+export function selectMatchLeft(index) {
+    const state = getState();
+    if (state.studyMode && state.showAnswer) return;
+    
+    selectedMatchLeft = index;
+    
+    // Highlight selected
+    document.querySelectorAll('.match-item.left').forEach(el => el.classList.remove('tap-selected'));
+    document.querySelector(`[data-index="${index}"].match-item.left`)?.classList.add('tap-selected');
+    
+    showToast('Now tap a definition to match', 'info');
+}
+
+export function selectMatchRight(index) {
+    if (selectedMatchLeft === null) {
+        showToast('Select a term first', 'warning');
+        return;
+    }
+    
+    matchDropHandler(selectedMatchLeft, index);
+    
+    // Clear selection
+    document.querySelectorAll('.match-item.left').forEach(el => el.classList.remove('tap-selected'));
+    selectedMatchLeft = null;
+}
+
 export function removeMatch(leftIndex) {
     const state = getState();
-    
-    // Don't allow changes if answer already shown in study mode
     if (state.studyMode && state.showAnswer) return;
     
     const currentAnswers = { ...(state.answers[state.currentQuestionIndex] || {}) };
@@ -782,13 +849,24 @@ export function removeMatch(leftIndex) {
     saveQuizProgress();
 }
 
+export function clearAllMatches() {
+    const state = getState();
+    if (state.studyMode && state.showAnswer) return;
+    
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = {};
+    setState({ answers });
+    saveQuizProgress();
+}
+
 export function matchDragEnd(e) {
     e.target.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
     draggedMatchIndex = null;
     draggedFromLeft = null;
 }
 
-// ==================== ORDERING DRAG & DROP ====================
+// ==================== ORDERING HANDLERS ====================
 
 let draggedOrderIndex = null;
 
@@ -816,24 +894,31 @@ export function orderDrop(e, targetIndex) {
     if (draggedOrderIndex === null || draggedOrderIndex === targetIndex) return;
     
     const state = getState();
-    
-    // Don't allow changes if answer already shown in study mode
     if (state.studyMode && state.showAnswer) return;
     
+    orderDropHandler(draggedOrderIndex, targetIndex);
+}
+
+function orderDropHandler(fromIndex, toIndex) {
+    const state = getState();
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
     const currentOrder = state.answers[state.currentQuestionIndex] || 
-        q.items.map((text, i) => ({ text, origIndex: i }));
+        q.options.map((text, i) => ({ text, origIndex: q.correct[i] }));
     
     const newOrder = [...currentOrder];
-    const [removed] = newOrder.splice(draggedOrderIndex, 1);
-    newOrder.splice(targetIndex, 0, removed);
+    const [removed] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, removed);
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = newOrder;
     setState({ answers });
     
-    draggedOrderIndex = null;
     saveQuizProgress();
+}
+
+// Touch handler for ordering
+function orderDropTouchHandler(fromIndex, toIndex) {
+    orderDropHandler(fromIndex, toIndex);
 }
 
 export function orderDragEnd(e) {
@@ -889,6 +974,80 @@ export function toggleFlag() {
     saveQuizProgress();
 }
 
+// ==================== QUIZ START ====================
+
+export async function startQuiz(quizId, options = {}) {
+    showLoading();
+    
+    try {
+        const quiz = await getQuiz(quizId);
+        
+        let savedProgress = null;
+        if (!options.restart) {
+            savedProgress = loadQuizProgress(quizId);
+        }
+        
+        if (savedProgress && !options.restart) {
+            // Restore saved progress
+            setState({
+                view: 'quiz',
+                currentQuiz: quiz,
+                currentQuestionIndex: savedProgress.questionIndex || 0,
+                answers: savedProgress.answers || [],
+                flaggedQuestions: new Set(savedProgress.flagged || []),
+                studyMode: savedProgress.studyMode ?? options.studyMode ?? true,
+                randomizeOptions: savedProgress.randomizeOptions ?? options.randomizeOptions ?? false,
+                optionShuffles: savedProgress.optionShuffles || {},
+                showAnswer: false,
+                quizStreak: savedProgress.quizStreak || 0,
+                maxQuizStreak: savedProgress.maxQuizStreak || 0,
+                matchingShuffled: savedProgress.matchingShuffled || {},
+                timerEnabled: savedProgress.timerEnabled ?? options.timed ?? false,
+                timerMinutes: options.minutes || 15,
+                timeRemaining: savedProgress.timeRemaining || ((options.minutes || 15) * 60),
+                quizStartTime: Date.now()
+            });
+            
+            showToast('Resuming quiz...', 'info');
+        } else {
+            // Fresh start
+            setState({
+                view: 'quiz',
+                currentQuiz: quiz,
+                currentQuestionIndex: 0,
+                answers: [],
+                flaggedQuestions: new Set(),
+                studyMode: options.studyMode ?? true,
+                randomizeOptions: options.randomizeOptions ?? false,
+                optionShuffles: {},
+                showAnswer: false,
+                quizStreak: 0,
+                maxQuizStreak: 0,
+                matchingShuffled: {},
+                timerEnabled: options.timed ?? false,
+                timerMinutes: options.minutes || 15,
+                timeRemaining: (options.minutes || 15) * 60,
+                quizStartTime: Date.now()
+            });
+            
+            if (window.sounds) window.sounds.playQuizStart();
+        }
+        
+        if (options.timed) {
+            startTimer();
+        }
+        
+        // Update daily streak
+        updateDailyStreak();
+        
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        showToast('Failed to load quiz: ' + error.message, 'error');
+        console.error('Quiz load error:', error);
+    }
+}
+
 // ==================== TIMER ====================
 
 function startTimer() {
@@ -898,14 +1057,15 @@ function startTimer() {
         const state = getState();
         if (state.timeRemaining <= 0) {
             clearInterval(timerInterval);
+            showToast('Time\'s up!', 'warning');
             submitQuiz();
             return;
         }
         
         if (window.sounds) {
-            if (state.timeRemaining === 60) {
+            if (state.timeRemaining === TIME.TIMER_WARNING_SECONDS) {
                 window.sounds.playTimerWarning();
-            } else if (state.timeRemaining <= 10) {
+            } else if (state.timeRemaining <= TIME.TIMER_URGENT_SECONDS) {
                 window.sounds.playTimerUrgent();
             }
         }
@@ -930,7 +1090,7 @@ export async function submitQuiz() {
     
     let correct = 0;
     quiz.questions.forEach((q, i) => {
-        if (checkIfCorrect(state.answers[i], q)) {
+        if (checkIfCorrect(state.answers[i], q, i)) {
             correct++;
         }
     });

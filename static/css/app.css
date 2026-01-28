@@ -2859,3 +2859,472 @@ h3 { font-size: 1.25rem; }
     cursor: default;
     pointer-events: none;
 }
+/* ============================================
+   Mobile & Touch Support CSS
+   ============================================ */
+
+/* ==================== TOUCH FEEDBACK ==================== */
+
+.touch-active {
+    transform: scale(0.98);
+    opacity: 0.9;
+    transition: all 0.1s ease;
+}
+
+.tap-selected {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+}
+
+/* ==================== MATCHING - MOBILE IMPROVEMENTS ==================== */
+
+.matching-container {
+    touch-action: none;
+}
+
+.match-item {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+}
+
+.match-item.left {
+    touch-action: manipulation;
+}
+
+.match-item.right {
+    touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+    .matching-grid {
+        gap: 1rem;
+    }
+    
+    .match-item {
+        min-height: 60px;
+        padding: 1rem;
+        font-size: 1rem;
+    }
+    
+    .match-letter,
+    .match-number {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+    
+    .match-preview {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+    }
+    
+    .btn-remove {
+        padding: 0.5rem;
+        min-width: 36px;
+        min-height: 36px;
+    }
+}
+
+.match-item.dragging {
+    opacity: 0.7;
+    transform: scale(1.05) rotate(2deg);
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.match-item.matched {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    border-color: var(--success);
+}
+
+.match-item.correct-match {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+    border-color: var(--success);
+    animation: correctPulse 0.5s ease;
+}
+
+.match-item.wrong-match {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+    border-color: var(--error);
+    animation: shake 0.5s ease;
+}
+
+/* ==================== ORDERING - MOBILE IMPROVEMENTS ==================== */
+
+.ordering-container {
+    touch-action: none;
+}
+
+.order-item {
+    touch-action: manipulation;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+}
+
+.order-item:active {
+    cursor: grabbing;
+}
+
+.order-item.dragging {
+    opacity: 0.7;
+    transform: scale(1.02);
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    cursor: grabbing;
+}
+
+.order-item.drag-over {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+    transform: translateY(-4px);
+}
+
+@media (max-width: 768px) {
+    .order-item {
+        min-height: 64px;
+        padding: 1rem;
+        font-size: 1rem;
+    }
+    
+    .order-handle {
+        font-size: 1.5rem;
+        width: 40px;
+    }
+    
+    .order-number {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+}
+
+.order-item.correct-order {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+    border-color: var(--success);
+}
+
+.order-item.wrong-order {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    border-color: var(--error);
+}
+
+/* ==================== MULTIPLE CHOICE - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .option {
+        min-height: 56px;
+        padding: 1rem;
+        font-size: 1rem;
+    }
+    
+    .option input[type="radio"],
+    .option input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .option-letter {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+}
+
+/* ==================== TRUE/FALSE - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .tf-options {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .tf-options .option {
+        width: 100%;
+        min-height: 80px;
+        padding: 1.5rem;
+    }
+    
+    .tf-icon {
+        font-size: 2rem;
+    }
+    
+    .tf-label {
+        font-size: 1.25rem;
+    }
+}
+
+/* ==================== QUIZ NAVIGATION - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .quiz-header {
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .quiz-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .quiz-footer {
+        padding: 1rem;
+    }
+    
+    .quiz-nav {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .btn {
+        min-height: 44px;
+    }
+    
+    .btn-sm {
+        min-height: 40px;
+    }
+}
+
+/* ==================== QUESTION DOTS - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .q-dot {
+        width: 36px;
+        height: 36px;
+        font-size: 0.9rem;
+    }
+}
+
+/* ==================== CODE BLOCKS - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .code-block {
+        font-size: 0.85rem;
+        padding: 1rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .code-block code {
+        white-space: pre;
+        word-wrap: normal;
+    }
+}
+
+/* ==================== LIBRARY CARDS - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .quiz-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .quiz-card {
+        max-width: 100%;
+    }
+    
+    .quiz-card-footer {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+    
+    .quiz-card-actions {
+        justify-content: center;
+        width: 100%;
+    }
+}
+
+/* ==================== MODAL - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .modal {
+        width: 95%;
+        max-width: 100%;
+        margin: 0.5rem;
+        max-height: 95vh;
+        overflow-y: auto;
+    }
+    
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 1rem;
+    }
+}
+
+/* ==================== FORMS - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .input,
+    .textarea,
+    select {
+        font-size: 16px;
+        min-height: 44px;
+    }
+    
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+}
+
+/* ==================== SEARCH BOX - MOBILE ==================== */
+
+@media (max-width: 768px) {
+    .library-toolbar {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .search-box {
+        width: 100%;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes correctPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    50% { transform: translateX(8px); }
+    75% { transform: translateX(-4px); }
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+
+.btn-icon,
+.dropdown button,
+.quiz-card-actions button {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+select:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* ==================== LOADING STATES ==================== */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ==================== OFFLINE INDICATOR ==================== */
+
+.offline-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--error);
+    color: white;
+    padding: 0.5rem;
+    text-align: center;
+    z-index: 10000;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+/* ==================== SAFE AREA INSETS (iOS Notch) ==================== */
+
+@supports (padding-top: env(safe-area-inset-top)) {
+    .quiz-header,
+    .navbar {
+        padding-top: max(env(safe-area-inset-top), 1rem);
+    }
+    
+    .quiz-footer {
+        padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+    }
+}
+
+/* ==================== TOUCH SCROLLING ==================== */
+
+.quiz-main,
+.create-main,
+.modal-body,
+.ordering-list,
+.matching-grid {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ==================== REDUCE MOTION ==================== */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ==================== HIGH CONTRAST MODE ==================== */
+
+@media (prefers-contrast: high) {
+    .option,
+    .match-item,
+    .order-item,
+    .card {
+        border-width: 2px;
+    }
+    
+    .btn {
+        border-width: 2px;
+    }
+}
