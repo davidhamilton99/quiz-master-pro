@@ -653,7 +653,7 @@ export function selectOption(index) {
     setState({ answers });
     
     if (state.studyMode) {
-        setTimeout(() => handleStudyModeCheck(index, q), 300);
+        setTimeout(() => handleStudyModeCheck(index, q), TIME.STUDY_MODE_DELAY_MS);
     }
     
     saveQuizProgress();
@@ -670,7 +670,7 @@ export function selectTF(value) {
     setState({ answers });
     
     if (state.studyMode) {
-        setTimeout(() => handleStudyModeCheck(value, q), 300);
+        setTimeout(() => handleStudyModeCheck(value, q), TIME.STUDY_MODE_DELAY_MS);
     }
     
     saveQuizProgress();

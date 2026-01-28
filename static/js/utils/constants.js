@@ -18,7 +18,7 @@ export const TIME = {
     TIMER_URGENT_SECONDS: 10,
     
     // Animation delays
-    STUDY_MODE_DELAY_MS: 300,
+    STUDY_MODE_DELAY_MS: 0,
     CELEBRATION_DELAY_MS: 300,
     CONFETTI_BURST_DELAY_MS: 200,
 };
