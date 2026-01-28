@@ -7,7 +7,7 @@ import {
 import { getQuiz, saveAttempt } from '../services/api.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
-import { TIME, STREAK, QUIZ } from '../constants.js';
+import { TIME, STREAK, QUIZ } from '../utils/constants.js';
 
 let timerInterval = null;
 
