@@ -404,7 +404,7 @@ function renderMultipleChoice(q, questionIndex) {
     }
     // ===== END RANDOMIZATION FIX =====
     
-    const isMulti = Array.isArray(displayCorrect);
+    const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
     
     let html = '<div class="options-grid">';
@@ -730,9 +730,18 @@ function checkIfCorrect(answer, question, questionIndex = null) {
             
         case 'matching':
             if (!answer || typeof answer !== 'object') return false;
-            return Object.entries(answer).every(([left, right]) => 
-                parseInt(left) === parseInt(right)
-            );
+            // Get the shuffled right items for this question
+            const shuffledRight = state.matchingShuffled[questionIndex];
+            if (!shuffledRight) return false;
+            
+            // Check if all pairs are matched correctly
+            // answer format: { leftIndex: rightDisplayIndex }
+            // We need to check if shuffledRight[rightDisplayIndex].origIndex === leftIndex
+            return Object.entries(answer).every(([left, right]) => {
+                const leftIdx = parseInt(left);
+                const rightIdx = parseInt(right);
+                return shuffledRight[rightIdx] && shuffledRight[rightIdx].origIndex === leftIdx;
+            });
             
         case 'ordering':
             if (!answer || !Array.isArray(answer)) return false;
@@ -740,7 +749,12 @@ function checkIfCorrect(answer, question, questionIndex = null) {
             
         default:
             if (Array.isArray(correctAnswer)) {
-                const ans = answer || [];
+                // Single correct answer stored as array with one element
+                if (correctAnswer.length === 1 && typeof answer === 'number') {
+                    return answer === correctAnswer[0];
+                }
+                // Multiple correct answers - user answer should be an array
+                const ans = Array.isArray(answer) ? answer : [];
                 return correctAnswer.length === ans.length && 
                        correctAnswer.every(c => ans.includes(c));
             }

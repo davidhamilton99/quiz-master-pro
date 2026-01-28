@@ -7,7 +7,7 @@ import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import {
-    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, nextQuestion, prevQuestion,
+    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, nextQuestion, prevQuestion,
     goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
     matchDragStart, matchDragEnd, matchDragOver, matchDragLeave, matchDrop, removeMatch,
     orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd
@@ -331,6 +331,7 @@ window.app = {
     selectOption,
     selectTF,
     checkMultipleChoiceAnswer,
+    toggleMultiSelect,
     nextQuestion,
     prevQuestion,
     goToQuestion,
