@@ -2865,9 +2865,9 @@ h3 { font-size: 1.25rem; }
 
 /* ==================== TOUCH FEEDBACK ==================== */
 
-.touch-active {
+/* Only apply touch-active if NOT already selected */
+.touch-active:not(.selected) {
     transform: scale(0.98);
-    opacity: 0.9;
     transition: all 0.1s ease;
 }
 
@@ -3327,4 +3327,66 @@ select:focus:not(:focus-visible) {
     .btn {
         border-width: 2px;
     }
+}
+
+/* ============================================
+   FIX: T/F Icon and Label Visibility
+   ============================================ */
+
+/* Make T/F icons bright and visible */
+.tf-option .tf-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.tf-option:first-child .tf-icon {
+    color: #34d399 !important; /* Bright green */
+}
+
+.tf-option:last-child .tf-icon {
+    color: #f87171 !important; /* Bright red */
+}
+
+.tf-option .tf-label {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary) !important;
+}
+
+/* Keep icons colored when selected */
+.tf-option.selected:first-child .tf-icon {
+    color: #34d399 !important;
+}
+
+.tf-option.selected:last-child .tf-icon {
+    color: #f87171 !important;
+}
+
+/* ============================================
+   FIX: Selection stays purple, no flicker
+   ============================================ */
+
+/* Override any active/touch states for selected options */
+.option.selected,
+.option.selected:hover,
+.option.selected:active,
+.option.selected:focus,
+.option.selected.touch-active {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2) !important;
+    transform: none !important;
+    opacity: 1 !important;
+}
+
+.tf-option.selected,
+.tf-option.selected:hover,
+.tf-option.selected:active,
+.tf-option.selected:focus,
+.tf-option.selected.touch-active {
+    border-color: var(--primary) !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2) !important;
+    transform: none !important;
+    opacity: 1 !important;
 }
