@@ -470,13 +470,12 @@ h3 { font-size: 1.25rem; }
     border: 2px solid var(--border);
     border-radius: var(--radius-lg);
     cursor: pointer;
-    transition: all var(--transition-base);
 }
 .option input[type="radio"],
 .option input[type="checkbox"] {
     display: none;
 }
-.option:hover { border-color: var(--border-light); background: var(--bg-hover); transform: translateX(4px); }
+.option:hover { border-color: var(--border-light); background: var(--bg-hover); }
 .option.selected { 
     border-color: var(--primary); 
     background: rgba(139, 92, 246, 0.2); 
@@ -536,8 +535,7 @@ h3 { font-size: 1.25rem; }
     border: 2px solid var(--border);
     border-radius: var(--radius-lg);
     cursor: pointer;
-    transition: all var(--transition-base);
-}
+.tf-option:hover { box-shadow: var(--shadow-md); }
 .tf-option:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
 .tf-option.selected { 
     border-color: var(--primary); 
