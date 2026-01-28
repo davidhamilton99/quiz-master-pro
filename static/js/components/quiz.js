@@ -419,8 +419,8 @@ function renderMultipleChoice(q, questionIndex) {
         
         let cls = 'option';
         if (showingAnswer) {
-            if (isCorrectOpt) cls += ' revealed correct-opt';
-            if (isSelected && !isCorrectOpt) cls += ' revealed wrong-opt';
+            if (isCorrectOpt) cls += ' correct-opt';
+            if (isSelected && !isCorrectOpt) cls += ' wrong-opt';
         } else if (isSelected) {
             cls += ' selected';
         }
@@ -482,11 +482,11 @@ function renderTrueFalse(q, questionIndex) {
     const correctAnswer = q.correct[0] === 0;
     
     const trueClass = showingAnswer 
-        ? (correctAnswer ? 'option revealed correct-opt' : userAnswer === true ? 'option revealed wrong-opt' : 'option')
+        ? (correctAnswer ? 'option correct-opt' : userAnswer === true ? 'option wrong-opt' : 'option')
         : userAnswer === true ? 'option selected' : 'option';
     
     const falseClass = showingAnswer 
-        ? (!correctAnswer ? 'option revealed correct-opt' : userAnswer === false ? 'option revealed wrong-opt' : 'option')
+        ? (!correctAnswer ? 'option correct-opt' : userAnswer === false ? 'option wrong-opt' : 'option')
         : userAnswer === false ? 'option selected' : 'option';
     
     return `
@@ -563,7 +563,7 @@ function renderMatching(q, questionIndex) {
                         const isWrong = showingAnswer && Object.entries(userAnswer).some(([left, right]) => right === i && parseInt(left) !== item.origIndex);
                         
                         return `
-                            <div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'revealed correct-match' : ''} ${isWrong ? 'revealed wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}"
+                            <div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'correct-match' : ''} ${isWrong ? 'wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}"
                                 data-touch-drop-zone="match-right"
                                 data-index="${i}"
                                 ondragover="window.app.matchDragOver(event)"
@@ -618,7 +618,7 @@ function renderOrdering(q, questionIndex) {
                     const isWrong = showingAnswer && item.origIndex !== i;
                     
                     return `
-                        <div class="order-item ${isCorrect ? 'revealed correct-order' : ''} ${isWrong ? 'revealed wrong-order' : ''} ${showingAnswer ? 'disabled' : ''}"
+                        <div class="order-item ${isCorrect ? 'correct-order' : ''} ${isWrong ? 'wrong-order' : ''} ${showingAnswer ? 'disabled' : ''}"
                             data-touch-draggable="order-item"
                             data-touch-drop-zone="order-item"
                             data-index="${i}"
