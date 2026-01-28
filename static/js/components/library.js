@@ -3,7 +3,7 @@ import { getState, setState, getAllInProgressQuizzes } from '../state.js';
 import { logout, deleteQuiz } from '../services/api.js';
 import { showExportModal, showImportModal } from '../services/export.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
-import { TIME } from '../constants.js';
+import { TIME } from '../utils/constants.js';
 
 // Debounce timer for search
 let searchTimeout = null;
