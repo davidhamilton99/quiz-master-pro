@@ -2962,7 +2962,13 @@ h3 { font-size: 1.25rem; }
 /* ==================== MATCHING - MOBILE IMPROVEMENTS ==================== */
 
 .matching-container {
-    touch-action: none;
+    /* Only disable touch actions on actual touch devices */
+}
+
+@media (pointer: coarse) {
+    .matching-container {
+        touch-action: none;
+    }
 }
 
 .match-item {
@@ -2974,11 +2980,18 @@ h3 { font-size: 1.25rem; }
 }
 
 .match-item.left {
-    touch-action: manipulation;
+    /* touch-action only on touch devices */
 }
 
 .match-item.right {
-    touch-action: manipulation;
+    /* touch-action only on touch devices */
+}
+
+@media (pointer: coarse) {
+    .match-item.left,
+    .match-item.right {
+        touch-action: manipulation;
+    }
 }
 
 @media (max-width: 768px) {
@@ -3075,11 +3088,16 @@ h3 { font-size: 1.25rem; }
 /* ==================== ORDERING - MOBILE IMPROVEMENTS ==================== */
 
 .ordering-container {
-    touch-action: none;
+    /* Only disable touch actions on actual touch devices */
+}
+
+@media (pointer: coarse) {
+    .ordering-container {
+        touch-action: none;
+    }
 }
 
 .order-item {
-    touch-action: manipulation;
     cursor: grab;
     user-select: none;
     -webkit-user-select: none;
