@@ -559,6 +559,7 @@ function renderMatching(q, questionIndex) {
     const state = getState();
     const userAnswer = state.answers[questionIndex] || {};
     const showingAnswer = state.studyMode && state.showAnswer;
+    const allMatched = Object.keys(userAnswer).length === q.pairs.length;
     
     // Get or create shuffled right items
     let shuffledRight = state.matchingShuffled[questionIndex];
@@ -598,7 +599,7 @@ function renderMatching(q, questionIndex) {
                                 <span class="match-text">${escapeHtml(pair.left)}</span>
                                 ${isMatched ? `
                                     <span class="match-badge">${matchedRightIndex + 1}</span>
-                                    ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})" title="Remove match">×</button>` : ''}
+                                    ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})" title="Remove match">&times;</button>` : ''}
                                 ` : ''}
                             </div>
                         `;
@@ -621,18 +622,21 @@ function renderMatching(q, questionIndex) {
                                 <span class="match-number">${i + 1}</span>
                                 <span class="match-text">${escapeHtml(item.text)}</span>
                                 ${isUsed ? `<span class="match-badge-right">${String.fromCharCode(65 + matchedLeftIndex)}</span>` : ''}
-                                ${showingAnswer && isCorrect ? '<span class="match-check">&check;</span>' : ''}
+                                ${showingAnswer && isCorrect ? '<span class="match-check">&#10003;</span>' : ''}
                             </div>
                         `;
                     }).join('')}
                 </div>
             </div>
             
-            ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `
-                <div class="mt-4">
+            <div class="mt-4 flex gap-2">
+                ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `
                     <button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">Clear All</button>
-                </div>
-            ` : ''}
+                ` : ''}
+                ${state.studyMode && allMatched && !showingAnswer ? `
+                    <button class="btn btn-primary" onclick="window.app.checkMatchingAnswer()">Check Answer</button>
+                ` : ''}
+            </div>
         </div>
     `;
 }
@@ -672,18 +676,24 @@ function renderOrdering(q, questionIndex) {
                             <div class="order-arrows ${showingAnswer ? 'hidden' : ''}">
                                 <button class="order-arrow up ${isFirst ? 'disabled' : ''}" 
                                     onclick="window.app.moveOrderItem(${i}, -1)"
-                                    ${isFirst || showingAnswer ? 'disabled' : ''}>▲</button>
+                                    ${isFirst || showingAnswer ? 'disabled' : ''}>&#9650;</button>
                                 <button class="order-arrow down ${isLast ? 'disabled' : ''}" 
                                     onclick="window.app.moveOrderItem(${i}, 1)"
-                                    ${isLast || showingAnswer ? 'disabled' : ''}>▼</button>
+                                    ${isLast || showingAnswer ? 'disabled' : ''}>&#9660;</button>
                             </div>
                             <span class="order-number">${i + 1}</span>
                             <span class="order-text">${escapeHtml(item.text)}</span>
-                            ${showingAnswer ? `<span class="order-result">${isCorrect ? '&check;' : '&cross;'}</span>` : ''}
+                            ${showingAnswer ? `<span class="order-result">${isCorrect ? '&#10003;' : '&#10007;'}</span>` : ''}
                         </div>
                     `;
                 }).join('')}
             </div>
+            
+            ${!showingAnswer ? `
+                <div class="mt-4 text-center">
+                    <button class="btn btn-primary btn-lg" onclick="window.app.checkOrderingAnswer()">Check Answer</button>
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -731,6 +741,36 @@ export function checkMultipleChoiceAnswer() {
     
     if (!userAnswer || userAnswer.length === 0) {
         showToast('Please select at least one answer', 'warning');
+        return;
+    }
+    
+    if (state.studyMode) {
+        handleStudyModeCheck(userAnswer, q);
+    }
+}
+
+export function checkMatchingAnswer() {
+    const state = getState();
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const userAnswer = state.answers[state.currentQuestionIndex];
+    
+    if (!userAnswer || Object.keys(userAnswer).length !== q.pairs.length) {
+        showToast('Please match all items first', 'warning');
+        return;
+    }
+    
+    if (state.studyMode) {
+        handleStudyModeCheck(userAnswer, q);
+    }
+}
+
+export function checkOrderingAnswer() {
+    const state = getState();
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const userAnswer = state.answers[state.currentQuestionIndex];
+    
+    if (!userAnswer || !Array.isArray(userAnswer)) {
+        showToast('Please arrange the items first', 'warning');
         return;
     }
     
