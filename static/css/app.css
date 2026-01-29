@@ -1879,11 +1879,52 @@ h3 { font-size: 1.25rem; }
 }
 
 .tf-options button:first-child .tf-icon {
-    color: var(--success);  /* True checkmark is always green */
+    color: var(--success) !important;  /* True checkmark is always green */
 }
 
 .tf-options button:last-child .tf-icon {
-    color: var(--error);  /* False X is always red */
+    color: var(--error) !important;  /* False X is always red */
+}
+
+/* Hover state for True/False buttons */
+.tf-options button.option:hover:not(.correct):not(.incorrect) {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-light);
+}
+
+/* Selected state - PURPLE like multiple choice */
+.tf-options button.option.selected {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.1);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+/* Correct/Incorrect border colors when answer is shown - but keep purple background for selected */
+.tf-options button.option.correct {
+    border-color: var(--success);
+    cursor: default;
+}
+
+.tf-options button.option.incorrect {
+    border-color: var(--error);
+    cursor: default;
+}
+
+/* When selected AND correct/incorrect, keep purple background but show green/red border */
+.tf-options button.option.selected.correct {
+    border-color: var(--success);
+    background: rgba(139, 92, 246, 0.1);  /* Keep purple background */
+}
+
+.tf-options button.option.selected.incorrect {
+    border-color: var(--error);
+    background: rgba(139, 92, 246, 0.1);  /* Keep purple background */
+}
+
+/* Non-selected correct answers show green background */
+.tf-options button.option.correct:not(.selected) {
+    background: rgba(16, 185, 129, 0.15);
 }
 
 /* Make them even brighter when the answer is shown */

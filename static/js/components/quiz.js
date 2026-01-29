@@ -483,13 +483,24 @@ function renderTrueFalse(q, questionIndex) {
     
     const correctAnswer = q.correct[0] === 0;
     
-    const trueClass = showingAnswer 
-        ? (correctAnswer ? 'option correct' : userAnswer === true ? 'option incorrect' : 'option')
-        : userAnswer === true ? 'option selected' : 'option';
+    const trueSelected = userAnswer === true;
+    const falseSelected = userAnswer === false;
     
-    const falseClass = showingAnswer 
-        ? (!correctAnswer ? 'option correct' : userAnswer === false ? 'option incorrect' : 'option')
-        : userAnswer === false ? 'option selected' : 'option';
+    let trueClass = 'option';
+    let falseClass = 'option';
+    
+    // Add selected class if this option was chosen
+    if (trueSelected) trueClass += ' selected';
+    if (falseSelected) falseClass += ' selected';
+    
+    // When showing answer, add correct/incorrect classes
+    if (showingAnswer) {
+        if (correctAnswer) trueClass += ' correct';
+        else if (trueSelected) trueClass += ' incorrect';
+        
+        if (!correctAnswer) falseClass += ' correct';
+        else if (falseSelected) falseClass += ' incorrect';
+    }
     
     return `
         <div class="tf-options">
