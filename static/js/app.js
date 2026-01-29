@@ -10,7 +10,8 @@ import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, nextQuestion, prevQuestion,
     goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
     matchDragStart, matchDragEnd, matchDragOver, matchDragLeave, matchDrop, removeMatch,
-    orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd
+    orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd,
+    unmatchItem, clearAllMatches, moveOrderItem, initQuizHandlers
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
 import {
@@ -216,6 +217,13 @@ function render() {
         case 'quiz':
             // Quiz has its own streak display, no top HUD needed
             content = renderQuiz();
+            
+            // Initialize matching/ordering handlers after render
+            setTimeout(() => {
+                if (window.app.initQuizHandlers) {
+                    window.app.initQuizHandlers();
+                }
+            }, 50);
             break;
         case 'results':
             showHUD = true;
@@ -346,6 +354,8 @@ window.app = {
     matchDragLeave,
     matchDrop,
     removeMatch,
+    unmatchItem,
+    clearAllMatches,
     
     // Ordering drag & drop
     orderDragStart,
@@ -353,6 +363,10 @@ window.app = {
     orderDragLeave,
     orderDrop,
     orderDragEnd,
+    moveOrderItem,
+    
+    // Initialize handlers
+    initQuizHandlers,
     
     // Results
     retryQuiz,

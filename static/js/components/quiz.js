@@ -1,4 +1,4 @@
-/* Quiz Component - COMPLETE FIX: Mobile Support + Randomization + All Improvements */
+/* Quiz Component - UPGRADED: Professional Matching & Ordering */
 import { 
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
@@ -11,143 +11,27 @@ import { TIME, STREAK, QUIZ } from '../utils/constants.js';
 
 let timerInterval = null;
 
-// ==================== MOBILE TOUCH SUPPORT ====================
+// ==================== HELPER FUNCTIONS ====================
 
-let touchStartX = 0;
-let touchStartY = 0;
-let touchedElement = null;
-let isTouchDragging = false;
-
-function initTouchSupport() {
-    // Add touch event listeners for drag-and-drop on mobile
-    document.addEventListener('touchstart', handleTouchStart, { passive: false });
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleTouchEnd, { passive: false });
-}
-
-function handleTouchStart(e) {
-    const target = e.target.closest('[data-touch-draggable]');
-    if (!target) return;
-    
-    e.preventDefault();
-    touchedElement = target;
-    isTouchDragging = false;
-    
-    const touch = e.touches[0];
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    
-    target.classList.add('touch-active');
-}
-
-function handleTouchMove(e) {
-    if (!touchedElement) return;
-    
-    const touch = e.touches[0];
-    const deltaX = Math.abs(touch.clientX - touchStartX);
-    const deltaY = Math.abs(touch.clientY - touchStartY);
-    
-    // If moved more than 10px, consider it a drag
-    if (deltaX > 10 || deltaY > 10) {
-        isTouchDragging = true;
-        e.preventDefault();
-        
-        // Visual feedback - move the element with finger
-        touchedElement.style.transform = `translate(${touch.clientX - touchStartX}px, ${touch.clientY - touchStartY}px)`;
-        touchedElement.style.opacity = '0.7';
-        touchedElement.style.pointerEvents = 'none'; // Prevent blocking drop detection
-        touchedElement.classList.add('dragging');
-        
-        // Highlight valid drop zones under finger
-        highlightDropZonesUnderFinger(touchedElement.dataset.touchDraggable, touch.clientX, touch.clientY);
-    }
-}
-
-function highlightDropZonesUnderFinger(dragType, x, y) {
-    // Remove previous highlights
-    document.querySelectorAll('.drop-zone-highlight').forEach(el => 
-        el.classList.remove('drop-zone-highlight')
+function isMobileDevice() {
+    return (
+        ('ontouchstart' in window || navigator.maxTouchPoints > 0) &&
+        window.innerWidth < 768
     );
-    
-    // Find all elements under the finger
-    const elements = document.elementsFromPoint(x, y);
-    for (const el of elements) {
-        const dropZone = el.closest('[data-touch-drop-zone]');
-        if (dropZone) {
-            const dropType = dropZone.dataset.touchDropZone;
-            // Check if drag and drop types are compatible
-            if ((dragType === 'match-left' && dropType === 'match-right') ||
-                (dragType === 'order-item' && dropType === 'order-item')) {
-                dropZone.classList.add('drop-zone-highlight');
-            }
-            break;
-        }
-    }
 }
 
-function handleTouchEnd(e) {
-    if (!touchedElement) return;
+function hapticFeedback(type = 'light') {
+    if (!navigator.vibrate) return;
     
-    const touch = e.changedTouches[0];
+    const patterns = {
+        light: 10,
+        medium: 20,
+        heavy: 30,
+        success: [10, 50, 10],
+        error: [20, 100, 20]
+    };
     
-    // FIX: Temporarily hide dragged element to find drop zone underneath
-    touchedElement.style.visibility = 'hidden';
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    touchedElement.style.visibility = '';
-    
-    // Reset visual state
-    touchedElement.style.transform = '';
-    touchedElement.style.opacity = '';
-    touchedElement.style.pointerEvents = '';
-    touchedElement.classList.remove('touch-active', 'dragging');
-    
-    // Remove drop zone highlights
-    document.querySelectorAll('.drop-zone-highlight').forEach(el => 
-        el.classList.remove('drop-zone-highlight')
-    );
-    
-    if (isTouchDragging && target) {
-        // Handle different drop zones
-        const dropZone = target.closest('[data-touch-drop-zone]');
-        if (dropZone) {
-            e.preventDefault();
-            handleTouchDrop(touchedElement, dropZone);
-        }
-    } else if (!isTouchDragging) {
-        // It was a tap, not a drag - handle as click
-        touchedElement.click();
-    }
-    
-    touchedElement = null;
-    isTouchDragging = false;
-}
-
-function handleTouchDrop(dragged, dropZone) {
-    const dragType = dragged.dataset.touchDraggable;
-    const dropType = dropZone.dataset.touchDropZone;
-    
-    if (dragType === 'match-left') {
-        const leftIndex = parseInt(dragged.dataset.index);
-        const rightIndex = parseInt(dropZone.dataset.index);
-        if (!isNaN(leftIndex) && !isNaN(rightIndex)) {
-            matchDropTouchHandler(leftIndex, rightIndex);
-        }
-    } else if (dragType === 'order-item') {
-        const fromIndex = parseInt(dragged.dataset.index);
-        const toIndex = parseInt(dropZone.dataset.index);
-        if (!isNaN(fromIndex) && !isNaN(toIndex)) {
-            orderDropTouchHandler(fromIndex, toIndex);
-        }
-    }
-}
-
-// Initialize touch support when module loads (only on touch devices)
-if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTouchSupport);
-    } else {
-        initTouchSupport();
-    }
+    navigator.vibrate(patterns[type] || patterns.light);
 }
 
 // ==================== OPTION SHUFFLING (FIX) ====================
@@ -270,7 +154,6 @@ function renderStudyModeFeedback(q, state) {
                 feedbackHtml += `</ol>`;
                 break;
             default:
-                // Get actual correct options (handle randomization)
                 const correctOptions = getCorrectOptionsForDisplay(q, state.currentQuestionIndex);
                 if (Array.isArray(correctOptions)) {
                     feedbackHtml += `<strong>Correct answers:</strong> ${correctOptions.join(', ')}`;
@@ -294,7 +177,6 @@ function renderStudyModeFeedback(q, state) {
 function getCorrectOptionsForDisplay(q, questionIndex) {
     const state = getState();
     
-    // Get displayed options and correct indices
     let displayOptions = q.options;
     let displayCorrect = q.correct;
     
@@ -417,13 +299,11 @@ function renderMultipleChoice(q, questionIndex) {
     const hasAnswered = userAnswer !== undefined;
     const showingAnswer = state.studyMode && state.showAnswer;
     
-    // ===== RANDOMIZATION FIX =====
     let displayOptions = q.options;
     let displayCorrect = q.correct;
     
     if (state.randomizeOptions) {
         if (!state.optionShuffles[questionIndex]) {
-            // First time - shuffle and store
             const result = shuffleOptionsWithMapping(q.options, q.correct);
             const shuffles = { ...state.optionShuffles };
             shuffles[questionIndex] = result;
@@ -432,13 +312,11 @@ function renderMultipleChoice(q, questionIndex) {
             displayOptions = result.shuffledOptions;
             displayCorrect = result.newCorrect;
         } else {
-            // Use stored shuffle
             const stored = state.optionShuffles[questionIndex];
             displayOptions = stored.shuffledOptions;
             displayCorrect = stored.newCorrect;
         }
     }
-    // ===== END RANDOMIZATION FIX =====
     
     const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
@@ -454,11 +332,9 @@ function renderMultipleChoice(q, questionIndex) {
             : displayCorrect === i;
         
         let cls = 'option';
-        // Always show selected state
         if (isSelected) {
             cls += ' selected';
         }
-        // Add correct/wrong highlighting when showing answer
         if (showingAnswer) {
             if (isCorrectOpt) cls += ' correct';
             if (isSelected && !isCorrectOpt) cls += ' incorrect';
@@ -489,7 +365,6 @@ function renderMultipleChoice(q, questionIndex) {
     return html;
 }
 
-// New function for multi-select toggle
 export function toggleMultiSelect(index) {
     const state = getState();
     if (state.studyMode && state.showAnswer) return;
@@ -525,11 +400,9 @@ function renderTrueFalse(q, questionIndex) {
     let trueClass = 'option';
     let falseClass = 'option';
     
-    // Add selected class if this option was chosen
     if (trueSelected) trueClass += ' selected';
     if (falseSelected) falseClass += ' selected';
     
-    // When showing answer, add correct/incorrect classes
     if (showingAnswer) {
         if (correctAnswer) trueClass += ' correct';
         else if (trueSelected) trueClass += ' incorrect';
@@ -552,90 +425,297 @@ function renderTrueFalse(q, questionIndex) {
     `;
 }
 
-// ==================== MATCHING (WITH MOBILE SUPPORT) ====================
+// ==================== MATCHING QUESTIONS (NEW IMPLEMENTATION) ====================
 
 function renderMatching(q, questionIndex) {
     const state = getState();
     const userAnswer = state.answers[questionIndex] || {};
     const showingAnswer = state.studyMode && state.showAnswer;
     
-    // Get or create shuffled right items
     let shuffledRight = state.matchingShuffled[questionIndex];
     if (!shuffledRight) {
-        shuffledRight = shuffleArray(q.pairs.map((p, i) => ({ text: p.right, origIndex: i })));
+        shuffledRight = shuffleArray(q.pairs.map((p, i) => ({ 
+            text: p.right, 
+            origIndex: i 
+        })));
         const newShuffled = { ...state.matchingShuffled };
         newShuffled[questionIndex] = shuffledRight;
         setState({ matchingShuffled: newShuffled });
     }
     
-    const isMobile = 'ontouchstart' in window;
+    const mobile = isMobileDevice();
     
     return `
-        <div class="matching-container">
-            <p class="helper-text mb-4">${isMobile ? 'Tap left items, then tap matching right items' : 'Drag left items to matching right items'}</p>
+        <div class="matching-container ${showingAnswer ? 'locked' : ''}" id="matching-q${questionIndex}">
+            ${renderMatchingInstructions(mobile, showingAnswer)}
             
             <div class="matching-grid">
-                <div class="matching-column">
+                <div class="matching-column matching-left">
                     <div class="matching-header">Terms</div>
-                    ${q.pairs.map((pair, i) => {
-                        const isMatched = userAnswer[i] !== undefined;
-                        const matchedWith = isMatched ? shuffledRight[userAnswer[i]].text : '';
-                        
-                        return `
-                            <div class="match-item left ${isMatched ? 'matched' : ''} ${showingAnswer ? 'disabled' : ''}"
-                                data-touch-draggable="match-left"
-                                data-index="${i}"
-                                draggable="${!showingAnswer}"
-                                ondragstart="window.app.matchDragStart(event, ${i}, true)"
-                                ondragend="window.app.matchDragEnd(event)"
-                                onclick="window.app.selectMatchLeft(${i})">
-                                <span class="match-letter">${String.fromCharCode(65 + i)}</span>
-                                <span class="match-text">${escapeHtml(pair.left)}</span>
-                                ${isMatched ? `
-                                    <div class="match-preview">
-                                        → ${escapeHtml(matchedWith)}
-                                        ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})">✕</button>` : ''}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `;
-                    }).join('')}
+                    ${q.pairs.map((pair, i) => 
+                        renderMatchLeftItem(pair, i, userAnswer, shuffledRight, showingAnswer, mobile)
+                    ).join('')}
                 </div>
                 
-                <div class="matching-column">
+                <div class="matching-column matching-right">
                     <div class="matching-header">Definitions</div>
-                    ${shuffledRight.map((item, i) => {
-                        const isUsed = Object.values(userAnswer).includes(i);
-                        const isCorrect = showingAnswer && userAnswer[item.origIndex] === i;
-                        const isWrong = showingAnswer && Object.entries(userAnswer).some(([left, right]) => right === i && parseInt(left) !== item.origIndex);
-                        
-                        return `
-                            <div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'correct-match' : ''} ${isWrong ? 'wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}"
-                                data-touch-drop-zone="match-right"
-                                data-index="${i}"
-                                ondragover="window.app.matchDragOver(event)"
-                                ondragleave="window.app.matchDragLeave(event)"
-                                ondrop="window.app.matchDrop(event, ${i})"
-                                onclick="window.app.selectMatchRight(${i})">
-                                <span class="match-number">${i + 1}</span>
-                                <span class="match-text">${escapeHtml(item.text)}</span>
-                                ${showingAnswer && isCorrect ? '<span class="match-check">✓</span>' : ''}
-                            </div>
-                        `;
-                    }).join('')}
+                    ${shuffledRight.map((item, i) => 
+                        renderMatchRightItem(item, i, userAnswer, showingAnswer, mobile)
+                    ).join('')}
                 </div>
             </div>
             
             ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `
-                <div class="mt-4">
-                    <button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">Clear All</button>
+                <div class="matching-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">
+                        Clear All Matches
+                    </button>
                 </div>
             ` : ''}
         </div>
     `;
 }
 
-// ==================== ORDERING (WITH MOBILE SUPPORT) ====================
+function renderMatchingInstructions(mobile, showingAnswer) {
+    if (showingAnswer) return '';
+    
+    if (mobile) {
+        return `
+            <div class="matching-instructions mobile">
+                <span class="instruction-icon">👆</span>
+                <p>Tap a term, then tap its matching definition</p>
+            </div>
+        `;
+    }
+    return `
+        <div class="matching-instructions desktop">
+            <span class="instruction-icon">🖱️</span>
+            <p>Drag terms to their matching definitions</p>
+        </div>
+    `;
+}
+
+function renderMatchLeftItem(pair, index, userAnswer, shuffledRight, showingAnswer, mobile) {
+    const isMatched = userAnswer[index] !== undefined;
+    const matchedRightIndex = userAnswer[index];
+    const matchedText = isMatched ? shuffledRight[matchedRightIndex].text : '';
+    
+    let statusClass = '';
+    if (showingAnswer && isMatched) {
+        const isCorrect = shuffledRight[matchedRightIndex].origIndex === index;
+        statusClass = isCorrect ? 'match-correct' : 'match-wrong';
+    }
+    
+    const letter = String.fromCharCode(65 + index);
+    
+    return `
+        <div class="match-item match-left ${isMatched ? 'matched' : ''} ${statusClass} ${showingAnswer ? 'disabled' : ''}"
+            data-left-index="${index}">
+            
+            <div class="match-content">
+                <span class="match-letter">${letter}</span>
+                <span class="match-text">${escapeHtml(pair.left)}</span>
+            </div>
+            
+            ${isMatched ? `
+                <div class="match-connection">
+                    <span class="connection-arrow">→</span>
+                    <span class="connection-text">${escapeHtml(matchedText)}</span>
+                    ${!showingAnswer ? `
+                        <button class="match-remove-btn" 
+                            onclick="window.app.unmatchItem(${index})"
+                            title="Remove match">
+                            ✕
+                        </button>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            ${showingAnswer && statusClass ? `
+                <span class="match-status-icon">
+                    ${statusClass === 'match-correct' ? '✓' : '✗'}
+                </span>
+            ` : ''}
+        </div>
+    `;
+}
+
+function renderMatchRightItem(item, index, userAnswer, showingAnswer, mobile) {
+    const isUsed = Object.values(userAnswer).includes(index);
+    
+    let statusClass = '';
+    if (showingAnswer) {
+        const matchedLeft = Object.entries(userAnswer).find(([_, right]) => right === index);
+        if (matchedLeft) {
+            const leftIndex = parseInt(matchedLeft[0]);
+            const isCorrect = item.origIndex === leftIndex;
+            statusClass = isCorrect ? 'match-correct' : 'match-wrong';
+        }
+    }
+    
+    const number = index + 1;
+    
+    return `
+        <div class="match-item match-right ${isUsed ? 'used' : ''} ${statusClass} ${showingAnswer ? 'disabled' : ''}"
+            data-right-index="${index}">
+            
+            <span class="match-number">${number}</span>
+            <span class="match-text">${escapeHtml(item.text)}</span>
+            
+            ${showingAnswer && statusClass ? `
+                <span class="match-status-icon">
+                    ${statusClass === 'match-correct' ? '✓' : '✗'}
+                </span>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Matching state
+let selectedMatchLeft = null;
+let draggedMatchLeft = null;
+
+function initMatchingHandlers() {
+    const container = document.querySelector('.matching-container:not(.locked)');
+    if (!container) return;
+    
+    const mobile = isMobileDevice();
+    
+    if (mobile) {
+        initMatchingMobile(container);
+    } else {
+        initMatchingDesktop(container);
+    }
+}
+
+function initMatchingMobile(container) {
+    container.querySelectorAll('.match-left:not(.disabled)').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (e.target.closest('.match-remove-btn')) return;
+            
+            const index = parseInt(item.dataset.leftIndex);
+            
+            container.querySelectorAll('.match-left').forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedMatchLeft = index;
+            
+            hapticFeedback('light');
+        });
+    });
+    
+    container.querySelectorAll('.match-right:not(.disabled)').forEach(item => {
+        item.addEventListener('click', () => {
+            if (selectedMatchLeft === null) {
+                hapticFeedback('error');
+                return;
+            }
+            
+            const rightIndex = parseInt(item.dataset.rightIndex);
+            createMatch(selectedMatchLeft, rightIndex);
+            
+            container.querySelectorAll('.match-left').forEach(i => i.classList.remove('selected'));
+            selectedMatchLeft = null;
+        });
+    });
+}
+
+function initMatchingDesktop(container) {
+    container.querySelectorAll('.match-left:not(.disabled)').forEach(item => {
+        item.draggable = true;
+        
+        item.addEventListener('dragstart', (e) => {
+            draggedMatchLeft = parseInt(item.dataset.leftIndex);
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            container.querySelectorAll('.match-right').forEach(r => r.classList.remove('drag-over'));
+            draggedMatchLeft = null;
+        });
+    });
+    
+    container.querySelectorAll('.match-right:not(.disabled)').forEach(item => {
+        item.addEventListener('dragover', (e) => {
+            if (draggedMatchLeft === null) return;
+            e.preventDefault();
+            item.classList.add('drag-over');
+        });
+        
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+        
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            item.classList.remove('drag-over');
+            
+            if (draggedMatchLeft === null) return;
+            
+            const rightIndex = parseInt(item.dataset.rightIndex);
+            createMatch(draggedMatchLeft, rightIndex);
+        });
+    });
+}
+
+function createMatch(leftIndex, rightIndex) {
+    const state = getState();
+    const currentAnswer = { ...(state.answers[state.currentQuestionIndex] || {}) };
+    
+    currentAnswer[leftIndex] = rightIndex;
+    
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = currentAnswer;
+    setState({ answers });
+    
+    hapticFeedback('success');
+    
+    const question = state.currentQuiz.questions[state.currentQuestionIndex];
+    if (state.studyMode && Object.keys(currentAnswer).length === question.pairs.length) {
+        setTimeout(() => checkMatchingAnswer(), 300);
+    }
+    
+    saveQuizProgress();
+    rerenderCurrentQuestion();
+}
+
+export function unmatchItem(leftIndex) {
+    const state = getState();
+    const currentAnswer = { ...(state.answers[state.currentQuestionIndex] || {}) };
+    
+    delete currentAnswer[leftIndex];
+    
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = currentAnswer;
+    setState({ answers });
+    
+    hapticFeedback('medium');
+    
+    saveQuizProgress();
+    rerenderCurrentQuestion();
+}
+
+export function clearAllMatches() {
+    const state = getState();
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = {};
+    setState({ answers });
+    
+    rerenderCurrentQuestion();
+}
+
+function checkMatchingAnswer() {
+    const state = getState();
+    const q = state.currentQuiz.questions[state.currentQuestionIndex];
+    const userAnswer = state.answers[state.currentQuestionIndex];
+    
+    if (state.studyMode) {
+        handleStudyModeCheck(userAnswer, q);
+    }
+}
+
+// ==================== ORDERING QUESTIONS (NEW IMPLEMENTATION) ====================
 
 function renderOrdering(q, questionIndex) {
     const state = getState();
@@ -643,8 +723,6 @@ function renderOrdering(q, questionIndex) {
     
     let currentOrder = state.answers[questionIndex];
     if (!currentOrder) {
-        // Initialize with shuffled order
-        // FIX: Use actual index i, not q.correct[i] which is the answer mapping
         currentOrder = shuffleArray(q.options.map((text, i) => ({ 
             text, 
             origIndex: i 
@@ -654,38 +732,215 @@ function renderOrdering(q, questionIndex) {
         setState({ answers });
     }
     
-    const isMobile = 'ontouchstart' in window;
+    const mobile = isMobileDevice();
     
     return `
-        <div class="ordering-container">
-            <p class="helper-text mb-4">${isMobile ? 'Tap and drag items to reorder them' : 'Drag items to reorder them'}</p>
+        <div class="ordering-container ${showingAnswer ? 'locked' : ''}" id="ordering-q${questionIndex}">
+            ${renderOrderingInstructions(mobile, showingAnswer)}
             
             <div class="ordering-list">
-                ${currentOrder.map((item, i) => {
-                    const isCorrect = showingAnswer && item.origIndex === i;
-                    const isWrong = showingAnswer && item.origIndex !== i;
-                    
-                    return `
-                        <div class="order-item ${isCorrect ? 'correct-order' : ''} ${isWrong ? 'wrong-order' : ''} ${showingAnswer ? 'disabled' : ''}"
-                            data-touch-draggable="order-item"
-                            data-touch-drop-zone="order-item"
-                            data-index="${i}"
-                            draggable="${!showingAnswer}"
-                            ondragstart="window.app.orderDragStart(event, ${i})"
-                            ondragover="window.app.orderDragOver(event)"
-                            ondragleave="window.app.orderDragLeave(event)"
-                            ondrop="window.app.orderDrop(event, ${i})"
-                            ondragend="window.app.orderDragEnd(event)">
-                            <span class="order-handle">${showingAnswer ? (isCorrect ? '✓' : '✗') : '☰'}</span>
-                            <span class="order-number">${i + 1}</span>
-                            <span class="order-text">${escapeHtml(item.text)}</span>
-                            ${showingAnswer && isCorrect ? '<span class="order-check">✓</span>' : ''}
-                        </div>
-                    `;
-                }).join('')}
+                ${currentOrder.map((item, i) => 
+                    renderOrderItem(item, i, showingAnswer, mobile, currentOrder.length)
+                ).join('')}
             </div>
         </div>
     `;
+}
+
+function renderOrderingInstructions(mobile, showingAnswer) {
+    if (showingAnswer) return '';
+    
+    if (mobile) {
+        return `
+            <div class="ordering-instructions mobile">
+                <span class="instruction-icon">📱</span>
+                <p>Use arrow buttons to reorder items</p>
+            </div>
+        `;
+    }
+    return `
+        <div class="ordering-instructions desktop">
+            <span class="instruction-icon">🖱️</span>
+            <p>Drag items to reorder them</p>
+        </div>
+    `;
+}
+
+function renderOrderItem(item, index, showingAnswer, mobile, total) {
+    let statusClass = '';
+    if (showingAnswer) {
+        const isCorrect = item.origIndex === index;
+        statusClass = isCorrect ? 'order-correct' : 'order-wrong';
+    }
+    
+    return `
+        <div class="order-item ${statusClass} ${showingAnswer ? 'disabled' : ''}"
+            data-order-index="${index}"
+            ${!showingAnswer && !mobile ? 'draggable="true"' : ''}>
+            
+            ${!showingAnswer && !mobile ? `
+                <span class="order-handle" title="Drag to reorder">☰</span>
+            ` : showingAnswer ? `
+                <span class="order-status-icon">
+                    ${statusClass === 'order-correct' ? '✓' : '✗'}
+                </span>
+            ` : `
+                <span class="order-handle-mobile">☰</span>
+            `}
+            
+            <span class="order-number">${index + 1}</span>
+            <span class="order-text">${escapeHtml(item.text)}</span>
+            
+            ${mobile && !showingAnswer ? `
+                <div class="order-arrows">
+                    <button class="order-arrow-btn order-up" 
+                        onclick="window.app.moveOrderItem(${index}, 'up')"
+                        ${index === 0 ? 'disabled' : ''}
+                        title="Move up">
+                        ▲
+                    </button>
+                    <button class="order-arrow-btn order-down" 
+                        onclick="window.app.moveOrderItem(${index}, 'down')"
+                        ${index === total - 1 ? 'disabled' : ''}
+                        title="Move down">
+                        ▼
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Ordering state
+let draggedOrderIndex = null;
+
+function initOrderingHandlers() {
+    const container = document.querySelector('.ordering-container:not(.locked)');
+    if (!container) return;
+    
+    const mobile = isMobileDevice();
+    
+    if (!mobile) {
+        initOrderingDesktop(container);
+    }
+}
+
+function initOrderingDesktop(container) {
+    container.querySelectorAll('.order-item[draggable="true"]').forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedOrderIndex = parseInt(item.dataset.orderIndex);
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            container.querySelectorAll('.order-item').forEach(i => {
+                i.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+            draggedOrderIndex = null;
+        });
+        
+        item.addEventListener('dragover', (e) => {
+            if (draggedOrderIndex === null) return;
+            
+            e.preventDefault();
+            const currentIndex = parseInt(item.dataset.orderIndex);
+            if (currentIndex === draggedOrderIndex) return;
+            
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            
+            container.querySelectorAll('.order-item').forEach(i => {
+                i.classList.remove('drag-over-top', 'drag-over-bottom');
+            });
+            
+            if (e.clientY < midpoint) {
+                item.classList.add('drag-over-top');
+            } else {
+                item.classList.add('drag-over-bottom');
+            }
+        });
+        
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            
+            if (draggedOrderIndex === null) return;
+            
+            const targetIndex = parseInt(item.dataset.orderIndex);
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            
+            let finalTarget = targetIndex;
+            if (e.clientY >= midpoint) {
+                finalTarget++;
+            }
+            
+            if (draggedOrderIndex < finalTarget) {
+                finalTarget--;
+            }
+            
+            if (draggedOrderIndex !== finalTarget) {
+                reorderItems(draggedOrderIndex, finalTarget);
+            }
+        });
+    });
+}
+
+export function moveOrderItem(index, direction) {
+    if (direction === 'up' && index > 0) {
+        reorderItems(index, index - 1);
+    } else if (direction === 'down') {
+        const state = getState();
+        const total = state.currentQuiz.questions[state.currentQuestionIndex].options.length;
+        if (index < total - 1) {
+            reorderItems(index, index + 1);
+        }
+    }
+    
+    hapticFeedback('light');
+}
+
+function reorderItems(fromIndex, toIndex) {
+    const state = getState();
+    const currentOrder = [...state.answers[state.currentQuestionIndex]];
+    
+    const [removed] = currentOrder.splice(fromIndex, 1);
+    currentOrder.splice(toIndex, 0, removed);
+    
+    const answers = [...state.answers];
+    answers[state.currentQuestionIndex] = currentOrder;
+    setState({ answers });
+    
+    saveQuizProgress();
+    rerenderCurrentQuestion();
+}
+
+function rerenderCurrentQuestion() {
+    const state = getState();
+    const question = state.currentQuiz.questions[state.currentQuestionIndex];
+    
+    let newHtml = '';
+    if (question.type === 'matching') {
+        newHtml = renderMatching(question, state.currentQuestionIndex);
+    } else if (question.type === 'ordering') {
+        newHtml = renderOrdering(question, state.currentQuestionIndex);
+    }
+    
+    if (newHtml) {
+        const container = document.querySelector(
+            question.type === 'matching' ? '.matching-container' : '.ordering-container'
+        );
+        if (container) {
+            container.outerHTML = newHtml;
+            
+            if (question.type === 'matching') {
+                initMatchingHandlers();
+            } else {
+                initOrderingHandlers();
+            }
+        }
+    }
 }
 
 // ==================== ANSWER HANDLING ====================
@@ -765,7 +1020,6 @@ function handleStudyModeCheck(userAnswer, question) {
 function checkIfCorrect(answer, question, questionIndex = null) {
     const state = getState();
     
-    // Get correct answer (handle randomization)
     let correctAnswer = question.correct;
     if (questionIndex !== null && state.randomizeOptions && state.optionShuffles[questionIndex]) {
         correctAnswer = state.optionShuffles[questionIndex].newCorrect;
@@ -778,13 +1032,9 @@ function checkIfCorrect(answer, question, questionIndex = null) {
             
         case 'matching':
             if (!answer || typeof answer !== 'object') return false;
-            // Get the shuffled right items for this question
             const shuffledRight = state.matchingShuffled[questionIndex];
             if (!shuffledRight) return false;
             
-            // Check if all pairs are matched correctly
-            // answer format: { leftIndex: rightDisplayIndex }
-            // We need to check if shuffledRight[rightDisplayIndex].origIndex === leftIndex
             return Object.entries(answer).every(([left, right]) => {
                 const leftIdx = parseInt(left);
                 const rightIdx = parseInt(right);
@@ -797,196 +1047,15 @@ function checkIfCorrect(answer, question, questionIndex = null) {
             
         default:
             if (Array.isArray(correctAnswer)) {
-                // Single correct answer stored as array with one element
                 if (correctAnswer.length === 1 && typeof answer === 'number') {
                     return answer === correctAnswer[0];
                 }
-                // Multiple correct answers - user answer should be an array
                 const ans = Array.isArray(answer) ? answer : [];
                 return correctAnswer.length === ans.length && 
                        correctAnswer.every(c => ans.includes(c));
             }
             return answer === correctAnswer;
     }
-}
-
-// ==================== MATCHING HANDLERS ====================
-
-let draggedMatchIndex = null;
-let draggedFromLeft = null;
-let selectedMatchLeft = null; // For mobile tap-to-match
-
-export function matchDragStart(e, index, fromLeft) {
-    draggedMatchIndex = index;
-    draggedFromLeft = fromLeft;
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-export function matchDragOver(e) {
-    e.preventDefault();
-    if (draggedMatchIndex !== null && draggedFromLeft) {
-        e.currentTarget.classList.add('drag-over');
-    }
-}
-
-export function matchDragLeave(e) {
-    e.currentTarget.classList.remove('drag-over');
-}
-
-export function matchDrop(e, rightIndex) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
-    
-    if (draggedMatchIndex === null || !draggedFromLeft) return;
-    
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    matchDropHandler(draggedMatchIndex, rightIndex);
-}
-
-function matchDropHandler(leftIndex, rightIndex) {
-    const state = getState();
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    const currentAnswers = { ...(state.answers[state.currentQuestionIndex] || {}) };
-    
-    currentAnswers[leftIndex] = rightIndex;
-    
-    const answers = [...state.answers];
-    answers[state.currentQuestionIndex] = currentAnswers;
-    setState({ answers });
-    
-    if (state.studyMode && Object.keys(currentAnswers).length === q.pairs.length) {
-        setTimeout(() => {
-            handleStudyModeCheck(currentAnswers, q);
-        }, 300);
-    }
-    
-    saveQuizProgress();
-}
-
-// Touch handler for matching
-function matchDropTouchHandler(leftIndex, rightIndex) {
-    matchDropHandler(leftIndex, rightIndex);
-}
-
-// Mobile tap-to-match support
-export function selectMatchLeft(index) {
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    selectedMatchLeft = index;
-    
-    // Highlight selected
-    document.querySelectorAll('.match-item.left').forEach(el => el.classList.remove('tap-selected'));
-    document.querySelector(`[data-index="${index}"].match-item.left`)?.classList.add('tap-selected');
-    
-    showToast('Now tap a definition to match', 'info');
-}
-
-export function selectMatchRight(index) {
-    if (selectedMatchLeft === null) {
-        showToast('Select a term first', 'warning');
-        return;
-    }
-    
-    matchDropHandler(selectedMatchLeft, index);
-    
-    // Clear selection
-    document.querySelectorAll('.match-item.left').forEach(el => el.classList.remove('tap-selected'));
-    selectedMatchLeft = null;
-}
-
-export function removeMatch(leftIndex) {
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    const currentAnswers = { ...(state.answers[state.currentQuestionIndex] || {}) };
-    delete currentAnswers[leftIndex];
-    
-    const answers = [...state.answers];
-    answers[state.currentQuestionIndex] = currentAnswers;
-    setState({ answers });
-    saveQuizProgress();
-}
-
-export function clearAllMatches() {
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    const answers = [...state.answers];
-    answers[state.currentQuestionIndex] = {};
-    setState({ answers });
-    saveQuizProgress();
-}
-
-export function matchDragEnd(e) {
-    e.target.classList.remove('dragging');
-    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    draggedMatchIndex = null;
-    draggedFromLeft = null;
-}
-
-// ==================== ORDERING HANDLERS ====================
-
-let draggedOrderIndex = null;
-
-export function orderDragStart(e, index) {
-    draggedOrderIndex = index;
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-export function orderDragOver(e) {
-    e.preventDefault();
-    if (draggedOrderIndex !== null) {
-        e.currentTarget.classList.add('drag-over');
-    }
-}
-
-export function orderDragLeave(e) {
-    e.currentTarget.classList.remove('drag-over');
-}
-
-export function orderDrop(e, targetIndex) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
-    
-    if (draggedOrderIndex === null || draggedOrderIndex === targetIndex) return;
-    
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    orderDropHandler(draggedOrderIndex, targetIndex);
-}
-
-function orderDropHandler(fromIndex, toIndex) {
-    const state = getState();
-    const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    const currentOrder = state.answers[state.currentQuestionIndex] || 
-        q.options.map((text, i) => ({ text, origIndex: i }));
-    
-    const newOrder = [...currentOrder];
-    const [removed] = newOrder.splice(fromIndex, 1);
-    newOrder.splice(toIndex, 0, removed);
-    
-    const answers = [...state.answers];
-    answers[state.currentQuestionIndex] = newOrder;
-    setState({ answers });
-    
-    saveQuizProgress();
-}
-
-// Touch handler for ordering
-function orderDropTouchHandler(fromIndex, toIndex) {
-    orderDropHandler(fromIndex, toIndex);
-}
-
-export function orderDragEnd(e) {
-    e.target.classList.remove('dragging');
-    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    draggedOrderIndex = null;
 }
 
 // ==================== NAVIGATION ====================
@@ -1050,7 +1119,6 @@ export async function startQuiz(quizId, options = {}) {
         }
         
         if (savedProgress && !options.restart) {
-            // Restore saved progress
             setState({
                 view: 'quiz',
                 currentQuiz: quiz,
@@ -1072,7 +1140,6 @@ export async function startQuiz(quizId, options = {}) {
             
             showToast('Resuming quiz...', 'info');
         } else {
-            // Fresh start
             setState({
                 view: 'quiz',
                 currentQuiz: quiz,
@@ -1099,10 +1166,20 @@ export async function startQuiz(quizId, options = {}) {
             startTimer();
         }
         
-        // Update daily streak
         updateDailyStreak();
         
         hideLoading();
+        
+        // Initialize handlers after render
+        setTimeout(() => {
+            const q = quiz.questions[savedProgress?.questionIndex || 0];
+            if (q.type === 'matching') {
+                initMatchingHandlers();
+            } else if (q.type === 'ordering') {
+                initOrderingHandlers();
+            }
+        }, 100);
+        
     } catch (error) {
         hideLoading();
         showToast('Failed to load quiz: ' + error.message, 'error');
@@ -1163,7 +1240,6 @@ export async function submitQuiz() {
     
     recordQuizComplete(correct, total);
     
-    // Celebrations
     if (window.sounds && window.animations) {
         if (isPerfect) {
             window.sounds.playPerfectScore();
@@ -1202,4 +1278,17 @@ export function exitQuiz() {
     stopTimer();
     saveQuizProgress();
     setState({ view: 'library', currentQuiz: null });
+}
+
+// Initialize handlers when quiz renders
+export function initQuizHandlers() {
+    const state = getState();
+    if (state.view === 'quiz' && state.currentQuiz) {
+        const q = state.currentQuiz.questions[state.currentQuestionIndex];
+        if (q.type === 'matching') {
+            initMatchingHandlers();
+        } else if (q.type === 'ordering') {
+            initOrderingHandlers();
+        }
+    }
 }
