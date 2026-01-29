@@ -446,7 +446,9 @@ function renderMatching(q, questionIndex) {
     const mobile = isMobileDevice();
     
     return `
-        <div class="matching-container ${showingAnswer ? 'locked' : ''}" id="matching-q${questionIndex}">
+        <div class="matching-container ${showingAnswer ? 'locked' : ''}" 
+            id="matching-q${questionIndex}"
+            style="${mobile ? 'touch-action: pan-y;' : ''}">
             ${renderMatchingInstructions(mobile, showingAnswer)}
             
             <div class="matching-grid">
@@ -776,6 +778,7 @@ function renderOrderItem(item, index, showingAnswer, mobile, total) {
     return `
         <div class="order-item ${statusClass} ${showingAnswer ? 'disabled' : ''}"
             data-order-index="${index}"
+            data-orig-index="${item.origIndex}"
             ${!showingAnswer && !mobile ? 'draggable="true"' : ''}>
             
             ${!showingAnswer && !mobile ? `
