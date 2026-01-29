@@ -197,7 +197,7 @@ export function renderQuiz() {
 
     return `<div class="quiz-page">
         <header class="quiz-header">
-            <button class="btn btn-ghost" onclick="window.app.exitQuiz()">â† Exit</button>
+            <button class="btn btn-ghost" onclick="window.app.exitQuiz()">&larr; Exit</button>
             <div class="quiz-info">
                 <span class="hide-mobile text-sm truncate" style="max-width: 200px;">${escapeHtml(quiz.title)}</span>
                 <span class="badge badge-primary">${state.currentQuestionIndex + 1} / ${total}</span>
@@ -205,7 +205,7 @@ export function renderQuiz() {
             </div>
             <div class="flex items-center gap-2">
                 ${state.timerEnabled ? `<div id="timer" class="quiz-timer ${state.timeRemaining <= TIME.TIMER_WARNING_SECONDS ? 'urgent' : ''}">${formatTime(state.timeRemaining)}</div>` : ''}
-                <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">ðŸš©</button>
+                <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
             </div>
         </header>
         <main class="quiz-main"><div class="quiz-content">
@@ -223,11 +223,11 @@ export function renderQuiz() {
             ${renderStudyModeFeedback(q, state)}
         </div></main>
         <footer class="quiz-footer"><div class="quiz-nav">
-            <button class="btn btn-secondary" onclick="window.app.prevQuestion()" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>â† Prev</button>
+            <button class="btn btn-secondary" onclick="window.app.prevQuestion()" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>&larr; Prev</button>
             ${renderQuestionNav(total, state.currentQuestionIndex)}
             ${state.currentQuestionIndex === total - 1 
                 ? `<button class="btn btn-primary" onclick="window.app.submitQuiz()">Submit</button>` 
-                : `<button class="btn btn-primary" onclick="window.app.nextQuestion()">Next â†’</button>`}
+                : `<button class="btn btn-primary" onclick="window.app.nextQuestion()">Next &rarr;</button>`}
         </div></footer>
     </div>`;
 }
@@ -241,7 +241,7 @@ function renderStudyModeFeedback(q, state) {
     let feedbackHtml = `
         <div class="study-feedback ${isCorrect ? 'correct' : 'incorrect'}">
             <div class="feedback-header">
-                <span class="feedback-icon">${isCorrect ? 'âœ“' : 'âœ—'}</span>
+                <span class="feedback-icon">${isCorrect ? '&#10003;' : '&#10007;'}</span>
                 <span class="feedback-text">${isCorrect ? 'Correct!' : 'Incorrect'}</span>
             </div>
     `;
@@ -257,7 +257,7 @@ function renderStudyModeFeedback(q, state) {
             case 'matching':
                 feedbackHtml += `<strong>Correct matches:</strong><ul class="correct-list">`;
                 q.pairs.forEach((pair, i) => {
-                    feedbackHtml += `<li>${escapeHtml(pair.left)} â†’ ${escapeHtml(pair.right)}</li>`;
+                    feedbackHtml += `<li>${escapeHtml(pair.left)} &larr;’ ${escapeHtml(pair.right)}</li>`;
                 });
                 feedbackHtml += `</ul>`;
                 break;
@@ -283,7 +283,7 @@ function renderStudyModeFeedback(q, state) {
     }
     
     if (q.explanation) {
-        feedbackHtml += `<div class="explanation"><strong>ðŸ’¡ Explanation:</strong> ${escapeHtml(q.explanation)}</div>`;
+        feedbackHtml += `<div class="explanation"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>`;
     }
     
     feedbackHtml += `</div>`;
@@ -317,7 +317,7 @@ function renderStreakDisplay(streak) {
     if (!streak || streak < 3) return '';
     
     const intensity = Math.min(Math.floor(streak / 5), 3);
-    const fires = 'ðŸ”¥'.repeat(intensity + 1);
+    const fires = '&#128293;'.repeat(intensity + 1);
     
     let message = '';
     let className = 'streak-indicator';
@@ -541,16 +541,17 @@ function renderTrueFalse(q, questionIndex) {
     return `
         <div class="tf-options">
             <button class="${trueClass}" onclick="window.app.selectTF(true)" ${disabled}>
-                <span class="tf-icon">âœ“</span>
+                <span class="tf-icon">&#10003;</span>
                 <span class="tf-label">True</span>
             </button>
             <button class="${falseClass}" onclick="window.app.selectTF(false)" ${disabled}>
-                <span class="tf-icon">âœ—</span>
+                <span class="tf-icon">&#10007;</span>
                 <span class="tf-label">False</span>
             </button>
         </div>
     `;
 }
+
 
 // ==================== MATCHING (TAP-TO-SELECT) ====================
 
@@ -620,7 +621,7 @@ function renderMatching(q, questionIndex) {
                                 <span class="match-number">${i + 1}</span>
                                 <span class="match-text">${escapeHtml(item.text)}</span>
                                 ${isUsed ? `<span class="match-badge-right">${String.fromCharCode(65 + matchedLeftIndex)}</span>` : ''}
-                                ${showingAnswer && isCorrect ? '<span class="match-check">✓</span>' : ''}
+                                ${showingAnswer && isCorrect ? '<span class="match-check">&check;</span>' : ''}
                             </div>
                         `;
                     }).join('')}
@@ -678,7 +679,7 @@ function renderOrdering(q, questionIndex) {
                             </div>
                             <span class="order-number">${i + 1}</span>
                             <span class="order-text">${escapeHtml(item.text)}</span>
-                            ${showingAnswer ? `<span class="order-result">${isCorrect ? '✓' : '✗'}</span>` : ''}
+                            ${showingAnswer ? `<span class="order-result">${isCorrect ? '&check;' : '&cross;'}</span>` : ''}
                         </div>
                     `;
                 }).join('')}

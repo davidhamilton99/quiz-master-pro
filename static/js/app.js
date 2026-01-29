@@ -9,7 +9,8 @@ import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDele
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
-    unmatchItem, clearAllMatches, moveOrderItem, initQuizHandlers
+    selectMatchLeft, selectMatchRight, unmatchItem, clearAllMatches, 
+    moveOrderItem, initQuizHandlers
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
 import {
@@ -345,7 +346,9 @@ window.app = {
     exitQuiz,
     submitQuiz,
     
-    // Matching & Ordering (new system)
+    // Matching & Ordering (tap-to-select system)
+    selectMatchLeft,
+    selectMatchRight,
     unmatchItem,
     clearAllMatches,
     moveOrderItem,
