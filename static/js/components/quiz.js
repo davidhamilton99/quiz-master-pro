@@ -55,7 +55,33 @@ function handleTouchMove(e) {
         // Visual feedback - move the element with finger
         touchedElement.style.transform = `translate(${touch.clientX - touchStartX}px, ${touch.clientY - touchStartY}px)`;
         touchedElement.style.opacity = '0.7';
+        touchedElement.style.pointerEvents = 'none'; // Prevent blocking drop detection
         touchedElement.classList.add('dragging');
+        
+        // Highlight valid drop zones under finger
+        highlightDropZonesUnderFinger(touchedElement.dataset.touchDraggable, touch.clientX, touch.clientY);
+    }
+}
+
+function highlightDropZonesUnderFinger(dragType, x, y) {
+    // Remove previous highlights
+    document.querySelectorAll('.drop-zone-highlight').forEach(el => 
+        el.classList.remove('drop-zone-highlight')
+    );
+    
+    // Find all elements under the finger
+    const elements = document.elementsFromPoint(x, y);
+    for (const el of elements) {
+        const dropZone = el.closest('[data-touch-drop-zone]');
+        if (dropZone) {
+            const dropType = dropZone.dataset.touchDropZone;
+            // Check if drag and drop types are compatible
+            if ((dragType === 'match-left' && dropType === 'match-right') ||
+                (dragType === 'order-item' && dropType === 'order-item')) {
+                dropZone.classList.add('drop-zone-highlight');
+            }
+            break;
+        }
     }
 }
 
@@ -63,12 +89,22 @@ function handleTouchEnd(e) {
     if (!touchedElement) return;
     
     const touch = e.changedTouches[0];
+    
+    // FIX: Temporarily hide dragged element to find drop zone underneath
+    touchedElement.style.visibility = 'hidden';
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    touchedElement.style.visibility = '';
     
     // Reset visual state
     touchedElement.style.transform = '';
     touchedElement.style.opacity = '';
+    touchedElement.style.pointerEvents = '';
     touchedElement.classList.remove('touch-active', 'dragging');
+    
+    // Remove drop zone highlights
+    document.querySelectorAll('.drop-zone-highlight').forEach(el => 
+        el.classList.remove('drop-zone-highlight')
+    );
     
     if (isTouchDragging && target) {
         // Handle different drop zones
@@ -608,9 +644,10 @@ function renderOrdering(q, questionIndex) {
     let currentOrder = state.answers[questionIndex];
     if (!currentOrder) {
         // Initialize with shuffled order
+        // FIX: Use actual index i, not q.correct[i] which is the answer mapping
         currentOrder = shuffleArray(q.options.map((text, i) => ({ 
             text, 
-            origIndex: q.correct[i] 
+            origIndex: i 
         })));
         const answers = [...state.answers];
         answers[questionIndex] = currentOrder;
@@ -928,7 +965,7 @@ function orderDropHandler(fromIndex, toIndex) {
     const state = getState();
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
     const currentOrder = state.answers[state.currentQuestionIndex] || 
-        q.options.map((text, i) => ({ text, origIndex: q.correct[i] }));
+        q.options.map((text, i) => ({ text, origIndex: i }));
     
     const newOrder = [...currentOrder];
     const [removed] = newOrder.splice(fromIndex, 1);

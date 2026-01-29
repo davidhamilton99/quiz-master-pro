@@ -580,7 +580,7 @@ h3 { font-size: 1.25rem; }
     transition: all var(--transition-base);
 }
 .match-draggable:hover { border-color: var(--primary); transform: translateX(-4px); box-shadow: var(--shadow-md); }
-.match-draggable.dragging { opacity: 0.5; cursor: grabbing; }
+.match-draggable.dragging { opacity: 0.5; cursor: grabbing; pointer-events: none; }
 
 .match-dropzone {
     padding: 0.75rem 1rem;
@@ -621,7 +621,7 @@ h3 { font-size: 1.25rem; }
 /* Ordering */
 .ordering-item { cursor: grab; }
 .ordering-item:active { cursor: grabbing; }
-.ordering-item.dragging { opacity: 0.5; }
+.ordering-item.dragging { opacity: 0.5; pointer-events: none; }
 .ordering-item.drag-over { border-color: var(--primary); background: rgba(139, 92, 246, 0.1); }
 .drag-handle { margin-left: auto; color: var(--text-muted); font-size: 1.25rem; cursor: grab; }
 /* ==================== RESULTS ==================== */
@@ -3018,6 +3018,43 @@ h3 { font-size: 1.25rem; }
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
+/* Mobile touch states */
+.match-item.touch-active,
+.order-item.touch-active {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: transform 0.1s ease;
+}
+
+/* Drop zone highlighting for mobile */
+.drop-zone-highlight {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.08)) !important;
+    border: 2px dashed var(--primary) !important;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15),
+                0 4px 12px rgba(99, 102, 241, 0.2);
+    animation: dropZonePulse 1s ease-in-out infinite;
+}
+
+@keyframes dropZonePulse {
+    0%, 100% {
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15),
+                    0 4px 12px rgba(99, 102, 241, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.25),
+                    0 6px 16px rgba(99, 102, 241, 0.3);
+    }
+}
+
+/* Tap selected state for mobile matching */
+.match-item.tap-selected {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05));
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2),
+                0 4px 12px rgba(139, 92, 246, 0.15);
+    transform: scale(1.02);
+}
+
 .match-item.matched {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
     border-color: var(--success);
@@ -3060,6 +3097,7 @@ h3 { font-size: 1.25rem; }
     z-index: 1000;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     cursor: grabbing;
+    pointer-events: none; /* Prevent blocking drop zones */
 }
 
 .order-item.drag-over {
@@ -3464,11 +3502,12 @@ select:focus:not(:focus-visible) {
     z-index: 1000;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     cursor: grabbing;
+    pointer-events: none; /* Prevent blocking drop zones */
 }
 
 .order-item.drag-over {
     border-color: var(--primary);
-    background: rgba(139, 92, 246, 0.1);
+    background: rgba(139, 102, 241, 0.1);
     transform: translateY(-4px);
 }
 
