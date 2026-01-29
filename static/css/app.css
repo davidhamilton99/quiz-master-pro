@@ -1777,10 +1777,14 @@ h3 { font-size: 1.25rem; }
 }
 
 .option-check {
-    font-size: 1.25rem;
+    font-size: 2rem;
     font-weight: 700;
     color: var(--success);
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
     animation: checkPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
@@ -1790,7 +1794,7 @@ h3 { font-size: 1.25rem; }
 
 @keyframes checkPop {
     0% { transform: scale(0); opacity: 0; }
-    50% { transform: scale(1.2); }
+    50% { transform: scale(1.3); }
     100% { transform: scale(1); opacity: 1; }
 }
 
@@ -1867,6 +1871,25 @@ h3 { font-size: 1.25rem; }
 .tf-label {
     font-size: 1.125rem;
     font-weight: 600;
+}
+
+/* True/False icon colors - always visible */
+.tf-options button .tf-icon {
+    font-weight: 700;
+}
+
+.tf-options button:first-child .tf-icon {
+    color: var(--success);  /* True checkmark is always green */
+}
+
+.tf-options button:last-child .tf-icon {
+    color: var(--error);  /* False X is always red */
+}
+
+/* Make them even brighter when the answer is shown */
+.tf-options button.option.correct .tf-icon,
+.tf-options button.option.incorrect .tf-icon {
+    filter: drop-shadow(0 0 8px currentColor);
 }
 
 @media (max-width: 480px) {
