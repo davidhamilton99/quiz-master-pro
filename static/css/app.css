@@ -553,6 +553,10 @@ h3 { font-size: 1.25rem; }
     border-radius: var(--radius-md);
     margin-bottom: 0.625rem;
     transition: all var(--transition-base);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
 }
 .match-item:hover { border-color: var(--border-light); }
 .match-item.selected { border-color: var(--primary); background: rgba(139, 92, 246, 0.1); }
@@ -2967,7 +2971,7 @@ h3 { font-size: 1.25rem; }
 
 @media (pointer: coarse) {
     .matching-container {
-        touch-action: none;
+        touch-action: pan-y;
     }
 }
 
@@ -3093,16 +3097,17 @@ h3 { font-size: 1.25rem; }
 
 @media (pointer: coarse) {
     .ordering-container {
-        touch-action: none;
+        touch-action: pan-y;
     }
 }
 
 .order-item {
-    cursor: grab;
+    cursor: default;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
     transition: all 0.2s ease;
+    touch-action: pan-y;
 }
 
 .order-item:active {
