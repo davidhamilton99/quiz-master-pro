@@ -7,10 +7,8 @@ import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import {
-    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, nextQuestion, prevQuestion,
-    goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
-    matchDragStart, matchDragEnd, matchDragOver, matchDragLeave, matchDrop, removeMatch,
-    orderDragStart, orderDragOver, orderDragLeave, orderDrop, orderDragEnd,
+    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
+    nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
     unmatchItem, clearAllMatches, moveOrderItem, initQuizHandlers
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
@@ -347,25 +345,10 @@ window.app = {
     exitQuiz,
     submitQuiz,
     
-    // Matching drag & drop
-    matchDragStart,
-    matchDragEnd,
-    matchDragOver,
-    matchDragLeave,
-    matchDrop,
-    removeMatch,
+    // Matching & Ordering (new system)
     unmatchItem,
     clearAllMatches,
-    
-    // Ordering drag & drop
-    orderDragStart,
-    orderDragOver,
-    orderDragLeave,
-    orderDrop,
-    orderDragEnd,
     moveOrderItem,
-    
-    // Initialize handlers
     initQuizHandlers,
     
     // Results
