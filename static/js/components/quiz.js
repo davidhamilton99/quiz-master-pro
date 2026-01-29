@@ -670,7 +670,7 @@ function renderOrdering(q, questionIndex) {
                             data-touch-draggable="order-item"
                             data-touch-drop-zone="order-item"
                             data-index="${i}"
-                            draggable="${!showingAnswer}"
+                            ${!showingAnswer ? 'draggable="true"' : ''}
                             ondragstart="window.app.orderDragStart(event, ${i})"
                             ondragover="window.app.orderDragOver(event)"
                             ondragleave="window.app.orderDragLeave(event)"
@@ -936,6 +936,7 @@ export function orderDragStart(e, index) {
     draggedOrderIndex = index;
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index);
 }
 
 export function orderDragOver(e) {
