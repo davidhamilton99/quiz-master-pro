@@ -10,7 +10,7 @@ import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
     selectMatchLeft, selectMatchRight, unmatchItem, clearAllMatches, 
-    moveOrderItem, initQuizHandlers
+    moveOrderItem, initQuizHandlers, checkMatchingAnswer, checkOrderingAnswer
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
 import {
@@ -353,6 +353,8 @@ window.app = {
     clearAllMatches,
     moveOrderItem,
     initQuizHandlers,
+    checkMatchingAnswer,
+    checkOrderingAnswer,
     
     // Results
     retryQuiz,
