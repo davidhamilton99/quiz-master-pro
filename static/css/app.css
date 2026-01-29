@@ -3707,3 +3707,7 @@ select:focus:not(:focus-visible) {
     from { opacity: 0; }
     to { opacity: 1; }
 }
+/* FIX: Prevent child elements from blocking drag events on order-item */
+.order-item > * {
+    pointer-events: none;
+}
