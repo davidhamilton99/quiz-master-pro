@@ -418,12 +418,14 @@ function renderMultipleChoice(q, questionIndex) {
             : displayCorrect === i;
         
         let cls = 'option';
-        if (showingAnswer) {
-            if (isCorrectOpt) cls += ' correct-opt';
-            if (isSelected && !isCorrectOpt) cls += ' wrong-opt';
-            if (isSelected && isCorrectOpt) cls += ' correct-opt';
-        } else if (isSelected) {
+        // Always show selected state
+        if (isSelected) {
             cls += ' selected';
+        }
+        // Add correct/wrong highlighting when showing answer
+        if (showingAnswer) {
+            if (isCorrectOpt) cls += ' correct';
+            if (isSelected && !isCorrectOpt) cls += ' incorrect';
         }
         
         const checkType = isMulti ? 'checkbox' : 'radio';
@@ -483,11 +485,11 @@ function renderTrueFalse(q, questionIndex) {
     const correctAnswer = q.correct[0] === 0;
     
     const trueClass = showingAnswer 
-        ? (correctAnswer ? 'option correct-opt' : userAnswer === true ? 'option wrong-opt' : 'option')
+        ? (correctAnswer ? 'option correct' : userAnswer === true ? 'option incorrect' : 'option')
         : userAnswer === true ? 'option selected' : 'option';
     
     const falseClass = showingAnswer 
-        ? (!correctAnswer ? 'option correct-opt' : userAnswer === false ? 'option wrong-opt' : 'option')
+        ? (!correctAnswer ? 'option correct' : userAnswer === false ? 'option incorrect' : 'option')
         : userAnswer === false ? 'option selected' : 'option';
     
     return `
