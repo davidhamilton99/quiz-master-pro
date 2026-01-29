@@ -1,6 +1,6 @@
 /* Quiz Component - COMPLETE FIX: Mobile Support + Randomization + All Improvements */
 import { 
-    getState, setState, setSkipRender, saveQuizProgress, loadQuizProgress, clearQuizProgress,
+    getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
     getLevelInfo
 } from '../state.js';
@@ -391,7 +391,6 @@ function renderMultipleChoice(q, questionIndex) {
             const result = shuffleOptionsWithMapping(q.options, q.correct);
             const shuffles = { ...state.optionShuffles };
             shuffles[questionIndex] = result;
-            setSkipRender(true);
             setState({ optionShuffles: shuffles });
             
             displayOptions = result.shuffledOptions;
@@ -408,8 +407,7 @@ function renderMultipleChoice(q, questionIndex) {
     const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
     
-    // FIXED: Use 'options-list' class (not 'options-grid')
-    let html = '<div class="options-list">';
+    let html = '<div class="options-grid">';
     displayOptions.forEach((opt, i) => {
         const letter = String.fromCharCode(65 + i);
         const isSelected = isMulti 
@@ -421,9 +419,8 @@ function renderMultipleChoice(q, questionIndex) {
         
         let cls = 'option';
         if (showingAnswer) {
-            // FIXED: Use 'correct'/'incorrect' classes (not 'correct-opt'/'wrong-opt')
-            if (isCorrectOpt) cls += ' correct';
-            if (isSelected && !isCorrectOpt) cls += ' incorrect';
+            if (isCorrectOpt) cls += ' correct-opt';
+            if (isSelected && !isCorrectOpt) cls += ' wrong-opt';
         } else if (isSelected) {
             cls += ' selected';
         }
@@ -431,18 +428,17 @@ function renderMultipleChoice(q, questionIndex) {
         const checkType = isMulti ? 'checkbox' : 'radio';
         const checked = isSelected ? 'checked' : '';
         
-        // FIXED: Use onclick on label with hidden input to prevent flicker
         html += `
-            <label class="${cls}" onclick="event.preventDefault(); window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
+            <label class="${cls}">
                 <input type="${checkType}" 
                     name="q${questionIndex}" 
                     value="${i}" 
                     ${checked} 
                     ${disabled}
-                    style="display:none">
+                    onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
                 <span class="option-letter">${letter}</span>
                 <span class="option-text">${escapeHtml(opt)}</span>
-                ${showingAnswer && isCorrectOpt ? '<span class="answer-icon">✓</span>' : ''}
+                ${showingAnswer && isCorrectOpt ? '<span class="option-check">✓</span>' : ''}
             </label>
         `;
     });
@@ -485,26 +481,25 @@ function renderTrueFalse(q, questionIndex) {
     
     const correctAnswer = q.correct[0] === 0;
     
-    // FIXED: Use 'tf-option' class (not 'option') and 'correct'/'incorrect' classes
     const trueClass = showingAnswer 
-        ? (correctAnswer ? 'tf-option correct' : userAnswer === true ? 'tf-option incorrect' : 'tf-option')
-        : userAnswer === true ? 'tf-option selected' : 'tf-option';
+        ? (correctAnswer ? 'option correct-opt' : userAnswer === true ? 'option wrong-opt' : 'option')
+        : userAnswer === true ? 'option selected' : 'option';
     
     const falseClass = showingAnswer 
-        ? (!correctAnswer ? 'tf-option correct' : userAnswer === false ? 'tf-option incorrect' : 'tf-option')
-        : userAnswer === false ? 'tf-option selected' : 'tf-option';
+        ? (!correctAnswer ? 'option correct-opt' : userAnswer === false ? 'option wrong-opt' : 'option')
+        : userAnswer === false ? 'option selected' : 'option';
     
     return `
         <div class="tf-options">
             <button class="${trueClass}" onclick="window.app.selectTF(true)" ${disabled}>
                 <span class="tf-icon">✓</span>
                 <span class="tf-label">True</span>
-                ${showingAnswer && correctAnswer ? '<span class="answer-icon">✓</span>' : ''}
+                ${showingAnswer && correctAnswer ? '<span class="option-check">✓</span>' : ''}
             </button>
             <button class="${falseClass}" onclick="window.app.selectTF(false)" ${disabled}>
                 <span class="tf-icon">✗</span>
                 <span class="tf-label">False</span>
-                ${showingAnswer && !correctAnswer ? '<span class="answer-icon">✓</span>' : ''}
+                ${showingAnswer && !correctAnswer ? '<span class="option-check">✓</span>' : ''}
             </button>
         </div>
     `;
@@ -655,17 +650,6 @@ export function selectOption(index) {
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = index;
     
-    // Update DOM directly to show selection (prevents flicker)
-    const options = document.querySelectorAll('.options-list .option');
-    options.forEach((opt, i) => {
-        opt.classList.remove('selected');
-    });
-    if (options[index]) {
-        options[index].classList.add('selected');
-    }
-    
-    // Update state but skip re-render
-    setSkipRender(true);
     setState({ answers });
     
     if (state.studyMode) {
@@ -683,14 +667,6 @@ export function selectTF(value) {
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = value;
     
-    // Update DOM directly to show selection (prevents flicker)
-    const tfButtons = document.querySelectorAll('.tf-options .tf-option');
-    tfButtons.forEach(btn => btn.classList.remove('selected'));
-    const targetBtn = value === true ? tfButtons[0] : tfButtons[1];
-    if (targetBtn) targetBtn.classList.add('selected');
-    
-    // Update state but skip re-render
-    setSkipRender(true);
     setState({ answers });
     
     if (state.studyMode) {
@@ -718,94 +694,23 @@ export function checkMultipleChoiceAnswer() {
 function handleStudyModeCheck(userAnswer, question) {
     const state = getState();
     const isCorrect = checkIfCorrect(userAnswer, question, state.currentQuestionIndex);
-    const qType = question.type;
-    
-    // Get correct answer index for highlighting
-    let correctIdx = question.correct;
-    if (state.randomizeOptions && state.optionShuffles[state.currentQuestionIndex]) {
-        correctIdx = state.optionShuffles[state.currentQuestionIndex].newCorrect;
-    }
-    
-    // Skip render for all these setState calls
-    setSkipRender(true);
     
     if (isCorrect) {
         recordCorrectAnswer();
-        if (window.sounds) window.sounds.playCorrect(state.quizStreak + 1);
+        if (window.sounds) window.sounds.playCorrect(state.quizStreak);
+        if (window.animations) {
+            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
+            if (answerEl) window.animations.burstCorrect(answerEl);
+        }
     } else {
         recordWrongAnswer();
         if (window.sounds) window.sounds.playWrong();
-    }
-    
-    // Update DOM directly to show correct/incorrect
-    if (qType === 'multiple' || qType === 'single' || !qType) {
-        const options = document.querySelectorAll('.options-list .option');
-        const correctIndex = Array.isArray(correctIdx) ? correctIdx[0] : correctIdx;
-        
-        options.forEach((opt, i) => {
-            opt.style.pointerEvents = 'none';
-            
-            if (i === correctIndex) {
-                opt.classList.remove('selected');
-                opt.classList.add('correct');
-            } else if (i === userAnswer && !isCorrect) {
-                opt.classList.add('incorrect');
-            }
-        });
-        
-        // Play animation
         if (window.animations) {
-            const answerEl = options[typeof userAnswer === 'number' ? userAnswer : correctIndex];
-            if (answerEl) {
-                isCorrect ? window.animations.burstCorrect(answerEl) : window.animations.burstWrong(answerEl);
-            }
-        }
-    } else if (qType === 'truefalse') {
-        const tfButtons = document.querySelectorAll('.tf-options .tf-option');
-        const correctBool = Array.isArray(correctIdx) ? correctIdx[0] === 0 : correctIdx === 0;
-        const correctBtnIdx = correctBool ? 0 : 1;
-        const userBtnIdx = userAnswer === true ? 0 : 1;
-        
-        tfButtons.forEach((btn, i) => {
-            btn.style.pointerEvents = 'none';
-            
-            if (i === correctBtnIdx) {
-                btn.classList.remove('selected');
-                btn.classList.add('correct');
-            } else if (i === userBtnIdx && !isCorrect) {
-                btn.classList.add('incorrect');
-            }
-        });
-        
-        if (window.animations) {
-            const answerEl = tfButtons[userBtnIdx];
-            if (answerEl) {
-                isCorrect ? window.animations.burstCorrect(answerEl) : window.animations.burstWrong(answerEl);
-            }
+            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
+            if (answerEl) window.animations.burstWrong(answerEl);
         }
     }
     
-    // Show explanation if exists
-    if (question.explanation) {
-        const questionContent = document.querySelector('.question-content');
-        if (questionContent && !document.querySelector('.explanation')) {
-            const expHtml = `
-                <div class="explanation ${isCorrect ? 'correct' : 'incorrect'}" style="margin-top:1.5rem;padding:1.25rem;border-radius:12px;${isCorrect ? 'background:rgba(16,185,129,0.1);border:1px solid var(--success)' : 'background:rgba(239,68,68,0.1);border:1px solid var(--error)'}">
-                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
-                        <span style="font-size:1.25rem;color:${isCorrect ? 'var(--success)' : 'var(--error)'}">${isCorrect ? '✓' : '✗'}</span>
-                        <span style="font-size:1.125rem;font-weight:600;color:${isCorrect ? 'var(--success)' : 'var(--error)'}">${isCorrect ? 'Correct!' : 'Incorrect'}</span>
-                    </div>
-                    <div style="padding:0.75rem 1rem;background:var(--bg-tertiary);border-radius:8px;line-height:1.6">
-                        💡 <strong>Explanation:</strong> ${question.explanation}
-                    </div>
-                </div>
-            `;
-            questionContent.insertAdjacentHTML('beforeend', expHtml);
-        }
-    }
-    
-    // Update state but skip render (DOM already updated)
-    setSkipRender(true);
     setState({ showAnswer: true });
 }
 

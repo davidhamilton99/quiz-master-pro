@@ -168,26 +168,14 @@ const initialState = {
 
 let state = { ...initialState };
 const listeners = new Set();
-let skipRender = false;
 
 // ==================== CORE STATE FUNCTIONS ====================
 export function getState() {
     return state;
 }
 
-export function setSkipRender(skip) {
-    skipRender = skip;
-}
-
 export function setState(updates) {
     state = { ...state, ...(typeof updates === 'function' ? updates(state) : updates) };
-    
-    // Skip notifying listeners if flag is set (prevents re-render during quiz interaction)
-    if (skipRender) {
-        skipRender = false;
-        return;
-    }
-    
     listeners.forEach(fn => fn(state));
 }
 
