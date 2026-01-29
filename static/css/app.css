@@ -3710,389 +3710,160 @@ select:focus:not(:focus-visible) {
 /* FIX: Prevent child elements from blocking drag events on order-item */
 .order-item > * {
     pointer-events: none;
-}/* ============================================
-   MATCHING & ORDERING - ENHANCED STYLES
-   Professional, smooth animations
-   ============================================ */
+}
+/* ==================== TAP-MODE MATCHING STYLES ==================== */
 
-/* ==================== MATCHING QUESTIONS ==================== */
-
-.matching-container {
-    margin-top: 1.5rem;
+.matching-container.tap-mode .match-item {
+    cursor: pointer;
+    position: relative;
 }
 
-.matching-instructions {
+.matching-container.tap-mode .match-item.left:not(.matched):hover {
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.matching-container.tap-mode .match-item.left.selected {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08));
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    transform: scale(1.01);
+}
+
+.matching-container.tap-mode .match-item.right:not(.used):hover {
+    border-color: var(--secondary);
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.match-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    background: var(--success);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.match-badge-right {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    background: var(--primary);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.btn-remove {
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.1));
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: var(--radius-lg);
-    margin-bottom: 1.5rem;
-    animation: fadeIn 0.3s ease;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 50%;
+    color: var(--error);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    margin-left: 8px;
+    flex-shrink: 0;
 }
 
-.instruction-icon {
-    font-size: 1.5rem;
+.btn-remove:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: var(--error);
 }
 
-.matching-instructions p {
-    margin: 0;
-    font-size: 0.9375rem;
-    color: var(--text-secondary);
+.match-item.matched .match-text {
+    color: var(--success);
 }
 
-.matching-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    margin-bottom: 1.5rem;
+.match-item.used .match-text {
+    color: var(--primary);
 }
 
-@media (max-width: 768px) {
-    .matching-grid {
-        grid-template-columns: 1fr;
-        gap: 2rem;
-    }
+.match-check {
+    color: var(--success);
+    font-weight: bold;
+    margin-left: 8px;
 }
 
-.matching-column {
+/* ==================== ARROW-MODE ORDERING STYLES ==================== */
+
+.ordering-container.arrow-mode .ordering-list {
     display: flex;
     flex-direction: column;
+    gap: 0.5rem;
 }
 
-.matching-header {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    margin-bottom: 1rem;
-    padding-left: 0.5rem;
-}
-
-/* Match Items */
-.match-item {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    padding: 1rem 1.25rem;
-    background: var(--bg-card);
-    border: 2px solid var(--border);
-    border-radius: var(--radius-lg);
-    margin-bottom: 0.75rem;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    min-height: 64px;
-}
-
-.match-item:not(.disabled):not(.matched):hover {
-    border-color: var(--border-light);
-    background: var(--bg-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Left items (terms) */
-.match-left {
-    cursor: pointer;
-}
-
-.match-left.selected {
-    border-color: var(--primary);
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2),
-                0 4px 12px rgba(139, 92, 246, 0.15);
-    transform: scale(1.02);
-    animation: pulseGlow 1.5s ease-in-out infinite;
-}
-
-@keyframes pulseGlow {
-    0%, 100% {
-        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2),
-                    0 4px 12px rgba(139, 92, 246, 0.15);
-    }
-    50% {
-        box-shadow: 0 0 0 5px rgba(139, 92, 246, 0.3),
-                    0 6px 16px rgba(139, 92, 246, 0.25);
-    }
-}
-
-.match-left.dragging {
-    opacity: 0.5;
-    transform: scale(0.95);
-}
-
-/* Desktop drag */
-.match-left[draggable="true"] {
-    cursor: grab;
-}
-
-.match-left[draggable="true"]:active {
-    cursor: grabbing;
-}
-
-/* Right items (definitions) */
-.match-right {
-    cursor: pointer;
-}
-
-.match-right.drag-over {
-    border-color: var(--primary);
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05));
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
-    transform: scale(1.02);
-}
-
-.match-right.used {
-    opacity: 0.5;
-    cursor: default;
-}
-
-/* Match content */
-.match-content {
+.ordering-container.arrow-mode .order-item {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: default;
+    transition: all 0.2s ease;
 }
 
-.match-letter,
-.match-number {
-    width: 32px;
-    height: 32px;
+.ordering-container.arrow-mode .order-item:hover {
+    border-color: var(--border-light);
+}
+
+.order-arrows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.order-arrows.hidden {
+    visibility: hidden;
+}
+
+.order-arrow {
+    width: 28px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-    font-weight: 700;
-    flex-shrink: 0;
-    color: var(--text-primary);
-}
-
-.match-text {
-    flex: 1;
-    line-height: 1.5;
-    color: var(--text-primary);
-}
-
-/* Match connection (shows matched definition on left side) */
-.match-connection {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border);
-    animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.connection-arrow {
-    font-size: 1rem;
-    color: var(--primary);
-}
-
-.connection-text {
-    flex: 1;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-}
-
-.match-remove-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
     border: 1px solid var(--border);
-    border-radius: 50%;
-    color: var(--text-muted);
-    font-size: 0.875rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
+    font-size: 0.75rem;
+    transition: all 0.15s ease;
+    padding: 0;
+    pointer-events: auto;
 }
 
-.match-remove-btn:hover {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: var(--error);
-    color: var(--error);
-    transform: scale(1.1);
+.order-arrow:hover:not(:disabled) {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
 }
 
-/* Status icons */
-.match-status-icon {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-.match-item.match-correct {
-    border-color: var(--success);
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
-}
-
-.match-item.match-correct .match-status-icon {
-    color: var(--success);
-}
-
-.match-item.match-wrong {
-    border-color: var(--error);
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
-}
-
-.match-item.match-wrong .match-status-icon {
-    color: var(--error);
-}
-
-/* Matching actions */
-.matching-actions {
-    display: flex;
-    justify-content: center;
-    margin-top: 1rem;
-}
-
-/* ==================== ORDERING QUESTIONS ==================== */
-
-.ordering-container {
-    margin-top: 1.5rem;
-}
-
-.ordering-instructions {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(139, 92, 246, 0.1));
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    border-radius: var(--radius-lg);
-    margin-bottom: 1.5rem;
-    animation: fadeIn 0.3s ease;
-}
-
-.ordering-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-/* Order Items */
-.order-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-    background: var(--bg-card);
-    border: 2px solid var(--border);
-    border-radius: var(--radius-lg);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-}
-
-.order-item:not(.disabled):hover {
-    border-color: var(--border-light);
-    background: var(--bg-hover);
-}
-
-/* Drag handle */
-.order-handle {
-    font-size: 1.25rem;
-    color: var(--text-muted);
-    cursor: grab;
-    user-select: none;
-    flex-shrink: 0;
-    width: 24px;
-    text-align: center;
-    transition: color 0.2s ease;
-}
-
-.order-item:hover .order-handle {
-    color: var(--primary);
-}
-
-.order-handle:active {
-    cursor: grabbing;
-}
-
-/* Dragging states */
-.order-item.dragging,
-.order-item.dragging-placeholder {
+.order-arrow:disabled,
+.order-arrow.disabled {
     opacity: 0.3;
-    pointer-events: none;
+    cursor: not-allowed;
 }
 
-.drag-clone {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3),
-                0 0 0 2px var(--primary);
-    transform: scale(1.05);
-    background: var(--bg-card);
-}
-
-.order-item.drag-over-top {
-    border-top-color: var(--primary);
-    border-top-width: 3px;
-    margin-top: -1px;
-}
-
-.order-item.drag-over-top::before {
-    content: '';
-    position: absolute;
-    top: -12px;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--primary);
-    border-radius: var(--radius-sm);
-    animation: placeholderPulse 1s ease-in-out infinite;
-}
-
-.order-item.drag-over-bottom {
-    border-bottom-color: var(--primary);
-    border-bottom-width: 3px;
-    margin-bottom: -1px;
-}
-
-.order-item.drag-over-bottom::after {
-    content: '';
-    position: absolute;
-    bottom: -12px;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--primary);
-    border-radius: var(--radius-sm);
-    animation: placeholderPulse 1s ease-in-out infinite;
-}
-
-@keyframes placeholderPulse {
-    0%, 100% {
-        opacity: 0.5;
-        transform: scaleY(1);
-    }
-    50% {
-        opacity: 1;
-        transform: scaleY(1.5);
-    }
-}
-
-/* Order number */
 .order-number {
     width: 32px;
     height: 32px;
@@ -4102,292 +3873,60 @@ select:focus:not(:focus-visible) {
     background: var(--bg-tertiary);
     border-radius: var(--radius-sm);
     font-size: 0.875rem;
-    font-weight: 700;
+    font-weight: 600;
     flex-shrink: 0;
 }
 
-/* Order text */
 .order-text {
     flex: 1;
-    line-height: 1.5;
+    font-size: 0.9375rem;
 }
 
-/* Arrow buttons (mobile) */
-.order-arrows {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+.order-result {
+    font-size: 1.25rem;
+    font-weight: bold;
     margin-left: auto;
 }
 
-.order-arrow-btn {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.order-arrow-btn:hover:not(:disabled) {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-    transform: scale(1.1);
-}
-
-.order-arrow-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-/* Status states */
-.order-status-icon {
-    font-size: 1.25rem;
-    font-weight: 700;
-    width: 24px;
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.order-item.order-correct {
+.order-item.correct-order {
     border-color: var(--success);
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+    background: rgba(16, 185, 129, 0.1);
 }
 
-.order-item.order-correct .order-status-icon {
+.order-item.correct-order .order-result {
     color: var(--success);
 }
 
-.order-item.order-correct .order-number {
-    background: var(--success);
-    color: white;
-}
-
-.order-item.order-wrong {
+.order-item.wrong-order {
     border-color: var(--error);
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    background: rgba(239, 68, 68, 0.1);
 }
 
-.order-item.order-wrong .order-status-icon {
+.order-item.wrong-order .order-result {
     color: var(--error);
 }
 
-.order-item.order-wrong .order-number {
-    background: var(--error);
-    color: white;
+.order-item.disabled {
+    cursor: default;
 }
 
-/* ==================== ANIMATIONS ==================== */
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ==================== MOBILE OPTIMIZATIONS ==================== */
-
+/* Mobile responsive for arrow ordering */
 @media (max-width: 768px) {
-    .match-item,
-    .order-item {
-        min-height: 56px;
-        padding: 0.875rem 1rem;
+    .order-arrow {
+        width: 36px;
+        height: 30px;
+        font-size: 0.875rem;
     }
     
-    .match-letter,
-    .match-number,
-    .order-number {
-        width: 28px;
-        height: 28px;
-        font-size: 0.8125rem;
-    }
-    
-    .match-text,
-    .order-text {
-        font-size: 0.9375rem;
-    }
-    
-    .matching-instructions,
-    .ordering-instructions {
-        padding: 0.75rem 1rem;
-    }
-    
-    .instruction-icon {
-        font-size: 1.25rem;
+    .ordering-container.arrow-mode .order-item {
+        padding: 0.875rem;
     }
 }
 
-/* ==================== ACCESSIBILITY ==================== */
-
-.match-item:focus-visible,
-.order-item:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-
-.match-remove-btn:focus-visible,
-.order-arrow-btn:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 1px;
-}
-
-/* ==================== REDUCED MOTION ==================== */
-
-@media (prefers-reduced-motion: reduce) {
-    .match-item,
-    .order-item,
-    .match-remove-btn,
-    .order-arrow-btn {
-        transition: none;
-    }
-    
-    .match-connection,
-    .matching-instructions,
-    .ordering-instructions {
-        animation: none;
-    }
-}
-
-/* ==================== ORDERING & MATCHING MOBILE FIXES ==================== */
-
-/* Allow vertical scrolling in matching container on mobile */
-.matching-container {
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-}
-
-/* Matching items should NOT block scrolling */
-.match-item {
-    touch-action: manipulation;
-}
-
-/* Only prevent scroll when actually tapping a match item */
-.match-item.selected {
-    touch-action: none;
-}
-
-/* Ordering container allows scrolling */
-.ordering-container {
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-}
-
-/* Order items allow scrolling */
-.order-item {
-    touch-action: pan-y;
-}
-
-/* Arrow buttons need large touch targets */
-.order-arrow-btn {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0.5rem;
-    margin: 0.125rem;
-    background: var(--bg-tertiary);
-    border: 2px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.order-arrow-btn:hover:not(:disabled) {
-    background: var(--bg-hover);
-    border-color: var(--primary);
-    color: var(--primary);
-    transform: scale(1.1);
-}
-
-.order-arrow-btn:active:not(:disabled) {
-    transform: scale(0.95);
-    background: var(--primary);
-    color: white;
-}
-
-.order-arrow-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    background: var(--bg-tertiary);
-    border-color: var(--border);
-    color: var(--text-muted);
-}
-
-.order-arrows {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin-left: auto;
-    flex-shrink: 0;
-}
-
-/* Better mobile ordering layout */
-@media (max-width: 768px) {
-    .order-item {
-        padding: 0.875rem 0.75rem;
-        gap: 0.75rem;
-    }
-    
-    .ordering-list {
-        padding: 0.5rem 0;
-    }
-    
-    .matching-grid {
+/* Matching on mobile - single column */
+@media (max-width: 640px) {
+    .matching-container.tap-mode .matching-grid {
+        grid-template-columns: 1fr;
         gap: 1.5rem;
     }
-    
-    .match-item {
-        padding: 0.875rem;
-        min-height: 56px;
-    }
-}
-
-/* Ordering instructions */
-.ordering-instructions,
-.matching-instructions {
-    text-align: center;
-    padding: 0.875rem 1rem;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
-    margin-bottom: 1rem;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}
-
-.instruction-icon {
-    font-size: 1.25rem;
-}
-
-/* Prevent text selection during drag/tap */
-.ordering-container,
-.matching-container {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-}
-
-/* But allow text selection when showing answer */
-.ordering-container.locked,
-.matching-container.locked {
-    user-select: text;
-    -webkit-user-select: text;
-    -moz-user-select: text;
 }

@@ -34,45 +34,45 @@ const LEVELS = [
 // ==================== ACHIEVEMENTS ====================
 const ACHIEVEMENTS = {
     // Learning Milestones
-    first_quiz: { id: 'first_quiz', name: 'First Steps', desc: 'Complete your first quiz', icon: '📚', xp: 50, secret: false },
-    ten_quizzes: { id: 'ten_quizzes', name: 'Getting Started', desc: 'Complete 10 quizzes', icon: '📖', xp: 100, secret: false },
-    fifty_quizzes: { id: 'fifty_quizzes', name: 'Marathon Runner', desc: 'Complete 50 quizzes', icon: '🏃', xp: 250, secret: false },
-    hundred_correct: { id: 'hundred_correct', name: 'Century Club', desc: 'Answer 100 questions correctly', icon: '💯', xp: 150, secret: false },
-    thousand_correct: { id: 'thousand_correct', name: 'Big Brain', desc: 'Answer 1000 questions correctly', icon: '🧠', xp: 500, secret: false },
+    first_quiz: { id: 'first_quiz', name: 'First Steps', desc: 'Complete your first quiz', icon: 'ðŸ“š', xp: 50, secret: false },
+    ten_quizzes: { id: 'ten_quizzes', name: 'Getting Started', desc: 'Complete 10 quizzes', icon: 'ðŸ“–', xp: 100, secret: false },
+    fifty_quizzes: { id: 'fifty_quizzes', name: 'Marathon Runner', desc: 'Complete 50 quizzes', icon: 'ðŸƒ', xp: 250, secret: false },
+    hundred_correct: { id: 'hundred_correct', name: 'Century Club', desc: 'Answer 100 questions correctly', icon: 'ðŸ’¯', xp: 150, secret: false },
+    thousand_correct: { id: 'thousand_correct', name: 'Big Brain', desc: 'Answer 1000 questions correctly', icon: 'ðŸ§ ', xp: 500, secret: false },
     
     // Perfect Scores
-    first_perfect: { id: 'first_perfect', name: 'Flawless', desc: 'Get your first perfect score', icon: '⭐', xp: 75, secret: false },
-    five_perfect: { id: 'five_perfect', name: 'Perfectionist', desc: 'Get 5 perfect scores', icon: '🌟', xp: 150, secret: false },
-    ten_perfect: { id: 'ten_perfect', name: 'Sharpshooter', desc: 'Get 10 perfect scores', icon: '🎯', xp: 300, secret: false },
+    first_perfect: { id: 'first_perfect', name: 'Flawless', desc: 'Get your first perfect score', icon: 'â­', xp: 75, secret: false },
+    five_perfect: { id: 'five_perfect', name: 'Perfectionist', desc: 'Get 5 perfect scores', icon: 'ðŸŒŸ', xp: 150, secret: false },
+    ten_perfect: { id: 'ten_perfect', name: 'Sharpshooter', desc: 'Get 10 perfect scores', icon: 'ðŸŽ¯', xp: 300, secret: false },
     
     // Streaks - Daily
-    streak_3: { id: 'streak_3', name: 'Spark', desc: '3-day study streak', icon: '🔥', xp: 50, secret: false },
-    streak_7: { id: 'streak_7', name: 'On Fire', desc: '7-day study streak', icon: '🔥', xp: 100, secret: false },
-    streak_14: { id: 'streak_14', name: 'Blazing', desc: '14-day study streak', icon: '🔥', xp: 200, secret: false },
-    streak_30: { id: 'streak_30', name: 'Inferno', desc: '30-day study streak', icon: '🌋', xp: 400, secret: false },
-    streak_100: { id: 'streak_100', name: 'Eternal Flame', desc: '100-day study streak', icon: '☀️', xp: 1000, secret: false },
+    streak_3: { id: 'streak_3', name: 'Spark', desc: '3-day study streak', icon: 'ðŸ”¥', xp: 50, secret: false },
+    streak_7: { id: 'streak_7', name: 'On Fire', desc: '7-day study streak', icon: 'ðŸ”¥', xp: 100, secret: false },
+    streak_14: { id: 'streak_14', name: 'Blazing', desc: '14-day study streak', icon: 'ðŸ”¥', xp: 200, secret: false },
+    streak_30: { id: 'streak_30', name: 'Inferno', desc: '30-day study streak', icon: 'ðŸŒ‹', xp: 400, secret: false },
+    streak_100: { id: 'streak_100', name: 'Eternal Flame', desc: '100-day study streak', icon: 'â˜€ï¸', xp: 1000, secret: false },
     
     // Streaks - In Quiz
-    quiz_streak_10: { id: 'quiz_streak_10', name: 'Hot Streak', desc: '10 correct answers in a row', icon: '⚡', xp: 50, secret: false },
-    quiz_streak_20: { id: 'quiz_streak_20', name: 'Unstoppable', desc: '20 correct answers in a row', icon: '💫', xp: 100, secret: false },
-    quiz_streak_50: { id: 'quiz_streak_50', name: 'Legendary Run', desc: '50 correct answers in a row', icon: '👑', xp: 300, secret: false },
+    quiz_streak_10: { id: 'quiz_streak_10', name: 'Hot Streak', desc: '10 correct answers in a row', icon: 'âš¡', xp: 50, secret: false },
+    quiz_streak_20: { id: 'quiz_streak_20', name: 'Unstoppable', desc: '20 correct answers in a row', icon: 'ðŸ’«', xp: 100, secret: false },
+    quiz_streak_50: { id: 'quiz_streak_50', name: 'Legendary Run', desc: '50 correct answers in a row', icon: 'ðŸ‘‘', xp: 300, secret: false },
     
     // Creation
-    first_create: { id: 'first_create', name: 'Creator', desc: 'Create your first quiz', icon: '✏️', xp: 50, secret: false },
-    five_create: { id: 'five_create', name: 'Author', desc: 'Create 5 quizzes', icon: '📝', xp: 150, secret: false },
+    first_create: { id: 'first_create', name: 'Creator', desc: 'Create your first quiz', icon: 'âœï¸', xp: 50, secret: false },
+    five_create: { id: 'five_create', name: 'Author', desc: 'Create 5 quizzes', icon: 'ðŸ“', xp: 150, secret: false },
     
     // Speed
-    speed_demon: { id: 'speed_demon', name: 'Speed Demon', desc: 'Answer 10 questions in under 60 seconds', icon: '⚡', xp: 100, secret: false },
+    speed_demon: { id: 'speed_demon', name: 'Speed Demon', desc: 'Answer 10 questions in under 60 seconds', icon: 'âš¡', xp: 100, secret: false },
     
     // Levels
-    level_10: { id: 'level_10', name: 'Bronze Scholar', desc: 'Reach level 10', icon: '🥉', xp: 200, secret: false },
-    level_20: { id: 'level_20', name: 'Silver Sage', desc: 'Reach level 20', icon: '🥈', xp: 400, secret: false },
-    level_30: { id: 'level_30', name: 'Gold Guardian', desc: 'Reach level 30', icon: '🥇', xp: 600, secret: false },
+    level_10: { id: 'level_10', name: 'Bronze Scholar', desc: 'Reach level 10', icon: 'ðŸ¥‰', xp: 200, secret: false },
+    level_20: { id: 'level_20', name: 'Silver Sage', desc: 'Reach level 20', icon: 'ðŸ¥ˆ', xp: 400, secret: false },
+    level_30: { id: 'level_30', name: 'Gold Guardian', desc: 'Reach level 30', icon: 'ðŸ¥‡', xp: 600, secret: false },
     
     // Hidden/Secret
-    night_owl: { id: 'night_owl', name: 'Night Owl', desc: 'Study between 2-5 AM', icon: '🦉', xp: 75, secret: true },
-    early_bird: { id: 'early_bird', name: 'Early Bird', desc: 'Study before 6 AM', icon: '🐦', xp: 75, secret: true },
-    weekend_warrior: { id: 'weekend_warrior', name: 'Weekend Warrior', desc: 'Study on both Saturday and Sunday', icon: '⚔️', xp: 50, secret: true },
+    night_owl: { id: 'night_owl', name: 'Night Owl', desc: 'Study between 2-5 AM', icon: 'ðŸ¦‰', xp: 75, secret: true },
+    early_bird: { id: 'early_bird', name: 'Early Bird', desc: 'Study before 6 AM', icon: 'ðŸ¦', xp: 75, secret: true },
+    weekend_warrior: { id: 'weekend_warrior', name: 'Weekend Warrior', desc: 'Study on both Saturday and Sunday', icon: 'âš”ï¸', xp: 50, secret: true },
 };
 
 // ==================== XP REWARDS ====================
@@ -135,6 +135,7 @@ const initialState = {
     showAnswer: false,
     flaggedQuestions: new Set(),
     matchingShuffled: {},
+    matchingSelectedLeft: null,  // For tap-to-match interaction
     
     // In-quiz stats
     quizStreak: 0,
