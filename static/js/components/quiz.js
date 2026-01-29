@@ -197,7 +197,7 @@ export function renderQuiz() {
 
     return `<div class="quiz-page">
         <header class="quiz-header">
-            <button class="btn btn-ghost" onclick="window.app.exitQuiz()">&larr; Exit</button>
+            <button class="btn btn-ghost" onclick="window.app.exitQuiz()">← Exit</button>
             <div class="quiz-info">
                 <span class="hide-mobile text-sm truncate" style="max-width: 200px;">${escapeHtml(quiz.title)}</span>
                 <span class="badge badge-primary">${state.currentQuestionIndex + 1} / ${total}</span>
@@ -223,7 +223,7 @@ export function renderQuiz() {
             ${renderStudyModeFeedback(q, state)}
         </div></main>
         <footer class="quiz-footer"><div class="quiz-nav">
-            <button class="btn btn-secondary" onclick="window.app.prevQuestion()" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>&larr; Prev</button>
+            <button class="btn btn-secondary" onclick="window.app.prevQuestion()" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>← Prev</button>
             ${renderQuestionNav(total, state.currentQuestionIndex)}
             ${state.currentQuestionIndex === total - 1 
                 ? `<button class="btn btn-primary" onclick="window.app.submitQuiz()">Submit</button>` 
