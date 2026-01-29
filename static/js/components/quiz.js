@@ -141,8 +141,8 @@ function handleTouchDrop(dragged, dropZone) {
     }
 }
 
-// Initialize touch support when module loads
-if (typeof window !== 'undefined') {
+// Initialize touch support when module loads (only on touch devices)
+if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initTouchSupport);
     } else {
