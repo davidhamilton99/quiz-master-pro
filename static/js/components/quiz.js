@@ -653,9 +653,23 @@ export function selectOption(index) {
     
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
     const answers = [...state.answers];
+    const prevAnswer = answers[state.currentQuestionIndex];
     answers[state.currentQuestionIndex] = index;
     
-    setState({ answers });
+    // Update DOM directly to prevent flicker (don't trigger full re-render)
+    const options = document.querySelectorAll('.options-list .option');
+    options.forEach((opt, i) => {
+        opt.classList.remove('selected');
+        const letterEl = opt.querySelector('.option-letter');
+        if (letterEl) letterEl.style.background = '';
+    });
+    if (options[index]) {
+        options[index].classList.add('selected');
+    }
+    
+    // Update state silently (we already updated DOM)
+    const currentState = getState();
+    currentState.answers = answers;
     
     if (state.studyMode) {
         setTimeout(() => handleStudyModeCheck(index, q), TIME.STUDY_MODE_DELAY_MS);
@@ -672,7 +686,15 @@ export function selectTF(value) {
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = value;
     
-    setState({ answers });
+    // Update DOM directly to prevent flicker
+    const tfButtons = document.querySelectorAll('.tf-options .tf-option');
+    tfButtons.forEach(btn => btn.classList.remove('selected'));
+    const targetBtn = value === true ? tfButtons[0] : tfButtons[1];
+    if (targetBtn) targetBtn.classList.add('selected');
+    
+    // Update state silently
+    const currentState = getState();
+    currentState.answers = answers;
     
     if (state.studyMode) {
         setTimeout(() => handleStudyModeCheck(value, q), TIME.STUDY_MODE_DELAY_MS);
@@ -699,24 +721,98 @@ export function checkMultipleChoiceAnswer() {
 function handleStudyModeCheck(userAnswer, question) {
     const state = getState();
     const isCorrect = checkIfCorrect(userAnswer, question, state.currentQuestionIndex);
+    const qType = question.type;
+    
+    // Get correct answer index for highlighting
+    let correctIdx = question.correct;
+    if (state.randomizeOptions && state.optionShuffles[state.currentQuestionIndex]) {
+        correctIdx = state.optionShuffles[state.currentQuestionIndex].newCorrect;
+    }
     
     if (isCorrect) {
         recordCorrectAnswer();
         if (window.sounds) window.sounds.playCorrect(state.quizStreak);
-        if (window.animations) {
-            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
-            if (answerEl) window.animations.burstCorrect(answerEl);
-        }
     } else {
         recordWrongAnswer();
         if (window.sounds) window.sounds.playWrong();
+    }
+    
+    // Update DOM directly to show correct/incorrect without full re-render
+    if (qType === 'multiple' || qType === 'single' || !qType) {
+        const options = document.querySelectorAll('.options-list .option');
+        const correctIndex = Array.isArray(correctIdx) ? correctIdx[0] : correctIdx;
+        
+        options.forEach((opt, i) => {
+            opt.classList.add('disabled');
+            opt.style.pointerEvents = 'none';
+            
+            if (i === correctIndex) {
+                opt.classList.add('correct');
+                opt.classList.remove('selected');
+            } else if (i === userAnswer && !isCorrect) {
+                opt.classList.add('incorrect');
+            }
+        });
+        
+        // Play animation on selected element
         if (window.animations) {
-            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
-            if (answerEl) window.animations.burstWrong(answerEl);
+            const answerEl = options[typeof userAnswer === 'number' ? userAnswer : correctIndex];
+            if (answerEl) {
+                if (isCorrect) window.animations.burstCorrect(answerEl);
+                else window.animations.burstWrong(answerEl);
+            }
+        }
+    } else if (qType === 'truefalse') {
+        const tfButtons = document.querySelectorAll('.tf-options .tf-option');
+        const correctBool = Array.isArray(correctIdx) ? correctIdx[0] === 0 : correctIdx === 0;
+        const correctBtnIdx = correctBool ? 0 : 1;
+        const userBtnIdx = userAnswer === true ? 0 : 1;
+        
+        tfButtons.forEach((btn, i) => {
+            btn.classList.add('disabled');
+            btn.style.pointerEvents = 'none';
+            
+            if (i === correctBtnIdx) {
+                btn.classList.add('correct');
+                btn.classList.remove('selected');
+            } else if (i === userBtnIdx && !isCorrect) {
+                btn.classList.add('incorrect');
+            }
+        });
+        
+        if (window.animations) {
+            const answerEl = tfButtons[userBtnIdx];
+            if (answerEl) {
+                if (isCorrect) window.animations.burstCorrect(answerEl);
+                else window.animations.burstWrong(answerEl);
+            }
         }
     }
     
-    setState({ showAnswer: true });
+    // Show explanation if exists
+    const explanationDiv = document.querySelector('.explanation');
+    if (!explanationDiv && question.explanation) {
+        const questionContent = document.querySelector('.question-content');
+        if (questionContent) {
+            const expHtml = `
+                <div class="explanation fade-in ${isCorrect ? 'correct' : 'incorrect'}">
+                    <div class="explanation-header">
+                        <span class="explanation-icon">${isCorrect ? '✓' : '✗'}</span>
+                        <span class="explanation-title">${isCorrect ? 'Correct!' : 'Incorrect'}</span>
+                    </div>
+                    <div class="explanation-body">
+                        <span class="lightbulb">💡</span>
+                        <strong>Explanation:</strong> ${question.explanation}
+                    </div>
+                </div>
+            `;
+            questionContent.insertAdjacentHTML('beforeend', expHtml);
+        }
+    }
+    
+    // Update state (but this shouldn't trigger re-render since we updated DOM directly)
+    const currentState = getState();
+    currentState.showAnswer = true;
 }
 
 function checkIfCorrect(answer, question, questionIndex = null) {
