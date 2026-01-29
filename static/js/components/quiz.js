@@ -421,6 +421,7 @@ function renderMultipleChoice(q, questionIndex) {
         if (showingAnswer) {
             if (isCorrectOpt) cls += ' correct-opt';
             if (isSelected && !isCorrectOpt) cls += ' wrong-opt';
+            if (isSelected && isCorrectOpt) cls += ' correct-opt';
         } else if (isSelected) {
             cls += ' selected';
         }
