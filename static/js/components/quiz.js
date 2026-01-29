@@ -407,7 +407,8 @@ function renderMultipleChoice(q, questionIndex) {
     const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
     
-    let html = '<div class="options-grid">';
+    // FIXED: Use 'options-list' class to match CSS (not 'options-grid')
+    let html = '<div class="options-list">';
     displayOptions.forEach((opt, i) => {
         const letter = String.fromCharCode(65 + i);
         const isSelected = isMulti 
@@ -417,10 +418,11 @@ function renderMultipleChoice(q, questionIndex) {
             ? displayCorrect.includes(i) 
             : displayCorrect === i;
         
+        // FIXED: Use 'correct'/'incorrect' classes to match CSS (not 'correct-opt'/'wrong-opt')
         let cls = 'option';
         if (showingAnswer) {
-            if (isCorrectOpt) cls += ' correct-opt';
-            if (isSelected && !isCorrectOpt) cls += ' wrong-opt';
+            if (isCorrectOpt) cls += ' correct';
+            if (isSelected && !isCorrectOpt) cls += ' incorrect';
         } else if (isSelected) {
             cls += ' selected';
         }
@@ -428,14 +430,15 @@ function renderMultipleChoice(q, questionIndex) {
         const checkType = isMulti ? 'checkbox' : 'radio';
         const checked = isSelected ? 'checked' : '';
         
+        // FIXED: Use hidden inputs and onclick on the label to prevent flickering
         html += `
-            <label class="${cls}">
+            <label class="${cls}" onclick="event.preventDefault(); window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
                 <input type="${checkType}" 
                     name="q${questionIndex}" 
                     value="${i}" 
                     ${checked} 
                     ${disabled}
-                    onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
+                    style="display:none">
                 <span class="option-letter">${letter}</span>
                 <span class="option-text">${escapeHtml(opt)}</span>
                 ${showingAnswer && isCorrectOpt ? '<span class="option-check">✓</span>' : ''}
@@ -481,25 +484,27 @@ function renderTrueFalse(q, questionIndex) {
     
     const correctAnswer = q.correct[0] === 0;
     
+    // FIXED: Use 'tf-option' class (not 'option') to match CSS styling
+    // FIXED: Use 'correct'/'incorrect' classes (not 'correct-opt'/'wrong-opt')
     const trueClass = showingAnswer 
-        ? (correctAnswer ? 'option correct-opt' : userAnswer === true ? 'option wrong-opt' : 'option')
-        : userAnswer === true ? 'option selected' : 'option';
+        ? (correctAnswer ? 'tf-option correct' : userAnswer === true ? 'tf-option incorrect' : 'tf-option')
+        : userAnswer === true ? 'tf-option selected' : 'tf-option';
     
     const falseClass = showingAnswer 
-        ? (!correctAnswer ? 'option correct-opt' : userAnswer === false ? 'option wrong-opt' : 'option')
-        : userAnswer === false ? 'option selected' : 'option';
+        ? (!correctAnswer ? 'tf-option correct' : userAnswer === false ? 'tf-option incorrect' : 'tf-option')
+        : userAnswer === false ? 'tf-option selected' : 'tf-option';
     
     return `
         <div class="tf-options">
             <button class="${trueClass}" onclick="window.app.selectTF(true)" ${disabled}>
                 <span class="tf-icon">✓</span>
                 <span class="tf-label">True</span>
-                ${showingAnswer && correctAnswer ? '<span class="option-check">✓</span>' : ''}
+                ${showingAnswer && correctAnswer ? '<span class="answer-icon">✓</span>' : ''}
             </button>
             <button class="${falseClass}" onclick="window.app.selectTF(false)" ${disabled}>
                 <span class="tf-icon">✗</span>
                 <span class="tf-label">False</span>
-                ${showingAnswer && !correctAnswer ? '<span class="option-check">✓</span>' : ''}
+                ${showingAnswer && !correctAnswer ? '<span class="answer-icon">✓</span>' : ''}
             </button>
         </div>
     `;
