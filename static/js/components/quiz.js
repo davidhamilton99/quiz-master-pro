@@ -1,8 +1,8 @@
 /* Quiz Component - COMPLETE FIX: Mobile Support + Randomization + All Improvements */
 import { 
-    getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
-    recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
-    getLevelInfo
+    getState, setState, setStateSilent, saveQuizProgress, loadQuizProgress, clearQuizProgress,
+    recordCorrectAnswer, recordWrongAnswer, recordCorrectAnswerSilent, recordWrongAnswerSilent,
+    recordQuizComplete, updateDailyStreak, getLevelInfo
 } from '../state.js';
 import { getQuiz, saveAttempt } from '../services/api.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
@@ -653,7 +653,6 @@ export function selectOption(index) {
     
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
     const answers = [...state.answers];
-    const prevAnswer = answers[state.currentQuestionIndex];
     answers[state.currentQuestionIndex] = index;
     
     // Update DOM directly to prevent flicker (don't trigger full re-render)
@@ -667,9 +666,8 @@ export function selectOption(index) {
         options[index].classList.add('selected');
     }
     
-    // Update state silently (we already updated DOM)
-    const currentState = getState();
-    currentState.answers = answers;
+    // Update state silently (no re-render)
+    setStateSilent({ answers });
     
     if (state.studyMode) {
         setTimeout(() => handleStudyModeCheck(index, q), TIME.STUDY_MODE_DELAY_MS);
@@ -692,9 +690,8 @@ export function selectTF(value) {
     const targetBtn = value === true ? tfButtons[0] : tfButtons[1];
     if (targetBtn) targetBtn.classList.add('selected');
     
-    // Update state silently
-    const currentState = getState();
-    currentState.answers = answers;
+    // Update state silently (no re-render)
+    setStateSilent({ answers });
     
     if (state.studyMode) {
         setTimeout(() => handleStudyModeCheck(value, q), TIME.STUDY_MODE_DELAY_MS);
@@ -729,11 +726,12 @@ function handleStudyModeCheck(userAnswer, question) {
         correctIdx = state.optionShuffles[state.currentQuestionIndex].newCorrect;
     }
     
+    // Use SILENT versions to avoid triggering re-render
     if (isCorrect) {
-        recordCorrectAnswer();
-        if (window.sounds) window.sounds.playCorrect(state.quizStreak);
+        recordCorrectAnswerSilent();
+        if (window.sounds) window.sounds.playCorrect(state.quizStreak + 1);
     } else {
-        recordWrongAnswer();
+        recordWrongAnswerSilent();
         if (window.sounds) window.sounds.playWrong();
     }
     
@@ -810,9 +808,7 @@ function handleStudyModeCheck(userAnswer, question) {
         }
     }
     
-    // Update state (but this shouldn't trigger re-render since we updated DOM directly)
-    const currentState = getState();
-    currentState.showAnswer = true;
+    // State already updated by silent functions above
 }
 
 function checkIfCorrect(answer, question, questionIndex = null) {

@@ -179,6 +179,11 @@ export function setState(updates) {
     listeners.forEach(fn => fn(state));
 }
 
+// Silent update - does NOT trigger re-render (for DOM-managed updates)
+export function setStateSilent(updates) {
+    state = { ...state, ...(typeof updates === 'function' ? updates(state) : updates) };
+}
+
 export function subscribe(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -399,6 +404,30 @@ export function recordCorrectAnswer() {
     return { streak: newQuizStreak, xp: XP_REWARDS.correctAnswer + streakBonus };
 }
 
+// Silent version - updates state without triggering re-render
+export function recordCorrectAnswerSilent() {
+    const profile = { ...state.playerProfile };
+    profile.totalCorrect += 1;
+    profile.totalAnswered += 1;
+    
+    const newQuizStreak = state.quizStreak + 1;
+    const maxQuizStreak = Math.max(state.maxQuizStreak, newQuizStreak);
+    
+    // Award XP silently (no achievements to avoid re-render)
+    const streakBonus = Math.min(newQuizStreak, 10) * XP_REWARDS.streakBonus;
+    profile.xp += XP_REWARDS.correctAnswer + streakBonus;
+    
+    setStateSilent({ 
+        playerProfile: profile,
+        quizStreak: newQuizStreak,
+        maxQuizStreak,
+        showAnswer: true
+    });
+    
+    saveProfile();
+    return { streak: newQuizStreak, xp: XP_REWARDS.correctAnswer + streakBonus };
+}
+
 export function recordWrongAnswer() {
     const profile = { ...state.playerProfile };
     profile.totalAnswered += 1;
@@ -406,6 +435,20 @@ export function recordWrongAnswer() {
     setState({ 
         playerProfile: profile,
         quizStreak: 0 // Reset streak on wrong answer
+    });
+    
+    saveProfile();
+}
+
+// Silent version - updates state without triggering re-render
+export function recordWrongAnswerSilent() {
+    const profile = { ...state.playerProfile };
+    profile.totalAnswered += 1;
+    
+    setStateSilent({ 
+        playerProfile: profile,
+        quizStreak: 0,
+        showAnswer: true
     });
     
     saveProfile();
