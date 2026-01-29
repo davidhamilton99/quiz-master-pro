@@ -442,6 +442,7 @@ function renderMultipleChoice(q, questionIndex) {
                 <span class="option-letter">${letter}</span>
                 <span class="option-text">${escapeHtml(opt)}</span>
                 ${showingAnswer && isCorrectOpt ? '<span class="option-check">✓</span>' : ''}
+                ${showingAnswer && isSelected && !isCorrectOpt ? '<span class="option-check incorrect">✗</span>' : ''}
             </label>
         `;
     });
@@ -498,11 +499,13 @@ function renderTrueFalse(q, questionIndex) {
                 <span class="tf-icon">✓</span>
                 <span class="tf-label">True</span>
                 ${showingAnswer && correctAnswer ? '<span class="option-check">✓</span>' : ''}
+                ${showingAnswer && userAnswer === true && !correctAnswer ? '<span class="option-check incorrect">✗</span>' : ''}
             </button>
             <button class="${falseClass}" onclick="window.app.selectTF(false)" ${disabled}>
                 <span class="tf-icon">✗</span>
                 <span class="tf-label">False</span>
                 ${showingAnswer && !correctAnswer ? '<span class="option-check">✓</span>' : ''}
+                ${showingAnswer && userAnswer === false && correctAnswer ? '<span class="option-check incorrect">✗</span>' : ''}
             </button>
         </div>
     `;
