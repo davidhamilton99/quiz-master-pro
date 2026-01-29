@@ -168,20 +168,27 @@ const initialState = {
 
 let state = { ...initialState };
 const listeners = new Set();
+let skipRender = false;
 
 // ==================== CORE STATE FUNCTIONS ====================
 export function getState() {
     return state;
 }
 
-export function setState(updates) {
-    state = { ...state, ...(typeof updates === 'function' ? updates(state) : updates) };
-    listeners.forEach(fn => fn(state));
+export function setSkipRender(skip) {
+    skipRender = skip;
 }
 
-// Silent update - does NOT trigger re-render (for DOM-managed updates)
-export function setStateSilent(updates) {
+export function setState(updates) {
     state = { ...state, ...(typeof updates === 'function' ? updates(state) : updates) };
+    
+    // Skip notifying listeners if flag is set (prevents re-render during quiz interaction)
+    if (skipRender) {
+        skipRender = false;
+        return;
+    }
+    
+    listeners.forEach(fn => fn(state));
 }
 
 export function subscribe(listener) {
@@ -404,30 +411,6 @@ export function recordCorrectAnswer() {
     return { streak: newQuizStreak, xp: XP_REWARDS.correctAnswer + streakBonus };
 }
 
-// Silent version - updates state without triggering re-render
-export function recordCorrectAnswerSilent() {
-    const profile = { ...state.playerProfile };
-    profile.totalCorrect += 1;
-    profile.totalAnswered += 1;
-    
-    const newQuizStreak = state.quizStreak + 1;
-    const maxQuizStreak = Math.max(state.maxQuizStreak, newQuizStreak);
-    
-    // Award XP silently (no achievements to avoid re-render)
-    const streakBonus = Math.min(newQuizStreak, 10) * XP_REWARDS.streakBonus;
-    profile.xp += XP_REWARDS.correctAnswer + streakBonus;
-    
-    setStateSilent({ 
-        playerProfile: profile,
-        quizStreak: newQuizStreak,
-        maxQuizStreak,
-        showAnswer: true
-    });
-    
-    saveProfile();
-    return { streak: newQuizStreak, xp: XP_REWARDS.correctAnswer + streakBonus };
-}
-
 export function recordWrongAnswer() {
     const profile = { ...state.playerProfile };
     profile.totalAnswered += 1;
@@ -435,20 +418,6 @@ export function recordWrongAnswer() {
     setState({ 
         playerProfile: profile,
         quizStreak: 0 // Reset streak on wrong answer
-    });
-    
-    saveProfile();
-}
-
-// Silent version - updates state without triggering re-render
-export function recordWrongAnswerSilent() {
-    const profile = { ...state.playerProfile };
-    profile.totalAnswered += 1;
-    
-    setStateSilent({ 
-        playerProfile: profile,
-        quizStreak: 0,
-        showAnswer: true
     });
     
     saveProfile();
