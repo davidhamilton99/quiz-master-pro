@@ -926,6 +926,9 @@ export function removeMatch(leftIndex) {
     saveQuizProgress();
 }
 
+// Alias for removeMatch (for compatibility)
+export const unmatchItem = removeMatch;
+
 export function clearAllMatches() {
     const state = getState();
     if (state.studyMode && state.showAnswer) return;
@@ -934,6 +937,12 @@ export function clearAllMatches() {
     answers[state.currentQuestionIndex] = {};
     setState({ answers });
     saveQuizProgress();
+}
+
+// Initialize quiz handlers (called after render for touch events if needed)
+export function initQuizHandlers() {
+    // No longer needed with tap-to-select approach
+    // Kept for compatibility with app.js
 }
 
 export function matchDragEnd(e) {
