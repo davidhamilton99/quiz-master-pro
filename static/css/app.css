@@ -3547,7 +3547,7 @@ select:focus:not(:focus-visible) {
 .order-handle {
     font-size: 1.25rem;
     color: var(--text-muted);
-    cursor: grab;
+    pointer-events: none;
     flex-shrink: 0;
     width: 24px;
     text-align: center;
