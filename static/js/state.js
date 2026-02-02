@@ -113,11 +113,19 @@ export function subscribe(fn) {
 // ==================== AUTH ====================
 
 export function loadAuth() {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    if (token && user) {
-        setState({ isAuthenticated: true, user: JSON.parse(user), view: 'library' });
-        return true;
+    try {
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        if (token && user) {
+            const parsedUser = JSON.parse(user);
+            setState({ isAuthenticated: true, user: parsedUser, view: 'library' });
+            return true;
+        }
+    } catch (e) {
+        console.error('Failed to load auth from localStorage:', e);
+        // Clear corrupted data
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
     }
     return false;
 }
