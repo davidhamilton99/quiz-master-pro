@@ -463,3 +463,16 @@ export function getTierName(level = null) {
     const currentLevel = level || getState().level;
     return getLevelTitle(currentLevel);
 }
+
+// ==================== PROFILE GETTER ====================
+
+export function getProfile() {
+    const s = getState();
+    return {
+        xp: s.xp || 0,
+        level: s.level || 1,
+        gems: s.gems || 0,
+        dailyStreak: s.dailyStreak || 0,
+        achievements: s.achievements || [],
+    };
+}
