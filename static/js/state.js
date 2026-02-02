@@ -288,6 +288,27 @@ export function clearQuizProgress(quizId) {
     localStorage.removeItem(PROGRESS_KEY + quizId);
 }
 
+
+export function getAllInProgressQuizzes() {
+    const progressList = [];
+    const s = getState();
+    
+    // Iterate through all quizzes and check for saved progress
+    s.quizzes.forEach(quiz => {
+        const progress = loadQuizProgress(quiz.id);
+        if (progress) {
+            progressList.push({
+                quizId: quiz.id,
+                questionIndex: progress.questionIndex,
+                total: quiz.questions?.length || 0,
+                savedAt: progress.savedAt,
+            });
+        }
+    });
+    
+    return progressList;
+}
+
 // ==================== DAILY STREAK ====================
 
 export function updateDailyStreak() {
