@@ -200,6 +200,13 @@ export function getLevelInfo(level = null) {
         xpForLevel: xpForCurrentLevel,
         progress,
         title: getLevelTitle(currentLevel),
+        profile: {
+            xp: s.xp || 0,
+            level: s.level || 1,
+            gems: s.gems || 0,
+            dailyStreak: s.dailyStreak || 0,
+            achievements: s.achievements || [],
+        },
     };
 }
 
@@ -474,5 +481,25 @@ export function getProfile() {
         gems: s.gems || 0,
         dailyStreak: s.dailyStreak || 0,
         achievements: s.achievements || [],
+    };
+}
+
+// ==================== PLAYER HUD DATA ====================
+
+export function getPlayerHudData() {
+    const s = getState();
+    const levelInfo = getLevelInfo();
+    
+    return {
+        profile: {
+            xp: s.xp || 0,
+            level: s.level || 1,
+            gems: s.gems || 0,
+            dailyStreak: s.dailyStreak || 0,
+            achievements: s.achievements || [],
+        },
+        levelInfo: levelInfo,
+        tierColor: getTierColor(),
+        tierName: getTierName(),
     };
 }
