@@ -57,6 +57,10 @@ let state = {
     achievements: [],
     pendingLevelUp: null,
     pendingAchievements: [],
+    totalAnswered: 0,
+    totalCorrect: 0,
+    quizzesCompleted: 0,
+    perfectScores: 0,
     
     // Settings
     soundEnabled: true,
@@ -66,7 +70,22 @@ let state = {
 const listeners = [];
 
 export function getState() {
-    return state;
+    // Add computed playerProfile property for compatibility with playerHud.js
+    return {
+        ...state,
+        playerProfile: {
+            xp: state.xp || 0,
+            level: state.level || 1,
+            gems: state.gems || 0,
+            dailyStreak: state.dailyStreak || 0,
+            lastActiveDate: state.lastActiveDate || null,
+            achievements: state.achievements || [],
+            totalAnswered: state.totalAnswered || 0,
+            totalCorrect: state.totalCorrect || 0,
+            quizzesCompleted: state.quizzesCompleted || 0,
+            perfectScores: state.perfectScores || 0,
+        }
+    };
 }
 
 /**
@@ -191,15 +210,20 @@ export function getLevelInfo(level = null) {
     }
     
     const xpIntoLevel = s.xp - totalXpForLevel;
-    const progress = Math.min(100, Math.round((xpIntoLevel / xpForCurrentLevel) * 100));
+    const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForCurrentLevel) * 100));
+    const progressDecimal = Math.min(1, xpIntoLevel / xpForCurrentLevel);
     
     return {
         level: currentLevel,
         xp: s.xp,
-        xpIntoLevel,
-        xpForLevel: xpForCurrentLevel,
-        progress,
+        xpInLevel: xpIntoLevel,  // For playerHud.js compatibility
+        xpIntoLevel,  // Keep for backward compatibility
+        xpForNext: xpForCurrentLevel,  // For playerHud.js compatibility
+        xpForLevel: xpForCurrentLevel,  // Keep for backward compatibility
+        progress: progressDecimal,  // 0-1 decimal for playerHud.js
+        progressPercent: progressPercent,  // 0-100 integer
         title: getLevelTitle(currentLevel),
+        tier: getTierFromLevel(currentLevel),  // For playerHud.js compatibility
         profile: {
             xp: s.xp || 0,
             level: s.level || 1,
@@ -219,6 +243,17 @@ function getLevelTitle(level) {
     if (level >= 10) return 'Apprentice';
     if (level >= 5) return 'Learner';
     return 'Novice';
+}
+
+function getTierFromLevel(level) {
+    if (level >= 50) return 7; // Legend
+    if (level >= 40) return 6; // Grandmaster
+    if (level >= 30) return 5; // Master
+    if (level >= 20) return 4; // Expert
+    if (level >= 15) return 3; // Scholar
+    if (level >= 10) return 2; // Apprentice
+    if (level >= 5) return 1;  // Learner
+    return 0; // Novice
 }
 
 function addXP(amount) {
@@ -453,8 +488,19 @@ export function checkAchievements() {
 
 // ==================== TIER SYSTEM ====================
 
-export function getTierColor(level = null) {
-    const currentLevel = level || getState().level;
+export function getTierColor(tierOrLevel = null) {
+    let currentLevel;
+    
+    if (tierOrLevel === null) {
+        currentLevel = getState().level;
+    } else if (tierOrLevel <= 7) {
+        // Tier number (0-7), convert to minimum level for that tier
+        const tierToLevel = [1, 5, 10, 15, 20, 30, 40, 50];
+        currentLevel = tierToLevel[tierOrLevel] || 1;
+    } else {
+        // Level number
+        currentLevel = tierOrLevel;
+    }
     
     if (currentLevel >= 50) return '#FFD700'; // Gold - Legend
     if (currentLevel >= 40) return '#E5E4E2'; // Platinum - Grandmaster
