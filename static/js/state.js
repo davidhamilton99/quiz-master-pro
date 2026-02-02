@@ -381,3 +381,65 @@ export function recordQuizComplete(correct, total) {
     
     addXP(xpGain);
 }
+// ==================== ACHIEVEMENTS ====================
+
+export function getUnlockedAchievements() {
+    const s = getState();
+    return s.achievements || [];
+}
+
+export function unlockAchievement(achievementId) {
+    const s = getState();
+    if (!s.achievements.includes(achievementId)) {
+        const newAchievements = [...s.achievements, achievementId];
+        setState({
+            achievements: newAchievements,
+            pendingAchievements: [...(s.pendingAchievements || []), achievementId],
+        }, true);
+        saveProfile();
+        return true;
+    }
+    return false;
+}
+
+export function checkAchievements() {
+    const s = getState();
+    const newAchievements = [];
+    
+    // First Quiz
+    if (!s.achievements.includes('first_quiz') && s.quizzes.length >= 1) {
+        unlockAchievement('first_quiz');
+        newAchievements.push('first_quiz');
+    }
+    
+    // Perfect Score
+    if (!s.achievements.includes('perfect_score')) {
+        // This would be checked in quiz results
+    }
+    
+    // Level milestones
+    if (!s.achievements.includes('level_5') && s.level >= 5) {
+        unlockAchievement('level_5');
+        newAchievements.push('level_5');
+    }
+    if (!s.achievements.includes('level_10') && s.level >= 10) {
+        unlockAchievement('level_10');
+        newAchievements.push('level_10');
+    }
+    if (!s.achievements.includes('level_25') && s.level >= 25) {
+        unlockAchievement('level_25');
+        newAchievements.push('level_25');
+    }
+    
+    // Streak milestones
+    if (!s.achievements.includes('streak_7') && s.dailyStreak >= 7) {
+        unlockAchievement('streak_7');
+        newAchievements.push('streak_7');
+    }
+    if (!s.achievements.includes('streak_30') && s.dailyStreak >= 30) {
+        unlockAchievement('streak_30');
+        newAchievements.push('streak_30');
+    }
+    
+    return newAchievements;
+}
