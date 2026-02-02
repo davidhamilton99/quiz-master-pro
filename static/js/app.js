@@ -5,7 +5,7 @@ import { ExportService, ImportService, showExportModal, showImportModal } from '
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
-import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
+import { renderLibrary, setSearch, setSort, setCategory, clearFilters, toggleMenu, confirmDelete } from './components/library.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
@@ -319,6 +319,7 @@ window.app = {
     setSearch,
     setSort,
     setCategory,
+    clearFilters,
     toggleMenu,
     confirmDelete,
     
@@ -387,6 +388,12 @@ window.app = {
     changeType,
     savePair,
     saveOption,
+    
+    // Phase 2: Code & Images
+    copyCode,
+    showImageModal,
+    clearImage,
+    previewImage,
     
     // Rewards
     showPendingRewards,
