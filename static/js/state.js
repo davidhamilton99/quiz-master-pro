@@ -443,3 +443,23 @@ export function checkAchievements() {
     
     return newAchievements;
 }
+
+// ==================== TIER SYSTEM ====================
+
+export function getTierColor(level = null) {
+    const currentLevel = level || getState().level;
+    
+    if (currentLevel >= 50) return '#FFD700'; // Gold - Legend
+    if (currentLevel >= 40) return '#E5E4E2'; // Platinum - Grandmaster
+    if (currentLevel >= 30) return '#CD7F32'; // Bronze - Master
+    if (currentLevel >= 20) return '#C0C0C0'; // Silver - Expert
+    if (currentLevel >= 15) return '#8B4513'; // Brown - Scholar
+    if (currentLevel >= 10) return '#4169E1'; // Blue - Apprentice
+    if (currentLevel >= 5) return '#32CD32';  // Green - Learner
+    return '#9CA3AF'; // Gray - Novice
+}
+
+export function getTierName(level = null) {
+    const currentLevel = level || getState().level;
+    return getLevelTitle(currentLevel);
+}
