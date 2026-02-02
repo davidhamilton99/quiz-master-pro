@@ -1,4 +1,4 @@
-/* Quiz Component - PHASE 2: Code Highlighting, Transitions, Image Support */
+/* Quiz Component - PHASE 2: Flicker-Free Navigation + Code/Image Support */
 import { 
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
@@ -10,11 +10,105 @@ import { showToast } from '../utils/toast.js';
 import { TIME, STREAK, QUIZ } from '../utils/constants.js';
 
 let timerInterval = null;
-
-// ==================== PHASE 2: TRANSITION STATE ====================
-
 let isTransitioning = false;
-const TRANSITION_DURATION = 300; // ms
+const TRANSITION_DURATION = 200;
+
+// ==================== TARGETED DOM UPDATES (NO FLICKER) ====================
+
+/**
+ * Update question content without full page re-render
+ * This is the key to preventing flickering
+ */
+function updateQuestionOnly() {
+    const container = document.getElementById('question-container');
+    if (!container) return false;
+    
+    const state = getState();
+    const quiz = state.currentQuiz;
+    if (!quiz) return false;
+    
+    const q = quiz.questions[state.currentQuestionIndex];
+    const total = quiz.questions.length;
+    
+    // Update question content
+    container.innerHTML = buildQuestionContent(q, state);
+    
+    // Update progress bar
+    const answeredCount = state.answers.filter(a => a !== undefined).length;
+    const progressPercent = Math.round((answeredCount / total) * 100);
+    
+    const progressFill = document.querySelector('.progress-fill');
+    if (progressFill) progressFill.style.width = `${progressPercent}%`;
+    
+    const progressLabel = document.querySelector('.progress-label');
+    if (progressLabel) progressLabel.textContent = `${progressPercent}% complete`;
+    
+    // Update milestones
+    document.querySelectorAll('.progress-milestone').forEach((m, i) => {
+        const thresholds = [25, 50, 75, 100];
+        const reached = (answeredCount / total) * 100 >= thresholds[i];
+        m.classList.toggle('reached', reached);
+        if (reached) m.innerHTML = '✓';
+    });
+    
+    // Update question counter badge
+    const counterBadge = document.querySelector('.quiz-info .badge-primary');
+    if (counterBadge) counterBadge.textContent = `${state.currentQuestionIndex + 1} / ${total}`;
+    
+    // Update nav dots
+    document.querySelectorAll('.q-dot').forEach((dot, i) => {
+        dot.classList.toggle('current', i === state.currentQuestionIndex);
+        dot.classList.toggle('answered', state.answers[i] !== undefined);
+        dot.classList.toggle('flagged', state.flaggedQuestions.has(i));
+    });
+    
+    // Update mobile counter
+    const mobileCounter = document.querySelector('.quiz-nav .show-mobile.font-medium');
+    if (mobileCounter) mobileCounter.textContent = `${state.currentQuestionIndex + 1} / ${total}`;
+    
+    // Update compact nav input
+    const jumpInput = document.querySelector('.question-jump-input');
+    if (jumpInput) jumpInput.value = state.currentQuestionIndex + 1;
+    
+    // Update prev/next buttons
+    const prevBtn = document.querySelector('.quiz-footer .btn-secondary');
+    if (prevBtn) prevBtn.disabled = state.currentQuestionIndex === 0;
+    
+    const nextBtn = document.querySelector('.quiz-footer .btn-primary');
+    if (nextBtn) {
+        if (state.currentQuestionIndex === total - 1) {
+            nextBtn.textContent = 'Submit';
+            nextBtn.setAttribute('onclick', 'window.app.submitQuiz()');
+        } else {
+            nextBtn.innerHTML = 'Next →';
+            nextBtn.setAttribute('onclick', 'window.app.nextQuestion()');
+        }
+    }
+    
+    // Update flag button
+    const flagBtn = document.querySelector('.quiz-header .btn-icon');
+    if (flagBtn) flagBtn.classList.toggle('flagged', state.flaggedQuestions.has(state.currentQuestionIndex));
+    
+    return true;
+}
+
+function buildQuestionContent(q, state) {
+    return `
+        ${renderStreakDisplay(state.quizStreak)}
+        <div class="question-header">
+            <div class="question-num">
+                Question ${state.currentQuestionIndex + 1}
+                ${getTypeBadge(q.type)}
+                ${state.flaggedQuestions.has(state.currentQuestionIndex) ? '<span class="badge badge-warning">Flagged</span>' : ''}
+            </div>
+            <h2 class="question-text">${escapeHtml(q.question)}</h2>
+        </div>
+        ${q.image ? renderQuestionImage(q.image, q.imageAlt) : ''}
+        ${q.code ? renderCodeBlock(q.code, q.codeLanguage || 'plaintext') : ''}
+        ${renderQuestionType(q, state.currentQuestionIndex)}
+        ${renderStudyModeFeedback(q, state)}
+    `;
+}
 
 // ==================== MOBILE TOUCH SUPPORT ====================
 
@@ -117,19 +211,18 @@ function handleTouchEnd(e) {
 
 function handleTouchDrop(dragged, dropZone) {
     const dragType = dragged.dataset.touchDraggable;
-    const dropType = dropZone.dataset.touchDropZone;
     
     if (dragType === 'match-left') {
         const leftIndex = parseInt(dragged.dataset.index);
         const rightIndex = parseInt(dropZone.dataset.index);
         if (!isNaN(leftIndex) && !isNaN(rightIndex)) {
-            matchDropTouchHandler(leftIndex, rightIndex);
+            matchDropHandler(leftIndex, rightIndex);
         }
     } else if (dragType === 'order-item') {
         const fromIndex = parseInt(dragged.dataset.index);
         const toIndex = parseInt(dropZone.dataset.index);
         if (!isNaN(fromIndex) && !isNaN(toIndex)) {
-            orderDropTouchHandler(fromIndex, toIndex);
+            orderDropHandler(fromIndex, toIndex);
         }
     }
 }
@@ -145,64 +238,42 @@ if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxT
 // ==================== OPTION SHUFFLING ====================
 
 function shuffleOptionsWithMapping(options, correctAnswer) {
-    const indexedOptions = options.map((opt, i) => ({ 
-        originalIndex: i, 
-        text: opt 
-    }));
+    const indexedOptions = options.map((opt, i) => ({ originalIndex: i, text: opt }));
     
     for (let i = indexedOptions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [indexedOptions[i], indexedOptions[j]] = [indexedOptions[j], indexedOptions[i]];
     }
     
-    const mapping = {};
-    indexedOptions.forEach((item, newIndex) => {
-        mapping[newIndex] = item.originalIndex;
-    });
-    
     const shuffledOptions = indexedOptions.map(item => item.text);
     
     let newCorrect;
     if (Array.isArray(correctAnswer)) {
-        newCorrect = correctAnswer.map(oldIdx => {
-            return indexedOptions.findIndex(item => item.originalIndex === oldIdx);
-        });
+        newCorrect = correctAnswer.map(oldIdx => 
+            indexedOptions.findIndex(item => item.originalIndex === oldIdx)
+        );
     } else {
         newCorrect = indexedOptions.findIndex(item => item.originalIndex === correctAnswer);
     }
     
-    return { shuffledOptions, newCorrect, mapping };
+    return { shuffledOptions, newCorrect };
 }
 
-// ==================== PHASE 2: CODE HIGHLIGHTING ====================
+// ==================== CODE HIGHLIGHTING ====================
 
-/**
- * Highlight code using Prism.js
- * Supports: powershell, bash, python, javascript, json, yaml, xml, sql, csharp, etc.
- */
 function highlightCode(code, language = 'plaintext') {
-    // Normalize language names
     const langMap = {
-        'ps': 'powershell',
-        'ps1': 'powershell',
-        'sh': 'bash',
-        'shell': 'bash',
-        'js': 'javascript',
-        'ts': 'typescript',
-        'py': 'python',
-        'yml': 'yaml',
-        'cs': 'csharp',
-        'c#': 'csharp',
-        'txt': 'plaintext',
-        'text': 'plaintext',
-        'conf': 'ini',
-        'config': 'ini',
-        'reg': 'ini', // Windows registry
+        'ps': 'powershell', 'ps1': 'powershell',
+        'sh': 'bash', 'shell': 'bash',
+        'js': 'javascript', 'ts': 'typescript',
+        'py': 'python', 'yml': 'yaml',
+        'cs': 'csharp', 'c#': 'csharp',
+        'txt': 'plaintext', 'text': 'plaintext',
+        'conf': 'ini', 'config': 'ini', 'reg': 'ini',
     };
     
     const normalizedLang = langMap[language.toLowerCase()] || language.toLowerCase();
     
-    // Check if Prism is available and has the language
     if (typeof Prism !== 'undefined' && Prism.languages[normalizedLang]) {
         try {
             return Prism.highlight(code, Prism.languages[normalizedLang], normalizedLang);
@@ -211,15 +282,9 @@ function highlightCode(code, language = 'plaintext') {
         }
     }
     
-    // Fallback: escape HTML
     return escapeHtml(code);
 }
 
-/**
- * Render a code block with syntax highlighting
- * @param {string} code - The code content
- * @param {string} language - Optional language identifier
- */
 function renderCodeBlock(code, language = 'plaintext') {
     const highlightedCode = highlightCode(code, language);
     const langLabel = language && language !== 'plaintext' ? language.toUpperCase() : '';
@@ -238,52 +303,29 @@ function renderCodeBlock(code, language = 'plaintext') {
     `;
 }
 
-// Copy code to clipboard
 export function copyCode(button) {
     const codeBlock = button.closest('.code-block-wrapper').querySelector('code');
     const code = codeBlock.textContent;
     
     navigator.clipboard.writeText(code).then(() => {
         button.classList.add('copied');
-        button.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-        `;
+        button.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
         setTimeout(() => {
             button.classList.remove('copied');
-            button.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-            `;
+            button.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
         }, 2000);
-    }).catch(err => {
-        console.error('Copy failed:', err);
-        showToast('Failed to copy', 'error');
-    });
+    }).catch(() => showToast('Failed to copy', 'error'));
 }
 
-// ==================== PHASE 2: IMAGE SUPPORT ====================
+// ==================== IMAGE SUPPORT ====================
 
-/**
- * Render an image in a question
- * @param {string} imageUrl - URL or base64 data URL
- * @param {string} alt - Alt text for accessibility
- */
 function renderQuestionImage(imageUrl, alt = 'Question image') {
     if (!imageUrl) return '';
     
     return `
         <div class="question-image-container">
-            <img 
-                src="${escapeHtml(imageUrl)}" 
-                alt="${escapeHtml(alt)}"
-                class="question-image"
-                loading="lazy"
-                onclick="window.app.showImageModal(this.src, this.alt)"
-            />
+            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(alt)}" class="question-image" loading="lazy"
+                onclick="window.app.showImageModal(this.src, this.alt)"/>
             <button class="image-zoom-btn" onclick="window.app.showImageModal('${escapeHtml(imageUrl)}', '${escapeHtml(alt)}')" title="View full size">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="11" cy="11" r="8"></circle>
@@ -295,30 +337,6 @@ function renderQuestionImage(imageUrl, alt = 'Question image') {
     `;
 }
 
-/**
- * Render an image option (for image-based multiple choice)
- */
-function renderImageOption(imageUrl, index, isSelected, isCorrect, showingAnswer, disabled) {
-    let cls = 'option image-option';
-    if (isSelected) cls += ' selected';
-    if (showingAnswer && isCorrect) cls += ' correct';
-    if (showingAnswer && isSelected && !isCorrect) cls += ' incorrect';
-    
-    return `
-        <label class="${cls}">
-            <input type="radio" 
-                name="q-img" 
-                value="${index}" 
-                ${isSelected ? 'checked' : ''} 
-                ${disabled ? 'disabled' : ''}
-                onchange="window.app.selectOption(${index})">
-            <span class="option-letter">${String.fromCharCode(65 + index)}</span>
-            <img src="${escapeHtml(imageUrl)}" alt="Option ${String.fromCharCode(65 + index)}" class="option-image" loading="lazy">
-        </label>
-    `;
-}
-
-// Image modal for full-screen view
 export function showImageModal(src, alt) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay image-modal';
@@ -336,7 +354,6 @@ export function showImageModal(src, alt) {
     `;
     document.body.appendChild(modal);
     
-    // Close on escape
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
             modal.remove();
@@ -346,23 +363,21 @@ export function showImageModal(src, alt) {
     document.addEventListener('keydown', handleEsc);
 }
 
-// ==================== RENDER FUNCTIONS ====================
+// ==================== MAIN RENDER ====================
 
 export function renderQuiz() {
     const state = getState();
     const quiz = state.currentQuiz;
-    if (!quiz) return '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh"><div class="spinner"></div></div>';
+    if (!quiz) return '<div class="quiz-loading"><div class="spinner"></div></div>';
     
     const q = quiz.questions[state.currentQuestionIndex];
     const total = quiz.questions.length;
-    const hasAnswered = state.answers[state.currentQuestionIndex] !== undefined;
-    const showingAnswer = state.studyMode && state.showAnswer;
     
-    // Calculate progress percentage
     const answeredCount = state.answers.filter(a => a !== undefined).length;
     const progressPercent = Math.round((answeredCount / total) * 100);
 
-    return `<div class="quiz-page">
+    return `
+    <div class="quiz-page">
         <header class="quiz-header">
             <button class="btn btn-ghost" onclick="window.app.exitQuiz()">← Exit</button>
             <div class="quiz-info">
@@ -376,7 +391,6 @@ export function renderQuiz() {
             </div>
         </header>
         
-        <!-- PHASE 2: Progress bar with milestones -->
         <div class="quiz-progress-bar">
             <div class="progress-track">
                 <div class="progress-fill" style="width: ${progressPercent}%"></div>
@@ -386,46 +400,28 @@ export function renderQuiz() {
         </div>
         
         <main class="quiz-main">
-            <!-- PHASE 2: Animated question container -->
-            <div class="quiz-content question-container ${state.transitionDirection || ''}" id="question-container">
-                ${renderStreakDisplay(state.quizStreak)}
-                <div class="question-header">
-                    <div class="question-num">
-                        Question ${state.currentQuestionIndex + 1}
-                        ${getTypeBadge(q.type)}
-                        ${state.flaggedQuestions.has(state.currentQuestionIndex) ? '<span class="badge badge-warning">Flagged</span>' : ''}
-                    </div>
-                    <h2 class="question-text">${escapeHtml(q.question)}</h2>
-                </div>
-                
-                <!-- PHASE 2: Question image support -->
-                ${q.image ? renderQuestionImage(q.image, q.imageAlt) : ''}
-                
-                <!-- PHASE 2: Enhanced code block with syntax highlighting -->
-                ${q.code ? renderCodeBlock(q.code, q.codeLanguage || 'plaintext') : ''}
-                
-                ${renderQuestionType(q, state.currentQuestionIndex)}
-                ${renderStudyModeFeedback(q, state)}
+            <div class="quiz-content question-container" id="question-container">
+                ${buildQuestionContent(q, state)}
             </div>
         </main>
-        <footer class="quiz-footer"><div class="quiz-nav">
-            <button class="btn btn-secondary" onclick="window.app.prevQuestion()" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>← Prev</button>
-            ${renderQuestionNav(total, state.currentQuestionIndex)}
-            ${state.currentQuestionIndex === total - 1 
-                ? `<button class="btn btn-primary" onclick="window.app.submitQuiz()">Submit</button>` 
-                : `<button class="btn btn-primary" onclick="window.app.nextQuestion()">Next →</button>`}
-        </div></footer>
+        
+        <footer class="quiz-footer">
+            <div class="quiz-nav">
+                <button class="btn btn-secondary" onclick="window.app.prevQuestion()" ${state.currentQuestionIndex === 0 ? 'disabled' : ''}>← Prev</button>
+                ${renderQuestionNav(total, state.currentQuestionIndex)}
+                ${state.currentQuestionIndex === total - 1 
+                    ? `<button class="btn btn-primary" onclick="window.app.submitQuiz()">Submit</button>` 
+                    : `<button class="btn btn-primary" onclick="window.app.nextQuestion()">Next →</button>`}
+            </div>
+        </footer>
     </div>`;
 }
 
-// PHASE 2: Progress milestones (25%, 50%, 75%, 100%)
 function renderProgressMilestones(total, answered) {
     const milestones = [25, 50, 75, 100];
     return milestones.map(pct => {
         const reached = (answered / total) * 100 >= pct;
-        return `<div class="progress-milestone ${reached ? 'reached' : ''}" style="left: ${pct}%" title="${pct}%">
-            ${reached ? '✓' : ''}
-        </div>`;
+        return `<div class="progress-milestone ${reached ? 'reached' : ''}" style="left: ${pct}%" title="${pct}%">${reached ? '✓' : ''}</div>`;
     }).join('');
 }
 
@@ -436,7 +432,7 @@ function renderStudyModeFeedback(q, state) {
     const isCorrect = checkIfCorrect(userAnswer, q, state.currentQuestionIndex);
     
     let feedbackHtml = `
-        <div class="study-feedback ${isCorrect ? 'correct' : 'incorrect'} fade-in">
+        <div class="study-feedback ${isCorrect ? 'correct' : 'incorrect'}">
             <div class="feedback-header">
                 <span class="feedback-icon">${isCorrect ? '✓' : '✗'}</span>
                 <span class="feedback-text">${isCorrect ? 'Correct!' : 'Incorrect'}</span>
@@ -445,35 +441,20 @@ function renderStudyModeFeedback(q, state) {
     
     if (!isCorrect) {
         feedbackHtml += `<div class="correct-answer-reveal">`;
-        
         switch (q.type) {
             case 'truefalse':
-                const correctBool = q.correct[0] === 0;
-                feedbackHtml += `<strong>Correct answer:</strong> ${correctBool ? 'True' : 'False'}`;
+                feedbackHtml += `<strong>Correct answer:</strong> ${q.correct[0] === 0 ? 'True' : 'False'}`;
                 break;
             case 'matching':
-                feedbackHtml += `<strong>Correct matches:</strong><ul class="correct-list">`;
-                q.pairs.forEach((pair, i) => {
-                    feedbackHtml += `<li>${escapeHtml(pair.left)} → ${escapeHtml(pair.right)}</li>`;
-                });
-                feedbackHtml += `</ul>`;
+                feedbackHtml += `<strong>Correct matches:</strong><ul class="correct-list">${q.pairs.map(p => `<li>${escapeHtml(p.left)} → ${escapeHtml(p.right)}</li>`).join('')}</ul>`;
                 break;
             case 'ordering':
-                feedbackHtml += `<strong>Correct order:</strong><ol class="correct-list">`;
-                q.options.forEach((item, i) => {
-                    feedbackHtml += `<li>${escapeHtml(item)}</li>`;
-                });
-                feedbackHtml += `</ol>`;
+                feedbackHtml += `<strong>Correct order:</strong><ol class="correct-list">${q.options.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`;
                 break;
             default:
                 const correctOptions = getCorrectOptionsForDisplay(q, state.currentQuestionIndex);
-                if (Array.isArray(correctOptions)) {
-                    feedbackHtml += `<strong>Correct answers:</strong> ${correctOptions.join(', ')}`;
-                } else {
-                    feedbackHtml += `<strong>Correct answer:</strong> ${correctOptions}`;
-                }
+                feedbackHtml += `<strong>Correct answer:</strong> ${Array.isArray(correctOptions) ? correctOptions.join(', ') : correctOptions}`;
         }
-        
         feedbackHtml += `</div>`;
     }
     
@@ -481,14 +462,11 @@ function renderStudyModeFeedback(q, state) {
         feedbackHtml += `<div class="explanation"><strong>💡 Explanation:</strong> ${escapeHtml(q.explanation)}</div>`;
     }
     
-    feedbackHtml += `</div>`;
-    
-    return feedbackHtml;
+    return feedbackHtml + `</div>`;
 }
 
 function getCorrectOptionsForDisplay(q, questionIndex) {
     const state = getState();
-    
     let displayOptions = q.options;
     let displayCorrect = q.correct;
     
@@ -499,12 +477,9 @@ function getCorrectOptionsForDisplay(q, questionIndex) {
     }
     
     if (Array.isArray(displayCorrect)) {
-        return displayCorrect.map(idx => 
-            `${String.fromCharCode(65 + idx)}. ${escapeHtml(displayOptions[idx])}`
-        );
-    } else {
-        return `${String.fromCharCode(65 + displayCorrect)}. ${escapeHtml(displayOptions[displayCorrect])}`;
+        return displayCorrect.map(idx => `${String.fromCharCode(65 + idx)}. ${escapeHtml(displayOptions[idx])}`);
     }
+    return `${String.fromCharCode(65 + displayCorrect)}. ${escapeHtml(displayOptions[displayCorrect])}`;
 }
 
 function renderStreakDisplay(streak) {
@@ -513,53 +488,22 @@ function renderStreakDisplay(streak) {
     const intensity = Math.min(Math.floor(streak / 5), 3);
     const fires = '🔥'.repeat(intensity + 1);
     
-    let message = '';
-    let className = 'streak-indicator';
+    let message = '', className = 'streak-indicator';
     
-    if (streak >= STREAK.LEGENDARY) {
-        message = 'LEGENDARY!';
-        className += ' legendary';
-    } else if (streak >= STREAK.UNSTOPPABLE) {
-        message = 'UNSTOPPABLE!';
-        className += ' unstoppable';
-    } else if (streak >= STREAK.ON_FIRE) {
-        message = 'ON FIRE!';
-        className += ' on-fire';
-    } else if (streak >= STREAK.NICE) {
-        message = 'Nice streak!';
-        className += ' nice';
-    } else {
-        message = `${streak} in a row`;
-    }
+    if (streak >= STREAK.LEGENDARY) { message = 'LEGENDARY!'; className += ' legendary'; }
+    else if (streak >= STREAK.UNSTOPPABLE) { message = 'UNSTOPPABLE!'; className += ' unstoppable'; }
+    else if (streak >= STREAK.ON_FIRE) { message = 'ON FIRE!'; className += ' on-fire'; }
+    else if (streak >= STREAK.NICE) { message = 'Nice streak!'; className += ' nice'; }
+    else { message = `${streak} in a row`; }
     
-    return `
-        <div class="${className}">
-            <span class="streak-flames">${fires}</span>
-            <span class="streak-message">${message}</span>
-            <span class="streak-number">${streak}</span>
-        </div>
-    `;
+    return `<div class="${className}"><span class="streak-flames">${fires}</span><span class="streak-message">${message}</span><span class="streak-number">${streak}</span></div>`;
 }
 
 function renderQuestionNav(total, current) {
     if (total > QUIZ.MAX_COMPACT_NAV_QUESTIONS) {
-        return `
-            <div class="question-nav-compact">
-                <input type="number" 
-                    class="question-jump-input" 
-                    min="1" 
-                    max="${total}" 
-                    value="${current + 1}"
-                    onchange="window.app.goToQuestion(parseInt(this.value) - 1)"
-                    onclick="this.select()"
-                />
-                <span class="question-nav-total">/ ${total}</span>
-            </div>
-        `;
+        return `<div class="question-nav-compact"><input type="number" class="question-jump-input" min="1" max="${total}" value="${current + 1}" onchange="window.app.goToQuestion(parseInt(this.value) - 1)" onclick="this.select()"/><span class="question-nav-total">/ ${total}</span></div>`;
     }
-    
-    return `<div class="question-dots hide-mobile">${renderDots()}</div>
-            <div class="show-mobile font-medium">${current + 1} / ${total}</div>`;
+    return `<div class="question-dots hide-mobile">${renderDots()}</div><div class="show-mobile font-medium">${current + 1} / ${total}</div>`;
 }
 
 function renderDots() {
@@ -575,13 +519,7 @@ function renderDots() {
 }
 
 function getTypeBadge(type) {
-    const badges = {
-        choice: '<span class="badge badge-info">Multiple Choice</span>',
-        truefalse: '<span class="badge badge-success">True/False</span>',
-        matching: '<span class="badge badge-warning">Matching</span>',
-        ordering: '<span class="badge badge-primary">Ordering</span>',
-        fillin: '<span class="badge badge-accent">Fill in Blank</span>'
-    };
+    const badges = { choice: '<span class="badge badge-info">Multiple Choice</span>', truefalse: '<span class="badge badge-success">True/False</span>', matching: '<span class="badge badge-warning">Matching</span>', ordering: '<span class="badge badge-primary">Ordering</span>', fillin: '<span class="badge badge-accent">Fill in Blank</span>' };
     return badges[type] || '';
 }
 
@@ -605,7 +543,6 @@ function renderQuestionType(q, questionIndex) {
 function renderMultipleChoice(q, questionIndex) {
     const state = getState();
     const userAnswer = state.answers[questionIndex];
-    const hasAnswered = userAnswer !== undefined;
     const showingAnswer = state.studyMode && state.showAnswer;
     
     let displayOptions = q.options;
@@ -616,8 +553,7 @@ function renderMultipleChoice(q, questionIndex) {
             const result = shuffleOptionsWithMapping(q.options, q.correct);
             const shuffles = { ...state.optionShuffles };
             shuffles[questionIndex] = result;
-            setState({ optionShuffles: shuffles });
-            
+            setState({ optionShuffles: shuffles }, true); // Skip render
             displayOptions = result.shuffledOptions;
             displayCorrect = result.newCorrect;
         } else {
@@ -629,20 +565,14 @@ function renderMultipleChoice(q, questionIndex) {
     
     const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
-    
-    // PHASE 2: Check if options are images
     const hasImageOptions = q.optionImages && q.optionImages.length > 0;
     
     let html = `<div class="options-grid ${hasImageOptions ? 'image-options-grid' : ''}">`;
     
     displayOptions.forEach((opt, i) => {
         const letter = String.fromCharCode(65 + i);
-        const isSelected = isMulti 
-            ? (userAnswer || []).includes(i) 
-            : userAnswer === i;
-        const isCorrectOpt = isMulti 
-            ? displayCorrect.includes(i) 
-            : displayCorrect === i;
+        const isSelected = isMulti ? (userAnswer || []).includes(i) : userAnswer === i;
+        const isCorrectOpt = isMulti ? displayCorrect.includes(i) : displayCorrect === i;
         
         let cls = 'option';
         if (isSelected) cls += ' selected';
@@ -654,34 +584,10 @@ function renderMultipleChoice(q, questionIndex) {
         const checkType = isMulti ? 'checkbox' : 'radio';
         const checked = isSelected ? 'checked' : '';
         
-        // PHASE 2: Image option support
         if (hasImageOptions && q.optionImages[i]) {
-            html += `
-                <label class="${cls} image-option">
-                    <input type="${checkType}" 
-                        name="q${questionIndex}" 
-                        value="${i}" 
-                        ${checked} 
-                        ${disabled}
-                        onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
-                    <span class="option-letter">${letter}</span>
-                    <img src="${escapeHtml(q.optionImages[i])}" alt="Option ${letter}" class="option-image" loading="lazy">
-                    ${opt ? `<span class="option-caption">${escapeHtml(opt)}</span>` : ''}
-                </label>
-            `;
+            html += `<label class="${cls} image-option"><input type="${checkType}" name="q${questionIndex}" value="${i}" ${checked} ${disabled} onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})"><span class="option-letter">${letter}</span><img src="${escapeHtml(q.optionImages[i])}" alt="Option ${letter}" class="option-image" loading="lazy">${opt ? `<span class="option-caption">${escapeHtml(opt)}</span>` : ''}</label>`;
         } else {
-            html += `
-                <label class="${cls}">
-                    <input type="${checkType}" 
-                        name="q${questionIndex}" 
-                        value="${i}" 
-                        ${checked} 
-                        ${disabled}
-                        onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
-                    <span class="option-letter">${letter}</span>
-                    <span class="option-text">${escapeHtml(opt)}</span>
-                </label>
-            `;
+            html += `<label class="${cls}"><input type="${checkType}" name="q${questionIndex}" value="${i}" ${checked} ${disabled} onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})"><span class="option-letter">${letter}</span><span class="option-text">${escapeHtml(opt)}</span></label>`;
         }
     });
     html += '</div>';
@@ -698,18 +604,13 @@ export function toggleMultiSelect(index) {
     if (state.studyMode && state.showAnswer) return;
     
     const currentAnswer = state.answers[state.currentQuestionIndex] || [];
-    let newAnswer;
-    
-    if (currentAnswer.includes(index)) {
-        newAnswer = currentAnswer.filter(i => i !== index);
-    } else {
-        newAnswer = [...currentAnswer, index];
-    }
+    const newAnswer = currentAnswer.includes(index) ? currentAnswer.filter(i => i !== index) : [...currentAnswer, index];
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = newAnswer;
-    setState({ answers });
+    setState({ answers }, true);
     saveQuizProgress();
+    updateQuestionOnly();
 }
 
 // ==================== TRUE/FALSE ====================
@@ -719,7 +620,6 @@ function renderTrueFalse(q, questionIndex) {
     const userAnswer = state.answers[questionIndex];
     const showingAnswer = state.studyMode && state.showAnswer;
     const disabled = showingAnswer ? 'disabled' : '';
-    
     const correctAnswer = q.correct[0] === 0;
     
     const trueSelected = userAnswer === true;
@@ -734,28 +634,18 @@ function renderTrueFalse(q, questionIndex) {
     if (showingAnswer) {
         if (correctAnswer) trueClass += ' correct';
         else if (trueSelected) trueClass += ' incorrect';
-        
         if (!correctAnswer) falseClass += ' correct';
         else if (falseSelected) falseClass += ' incorrect';
     }
     
-    // PHASE 2: Card flip style for T/F
     return `
         <div class="tf-options">
             <button class="${trueClass}" onclick="window.app.selectTF(true)" ${disabled}>
-                <div class="tf-icon-wrapper true">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                </div>
+                <div class="tf-icon-wrapper true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
                 <span class="tf-label">True</span>
             </button>
             <button class="${falseClass}" onclick="window.app.selectTF(false)" ${disabled}>
-                <div class="tf-icon-wrapper false">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <path d="M18 6L6 18M6 6l12 12"></path>
-                    </svg>
-                </div>
+                <div class="tf-icon-wrapper false"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 <span class="tf-label">False</span>
             </button>
         </div>
@@ -775,20 +665,16 @@ function renderMatching(q, questionIndex) {
         shuffledRight = shuffleArray(q.pairs.map((p, i) => ({ text: p.right, origIndex: i })));
         const newShuffled = { ...state.matchingShuffled };
         newShuffled[questionIndex] = shuffledRight;
-        setState({ matchingShuffled: newShuffled });
+        setState({ matchingShuffled: newShuffled }, true);
     }
     
     const selectedLeft = state.matchingSelectedLeft;
-    
     const rightToLeft = {};
-    Object.entries(userAnswer).forEach(([left, right]) => {
-        rightToLeft[right] = parseInt(left);
-    });
+    Object.entries(userAnswer).forEach(([left, right]) => { rightToLeft[right] = parseInt(left); });
     
     return `
         <div class="matching-container tap-mode">
             <p class="helper-text mb-4">Tap a term, then tap its matching definition</p>
-            
             <div class="matching-grid">
                 <div class="matching-column">
                     <div class="matching-header">Terms</div>
@@ -796,22 +682,9 @@ function renderMatching(q, questionIndex) {
                         const isMatched = userAnswer[i] !== undefined;
                         const isSelected = selectedLeft === i && !isMatched;
                         const matchedRightIndex = userAnswer[i];
-                        
-                        return `
-                            <div class="match-item left ${isMatched ? 'matched' : ''} ${isSelected ? 'selected' : ''} ${showingAnswer ? 'disabled' : ''}"
-                                data-index="${i}"
-                                onclick="window.app.selectMatchLeft(${i})">
-                                <span class="match-letter">${String.fromCharCode(65 + i)}</span>
-                                <span class="match-text">${escapeHtml(pair.left)}</span>
-                                ${isMatched ? `
-                                    <span class="match-badge">${matchedRightIndex + 1}</span>
-                                    ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})" title="Remove match">×</button>` : ''}
-                                ` : ''}
-                            </div>
-                        `;
+                        return `<div class="match-item left ${isMatched ? 'matched' : ''} ${isSelected ? 'selected' : ''} ${showingAnswer ? 'disabled' : ''}" data-index="${i}" onclick="window.app.selectMatchLeft(${i})"><span class="match-letter">${String.fromCharCode(65 + i)}</span><span class="match-text">${escapeHtml(pair.left)}</span>${isMatched ? `<span class="match-badge">${matchedRightIndex + 1}</span>${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})" title="Remove match">×</button>` : ''}` : ''}</div>`;
                     }).join('')}
                 </div>
-                
                 <div class="matching-column">
                     <div class="matching-header">Definitions</div>
                     ${shuffledRight.map((item, i) => {
@@ -819,29 +692,13 @@ function renderMatching(q, questionIndex) {
                         const matchedLeftIndex = rightToLeft[i];
                         const isCorrect = showingAnswer && userAnswer[item.origIndex] === i;
                         const isWrong = showingAnswer && isUsed && !isCorrect;
-                        
-                        return `
-                            <div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'correct-match' : ''} ${isWrong ? 'wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}"
-                                data-index="${i}"
-                                data-orig-index="${item.origIndex}"
-                                onclick="window.app.selectMatchRight(${i})">
-                                <span class="match-number">${i + 1}</span>
-                                <span class="match-text">${escapeHtml(item.text)}</span>
-                                ${isUsed ? `<span class="match-badge-right">${String.fromCharCode(65 + matchedLeftIndex)}</span>` : ''}
-                                ${showingAnswer && isCorrect ? '<span class="match-check">✓</span>' : ''}
-                            </div>
-                        `;
+                        return `<div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'correct-match' : ''} ${isWrong ? 'wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}" data-index="${i}" data-orig-index="${item.origIndex}" onclick="window.app.selectMatchRight(${i})"><span class="match-number">${i + 1}</span><span class="match-text">${escapeHtml(item.text)}</span>${isUsed ? `<span class="match-badge-right">${String.fromCharCode(65 + matchedLeftIndex)}</span>` : ''}${showingAnswer && isCorrect ? '<span class="match-check">✓</span>' : ''}</div>`;
                     }).join('')}
                 </div>
             </div>
-            
             <div class="mt-4 flex gap-2">
-                ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `
-                    <button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">Clear All</button>
-                ` : ''}
-                ${state.studyMode && allMatched && !showingAnswer ? `
-                    <button class="btn btn-primary" onclick="window.app.checkMatchingAnswer()">Check Answer</button>
-                ` : ''}
+                ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `<button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">Clear All</button>` : ''}
+                ${state.studyMode && allMatched && !showingAnswer ? `<button class="btn btn-primary" onclick="window.app.checkMatchingAnswer()">Check Answer</button>` : ''}
             </div>
         </div>
     `;
@@ -855,50 +712,25 @@ function renderOrdering(q, questionIndex) {
     
     let currentOrder = state.answers[questionIndex];
     if (!currentOrder) {
-        currentOrder = shuffleArray(q.options.map((text, i) => ({ 
-            text, 
-            origIndex: i 
-        })));
+        currentOrder = shuffleArray(q.options.map((text, i) => ({ text, origIndex: i })));
         const answers = [...state.answers];
         answers[questionIndex] = currentOrder;
-        setState({ answers });
+        setState({ answers }, true);
     }
     
     return `
         <div class="ordering-container arrow-mode">
             <p class="helper-text mb-4">Use the arrows to reorder items (1 = first)</p>
-            
             <div class="ordering-list">
                 ${currentOrder.map((item, i) => {
                     const isCorrect = showingAnswer && item.origIndex === i;
                     const isWrong = showingAnswer && item.origIndex !== i;
                     const isFirst = i === 0;
                     const isLast = i === currentOrder.length - 1;
-                    
-                    return `
-                        <div class="order-item ${isCorrect ? 'correct-order' : ''} ${isWrong ? 'wrong-order' : ''} ${showingAnswer ? 'disabled' : ''}"
-                            data-index="${i}">
-                            <div class="order-arrows ${showingAnswer ? 'hidden' : ''}">
-                                <button class="order-arrow up ${isFirst ? 'disabled' : ''}" 
-                                    onclick="window.app.moveOrderItem(${i}, -1)"
-                                    ${isFirst || showingAnswer ? 'disabled' : ''}>▲</button>
-                                <button class="order-arrow down ${isLast ? 'disabled' : ''}" 
-                                    onclick="window.app.moveOrderItem(${i}, 1)"
-                                    ${isLast || showingAnswer ? 'disabled' : ''}>▼</button>
-                            </div>
-                            <span class="order-number">${i + 1}</span>
-                            <span class="order-text">${escapeHtml(item.text)}</span>
-                            ${showingAnswer ? `<span class="order-result">${isCorrect ? '✓' : '✗'}</span>` : ''}
-                        </div>
-                    `;
+                    return `<div class="order-item ${isCorrect ? 'correct-order' : ''} ${isWrong ? 'wrong-order' : ''} ${showingAnswer ? 'disabled' : ''}" data-index="${i}"><div class="order-arrows ${showingAnswer ? 'hidden' : ''}"><button class="order-arrow up ${isFirst ? 'disabled' : ''}" onclick="window.app.moveOrderItem(${i}, -1)" ${isFirst || showingAnswer ? 'disabled' : ''}>▲</button><button class="order-arrow down ${isLast ? 'disabled' : ''}" onclick="window.app.moveOrderItem(${i}, 1)" ${isLast || showingAnswer ? 'disabled' : ''}>▼</button></div><span class="order-number">${i + 1}</span><span class="order-text">${escapeHtml(item.text)}</span>${showingAnswer ? `<span class="order-result">${isCorrect ? '✓' : '✗'}</span>` : ''}</div>`;
                 }).join('')}
             </div>
-            
-            ${!showingAnswer ? `
-                <div class="mt-4 text-center">
-                    <button class="btn btn-primary btn-lg" onclick="window.app.checkOrderingAnswer()">Check Answer</button>
-                </div>
-            ` : ''}
+            ${!showingAnswer ? `<div class="mt-4 text-center"><button class="btn btn-primary btn-lg" onclick="window.app.checkOrderingAnswer()">Check Answer</button></div>` : ''}
         </div>
     `;
 }
@@ -913,13 +745,14 @@ export function selectOption(index) {
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = index;
     
-    setState({ answers });
+    setState({ answers }, true);
     
     if (state.studyMode) {
         setTimeout(() => handleStudyModeCheck(index, q), TIME.STUDY_MODE_DELAY_MS);
     }
     
     saveQuizProgress();
+    updateQuestionOnly();
 }
 
 export function selectTF(value) {
@@ -930,13 +763,14 @@ export function selectTF(value) {
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = value;
     
-    setState({ answers });
+    setState({ answers }, true);
     
     if (state.studyMode) {
         setTimeout(() => handleStudyModeCheck(value, q), TIME.STUDY_MODE_DELAY_MS);
     }
     
     saveQuizProgress();
+    updateQuestionOnly();
 }
 
 export function checkMultipleChoiceAnswer() {
@@ -949,9 +783,7 @@ export function checkMultipleChoiceAnswer() {
         return;
     }
     
-    if (state.studyMode) {
-        handleStudyModeCheck(userAnswer, q);
-    }
+    if (state.studyMode) handleStudyModeCheck(userAnswer, q);
 }
 
 export function checkMatchingAnswer() {
@@ -964,9 +796,7 @@ export function checkMatchingAnswer() {
         return;
     }
     
-    if (state.studyMode) {
-        handleStudyModeCheck(userAnswer, q);
-    }
+    if (state.studyMode) handleStudyModeCheck(userAnswer, q);
 }
 
 export function checkOrderingAnswer() {
@@ -979,9 +809,7 @@ export function checkOrderingAnswer() {
         return;
     }
     
-    if (state.studyMode) {
-        handleStudyModeCheck(userAnswer, q);
-    }
+    if (state.studyMode) handleStudyModeCheck(userAnswer, q);
 }
 
 function handleStudyModeCheck(userAnswer, question) {
@@ -1007,7 +835,8 @@ function handleStudyModeCheck(userAnswer, question) {
         }
     }
     
-    setState({ showAnswer: true });
+    setState({ showAnswer: true }, true);
+    updateQuestionOnly();
 }
 
 function checkIfCorrect(answer, question, questionIndex = null) {
@@ -1020,73 +849,28 @@ function checkIfCorrect(answer, question, questionIndex = null) {
     
     switch (question.type) {
         case 'truefalse':
-            const correctBool = correctAnswer[0] === 0;
-            return answer === correctBool;
-            
+            return answer === (correctAnswer[0] === 0);
         case 'matching':
             if (!answer || typeof answer !== 'object') return false;
             const shuffledRight = state.matchingShuffled[questionIndex];
-            if (!shuffledRight) return false;
-            
-            if (Object.keys(answer).length !== question.pairs.length) return false;
-            
+            if (!shuffledRight || Object.keys(answer).length !== question.pairs.length) return false;
             return Object.entries(answer).every(([left, right]) => {
-                const leftIdx = parseInt(left);
-                const rightIdx = parseInt(right);
-                return shuffledRight[rightIdx] && shuffledRight[rightIdx].origIndex === leftIdx;
+                return shuffledRight[parseInt(right)]?.origIndex === parseInt(left);
             });
-            
         case 'ordering':
             if (!answer || !Array.isArray(answer)) return false;
             return answer.every((item, idx) => item.origIndex === idx);
-            
         default:
             if (Array.isArray(correctAnswer)) {
-                if (correctAnswer.length === 1 && typeof answer === 'number') {
-                    return answer === correctAnswer[0];
-                }
+                if (correctAnswer.length === 1 && typeof answer === 'number') return answer === correctAnswer[0];
                 const ans = Array.isArray(answer) ? answer : [];
-                return correctAnswer.length === ans.length && 
-                       correctAnswer.every(c => ans.includes(c));
+                return correctAnswer.length === ans.length && correctAnswer.every(c => ans.includes(c));
             }
             return answer === correctAnswer;
     }
 }
 
 // ==================== MATCHING HANDLERS ====================
-
-let draggedMatchIndex = null;
-let draggedFromLeft = null;
-
-export function matchDragStart(e, index, fromLeft) {
-    draggedMatchIndex = index;
-    draggedFromLeft = fromLeft;
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-export function matchDragOver(e) {
-    e.preventDefault();
-    if (draggedMatchIndex !== null && draggedFromLeft) {
-        e.currentTarget.classList.add('drag-over');
-    }
-}
-
-export function matchDragLeave(e) {
-    e.currentTarget.classList.remove('drag-over');
-}
-
-export function matchDrop(e, rightIndex) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
-    
-    if (draggedMatchIndex === null || !draggedFromLeft) return;
-    
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    matchDropHandler(draggedMatchIndex, rightIndex);
-}
 
 function matchDropHandler(leftIndex, rightIndex) {
     const state = getState();
@@ -1097,19 +881,14 @@ function matchDropHandler(leftIndex, rightIndex) {
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = currentAnswers;
-    setState({ answers });
-    
-    if (state.studyMode && Object.keys(currentAnswers).length === q.pairs.length) {
-        setTimeout(() => {
-            handleStudyModeCheck(currentAnswers, q);
-        }, 300);
-    }
+    setState({ answers, matchingSelectedLeft: null }, true);
     
     saveQuizProgress();
-}
-
-function matchDropTouchHandler(leftIndex, rightIndex) {
-    matchDropHandler(leftIndex, rightIndex);
+    updateQuestionOnly();
+    
+    if (state.studyMode && Object.keys(currentAnswers).length === q.pairs.length) {
+        setTimeout(() => handleStudyModeCheck(currentAnswers, q), 300);
+    }
 }
 
 export function selectMatchLeft(index) {
@@ -1117,11 +896,10 @@ export function selectMatchLeft(index) {
     if (state.studyMode && state.showAnswer) return;
     
     const currentAnswers = state.answers[state.currentQuestionIndex] || {};
-    if (currentAnswers[index] !== undefined) {
-        return;
-    }
+    if (currentAnswers[index] !== undefined) return;
     
-    setState({ matchingSelectedLeft: index });
+    setState({ matchingSelectedLeft: index }, true);
+    updateQuestionOnly();
 }
 
 export function selectMatchRight(index) {
@@ -1129,7 +907,6 @@ export function selectMatchRight(index) {
     if (state.studyMode && state.showAnswer) return;
     
     const selectedLeft = state.matchingSelectedLeft;
-    
     if (selectedLeft === null || selectedLeft === undefined) {
         showToast('Select a term first', 'warning');
         return;
@@ -1142,8 +919,6 @@ export function selectMatchRight(index) {
     }
     
     matchDropHandler(selectedLeft, index);
-    
-    setState({ matchingSelectedLeft: null });
 }
 
 export function removeMatch(leftIndex) {
@@ -1155,8 +930,9 @@ export function removeMatch(leftIndex) {
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = currentAnswers;
-    setState({ answers });
+    setState({ answers }, true);
     saveQuizProgress();
+    updateQuestionOnly();
 }
 
 export const unmatchItem = removeMatch;
@@ -1167,20 +943,12 @@ export function clearAllMatches() {
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = {};
-    setState({ answers });
+    setState({ answers, matchingSelectedLeft: null }, true);
     saveQuizProgress();
+    updateQuestionOnly();
 }
 
-export function initQuizHandlers() {
-    // Kept for compatibility
-}
-
-export function matchDragEnd(e) {
-    e.target.classList.remove('dragging');
-    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    draggedMatchIndex = null;
-    draggedFromLeft = null;
-}
+export function initQuizHandlers() {}
 
 // ==================== ORDERING HANDLERS ====================
 
@@ -1199,47 +967,16 @@ export function moveOrderItem(index, direction) {
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = newOrder;
-    setState({ answers });
+    setState({ answers }, true);
     
     saveQuizProgress();
-}
-
-let draggedOrderIndex = null;
-
-export function orderDragStart(e, index) {
-    draggedOrderIndex = index;
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-export function orderDragOver(e) {
-    e.preventDefault();
-    if (draggedOrderIndex !== null) {
-        e.currentTarget.classList.add('drag-over');
-    }
-}
-
-export function orderDragLeave(e) {
-    e.currentTarget.classList.remove('drag-over');
-}
-
-export function orderDrop(e, targetIndex) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
-    
-    if (draggedOrderIndex === null || draggedOrderIndex === targetIndex) return;
-    
-    const state = getState();
-    if (state.studyMode && state.showAnswer) return;
-    
-    orderDropHandler(draggedOrderIndex, targetIndex);
+    updateQuestionOnly();
 }
 
 function orderDropHandler(fromIndex, toIndex) {
     const state = getState();
     const q = state.currentQuiz.questions[state.currentQuestionIndex];
-    const currentOrder = state.answers[state.currentQuestionIndex] || 
-        q.options.map((text, i) => ({ text, origIndex: i }));
+    const currentOrder = state.answers[state.currentQuestionIndex] || q.options.map((text, i) => ({ text, origIndex: i }));
     
     const newOrder = [...currentOrder];
     const [removed] = newOrder.splice(fromIndex, 1);
@@ -1247,28 +984,19 @@ function orderDropHandler(fromIndex, toIndex) {
     
     const answers = [...state.answers];
     answers[state.currentQuestionIndex] = newOrder;
-    setState({ answers });
+    setState({ answers }, true);
     
     saveQuizProgress();
+    updateQuestionOnly();
 }
 
-function orderDropTouchHandler(fromIndex, toIndex) {
-    orderDropHandler(fromIndex, toIndex);
-}
-
-export function orderDragEnd(e) {
-    e.target.classList.remove('dragging');
-    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    draggedOrderIndex = null;
-}
-
-// ==================== NAVIGATION (WITH TRANSITIONS) ====================
+// ==================== NAVIGATION (FLICKER-FREE) ====================
 
 export function nextQuestion() {
     const state = getState();
     if (isTransitioning) return;
     if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
-        transitionToQuestion(state.currentQuestionIndex + 1, 'next');
+        navigateToQuestion(state.currentQuestionIndex + 1, 'next');
     }
 }
 
@@ -1276,7 +1004,7 @@ export function prevQuestion() {
     const state = getState();
     if (isTransitioning) return;
     if (state.currentQuestionIndex > 0) {
-        transitionToQuestion(state.currentQuestionIndex - 1, 'prev');
+        navigateToQuestion(state.currentQuestionIndex - 1, 'prev');
     }
 }
 
@@ -1284,45 +1012,46 @@ export function goToQuestion(index) {
     const state = getState();
     if (isTransitioning) return;
     if (index >= 0 && index < state.currentQuiz.questions.length && index !== state.currentQuestionIndex) {
-        const direction = index > state.currentQuestionIndex ? 'next' : 'prev';
-        transitionToQuestion(index, direction);
+        navigateToQuestion(index, index > state.currentQuestionIndex ? 'next' : 'prev');
     }
 }
 
-// PHASE 2: Smooth question transitions
-function transitionToQuestion(newIndex, direction) {
+function navigateToQuestion(newIndex, direction) {
     isTransitioning = true;
     const container = document.getElementById('question-container');
     
     if (container) {
         // Add exit animation
-        container.classList.add(`slide-out-${direction}`);
+        container.style.opacity = '0';
+        container.style.transform = direction === 'next' ? 'translateX(-20px)' : 'translateX(20px)';
         
         setTimeout(() => {
+            // Update state without triggering full render
             setState({ 
                 currentQuestionIndex: newIndex,
                 showAnswer: false,
-                matchingSelectedLeft: null,
-                transitionDirection: `slide-in-${direction}`
-            });
+                matchingSelectedLeft: null
+            }, true); // Skip render flag
+            
             saveQuizProgress();
             
-            // Remove transition class after animation completes
-            setTimeout(() => {
-                const newContainer = document.getElementById('question-container');
-                if (newContainer) {
-                    newContainer.classList.remove(`slide-in-${direction}`);
-                }
-                isTransitioning = false;
-            }, TRANSITION_DURATION);
+            // Update content
+            updateQuestionOnly();
+            
+            // Add enter animation
+            container.style.transform = direction === 'next' ? 'translateX(20px)' : 'translateX(-20px)';
+            
+            requestAnimationFrame(() => {
+                container.style.opacity = '1';
+                container.style.transform = 'translateX(0)';
+                
+                setTimeout(() => {
+                    isTransitioning = false;
+                }, TRANSITION_DURATION);
+            });
         }, TRANSITION_DURATION);
     } else {
-        // Fallback without animation
-        setState({ 
-            currentQuestionIndex: newIndex,
-            showAnswer: false,
-            matchingSelectedLeft: null
-        });
+        setState({ currentQuestionIndex: newIndex, showAnswer: false, matchingSelectedLeft: null }, true);
         saveQuizProgress();
         isTransitioning = false;
     }
@@ -1336,8 +1065,17 @@ export function toggleFlag() {
     } else {
         flagged.add(state.currentQuestionIndex);
     }
-    setState({ flaggedQuestions: flagged });
+    setState({ flaggedQuestions: flagged }, true);
     saveQuizProgress();
+    
+    // Update flag button and dots directly
+    const flagBtn = document.querySelector('.quiz-header .btn-icon');
+    if (flagBtn) flagBtn.classList.toggle('flagged', flagged.has(state.currentQuestionIndex));
+    
+    const dot = document.querySelector(`.q-dot:nth-child(${state.currentQuestionIndex + 1})`);
+    if (dot) dot.classList.toggle('flagged', flagged.has(state.currentQuestionIndex));
+    
+    updateQuestionOnly();
 }
 
 // ==================== QUIZ START ====================
@@ -1367,13 +1105,12 @@ export async function startQuiz(quizId, options = {}) {
                 quizStreak: savedProgress.quizStreak || 0,
                 maxQuizStreak: savedProgress.maxQuizStreak || 0,
                 matchingShuffled: savedProgress.matchingShuffled || {},
+                matchingSelectedLeft: null,
                 timerEnabled: savedProgress.timerEnabled ?? options.timed ?? false,
                 timerMinutes: options.minutes || 15,
                 timeRemaining: savedProgress.timeRemaining || ((options.minutes || 15) * 60),
-                quizStartTime: Date.now(),
-                transitionDirection: null
+                quizStartTime: Date.now()
             });
-            
             showToast('Resuming quiz...', 'info');
         } else {
             setState({
@@ -1389,22 +1126,17 @@ export async function startQuiz(quizId, options = {}) {
                 quizStreak: 0,
                 maxQuizStreak: 0,
                 matchingShuffled: {},
+                matchingSelectedLeft: null,
                 timerEnabled: options.timed ?? false,
                 timerMinutes: options.minutes || 15,
                 timeRemaining: (options.minutes || 15) * 60,
-                quizStartTime: Date.now(),
-                transitionDirection: null
+                quizStartTime: Date.now()
             });
-            
             if (window.sounds) window.sounds.playQuizStart();
         }
         
-        if (options.timed) {
-            startTimer();
-        }
-        
+        if (options.timed) startTimer();
         updateDailyStreak();
-        
         hideLoading();
     } catch (error) {
         hideLoading();
@@ -1428,22 +1160,24 @@ function startTimer() {
         }
         
         if (window.sounds) {
-            if (state.timeRemaining === TIME.TIMER_WARNING_SECONDS) {
-                window.sounds.playTimerWarning();
-            } else if (state.timeRemaining <= TIME.TIMER_URGENT_SECONDS) {
-                window.sounds.playTimerUrgent();
-            }
+            if (state.timeRemaining === TIME.TIMER_WARNING_SECONDS) window.sounds.playTimerWarning();
+            else if (state.timeRemaining <= TIME.TIMER_URGENT_SECONDS) window.sounds.playTimerUrgent();
         }
         
-        setState({ timeRemaining: state.timeRemaining - 1 });
+        const newTime = state.timeRemaining - 1;
+        setState({ timeRemaining: newTime }, true);
+        
+        // Update timer display directly
+        const timerEl = document.getElementById('timer');
+        if (timerEl) {
+            timerEl.textContent = formatTime(newTime);
+            timerEl.classList.toggle('urgent', newTime <= TIME.TIMER_WARNING_SECONDS);
+        }
     }, 1000);
 }
 
 export function stopTimer() {
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }
 
 // ==================== SUBMIT ====================
@@ -1455,9 +1189,7 @@ export async function submitQuiz() {
     
     let correct = 0;
     quiz.questions.forEach((q, i) => {
-        if (checkIfCorrect(state.answers[i], q, i)) {
-            correct++;
-        }
+        if (checkIfCorrect(state.answers[i], q, i)) correct++;
     });
     
     const total = quiz.questions.length;
@@ -1489,11 +1221,7 @@ export async function submitQuiz() {
     }
     
     clearQuizProgress(quiz.id);
-    
-    setState({
-        view: 'results',
-        quizResults: { correct, total, percentage, isPerfect, answers: state.answers }
-    });
+    setState({ view: 'results', quizResults: { correct, total, percentage, isPerfect, answers: state.answers } });
 }
 
 export function exitQuiz() {

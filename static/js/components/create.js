@@ -1,9 +1,25 @@
-/* Create/Edit Component - Fixed input focus issues */
+/* Create/Edit Component - PHASE 2: Image & Code Language Support */
 import { getState, setState } from '../state.js';
 import { getQuiz, createQuiz, updateQuiz } from '../services/api.js';
 import { escapeHtml, getRandomColor, showLoading, hideLoading } from '../utils/dom.js';
 import { parseQuizData, questionsToText } from '../utils/parser.js';
 import { showToast } from '../utils/toast.js';
+
+// Code language options for the dropdown
+const CODE_LANGUAGES = [
+    { value: '', label: 'None' },
+    { value: 'powershell', label: 'PowerShell' },
+    { value: 'bash', label: 'Bash/Shell' },
+    { value: 'python', label: 'Python' },
+    { value: 'javascript', label: 'JavaScript' },
+    { value: 'json', label: 'JSON' },
+    { value: 'yaml', label: 'YAML' },
+    { value: 'sql', label: 'SQL' },
+    { value: 'csharp', label: 'C#' },
+    { value: 'xml', label: 'XML/HTML' },
+    { value: 'ini', label: 'INI/Config' },
+    { value: 'plaintext', label: 'Plain Text' },
+];
 
 export function renderCreate() {
     const state = getState();
@@ -19,9 +35,14 @@ export function renderCreate() {
             <textarea id="q-data" class="textarea" rows="12" placeholder="Enter questions...">${escapeHtml(state.quizData)}</textarea>
         </div>
         ${state.showFormatHelp ? `<div class="format-help"><h4>Format</h4><pre>1. Multiple choice?
+[image: https://url.com/img.png | Alt text]
+[code:powershell]
+Get-Service | Where-Object {$_.Status -eq "Running"}
+[/code]
 A. Wrong
 B. Correct *
 C. Wrong
+[explanation: Optional]
 
 2. [order] Sort these:
 1) First
@@ -32,9 +53,7 @@ True
 
 4. [match] Match terms:
 A. HTTP => 80
-B. SSH => 22
-
-[explanation: Optional]</pre></div>` : ''}
+B. SSH => 22</pre></div>` : ''}
         <div class="flex gap-3 mt-6"><button class="btn btn-secondary flex-1" onclick="window.app.openVisual()">🎨 Visual Editor</button><button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">💾 Save Quiz</button></div>
     </main></div>`;
 }
@@ -77,6 +96,39 @@ function renderVisual() {
                     <label class="label">Question Text</label>
                     <textarea id="ve-question-${qIdx}" class="textarea" rows="3" placeholder="Enter your question..."
                         onblur="window.app.saveField('question', this.value)">${escapeHtml(q.question || '')}</textarea>
+                </div>
+                
+                <!-- PHASE 2: Image URL Field -->
+                <div class="form-group">
+                    <label class="label">Image URL <span class="text-muted">(optional)</span></label>
+                    <div class="image-input-group">
+                        <input type="url" id="ve-image-${qIdx}" class="input" placeholder="https://example.com/image.png"
+                            value="${escapeHtml(q.image || '')}"
+                            onblur="window.app.saveField('image', this.value)"
+                            oninput="window.app.previewImage(this.value)">
+                        ${q.image ? `<button class="btn btn-sm btn-ghost" onclick="window.app.clearImage()">Clear</button>` : ''}
+                    </div>
+                    ${q.image ? `<div class="image-preview"><img src="${escapeHtml(q.image)}" alt="Preview" onerror="this.parentElement.innerHTML='<span class=\\'text-error\\'>Failed to load image</span>'"></div>` : ''}
+                    <p class="helper-text">Add a diagram, screenshot, or other visual</p>
+                </div>
+                
+                <!-- PHASE 2: Code Block Section -->
+                <div class="form-group">
+                    <label class="label">Code Block <span class="text-muted">(optional)</span></label>
+                    <div class="code-input-group">
+                        <select id="ve-codelang-${qIdx}" class="input code-lang-select" 
+                            onchange="window.app.saveField('codeLanguage', this.value)">
+                            ${CODE_LANGUAGES.map(lang => `
+                                <option value="${lang.value}" ${q.codeLanguage === lang.value ? 'selected' : ''}>
+                                    ${lang.label}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <textarea id="ve-code-${qIdx}" class="textarea code-textarea" rows="4" 
+                        placeholder="Paste code here..."
+                        onblur="window.app.saveField('code', this.value)">${escapeHtml(q.code || '')}</textarea>
+                    <p class="helper-text">Add a code snippet with syntax highlighting</p>
                 </div>
                 
                 <div class="form-group">
@@ -254,7 +306,19 @@ export function openVisual() {
 }
 
 function createEmpty(type) {
-    const base = { question: '', type, explanation: null, pairs: [], options: [], correct: [] };
+    const base = { 
+        question: '', 
+        type, 
+        explanation: null, 
+        pairs: [], 
+        options: [], 
+        correct: [],
+        // PHASE 2: New fields
+        image: null,
+        imageAlt: null,
+        code: null,
+        codeLanguage: null,
+    };
     if (type === 'truefalse') return { ...base, options: ['True', 'False'], correct: [0] };
     if (type === 'matching') return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }] };
     return { ...base, options: ['', ''], correct: type === 'ordering' ? [0, 1] : [] };
@@ -267,11 +331,13 @@ export function closeVisual() {
 }
 
 export function selectQ(i) { setState({ currentEditQuestion: i }); }
+
 export function addQ() { 
     const s = getState();
     const q = [...(s.parsedQuestions || []), createEmpty('choice')]; 
     setState({ parsedQuestions: q, currentEditQuestion: q.length - 1 }); 
 }
+
 export function deleteQ(i) { 
     const s = getState(); 
     if (s.parsedQuestions.length <= 1) return showToast('Need at least 1 question', 'warning'); 
@@ -282,8 +348,24 @@ export function deleteQ(i) {
 export function saveField(field, value) {
     const s = getState();
     const q = [...s.parsedQuestions];
-    q[s.currentEditQuestion] = { ...q[s.currentEditQuestion], [field]: value };
+    q[s.currentEditQuestion] = { ...q[s.currentEditQuestion], [field]: value || null };
     setState({ parsedQuestions: q });
+}
+
+// PHASE 2: Clear image
+export function clearImage() {
+    saveField('image', null);
+    saveField('imageAlt', null);
+}
+
+// PHASE 2: Preview image (updates preview without saving)
+export function previewImage(url) {
+    const preview = document.querySelector('.image-preview');
+    if (preview && url) {
+        preview.innerHTML = `<img src="${escapeHtml(url)}" alt="Preview" onerror="this.parentElement.innerHTML='<span class=\\'text-error\\'>Failed to load image</span>'">`;
+    } else if (preview && !url) {
+        preview.remove();
+    }
 }
 
 export function changeType(newType) {
@@ -293,8 +375,13 @@ export function changeType(newType) {
     
     const q = [...s.parsedQuestions];
     const newQ = createEmpty(newType);
+    // Preserve existing fields
     newQ.question = current.question;
     newQ.explanation = current.explanation;
+    newQ.image = current.image;
+    newQ.imageAlt = current.imageAlt;
+    newQ.code = current.code;
+    newQ.codeLanguage = current.codeLanguage;
     q[s.currentEditQuestion] = newQ;
     setState({ parsedQuestions: q });
 }

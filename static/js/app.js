@@ -24,7 +24,8 @@ import {
 import * as sounds from './utils/sounds.js';
 import * as animations from './utils/animations.js';
 import { renderPlayerHUD, renderLevelUpModal, renderAchievementUnlock } from './utils/playerHud.js';
-
+import { copyCode, showImageModal } from './components/quiz.js';
+import { clearImage, previewImage } from './components/create.js';
 // Make sounds and animations available globally for quiz.js to use
 window.sounds = sounds;
 window.animations = animations;

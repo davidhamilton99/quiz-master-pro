@@ -1,162 +1,44 @@
-/* ============================================
-   State Management - SPECTACULAR Edition
-   XP, Levels, Achievements, Streaks, Gems
-   ============================================ */
+/* State Management - Updated with skipRender support */
 
-// ==================== LEVEL SYSTEM ====================
-const LEVELS = [
-    { level: 1, xpRequired: 0, title: 'Novice', tier: 'bronze' },
-    { level: 2, xpRequired: 100, title: 'Learner', tier: 'bronze' },
-    { level: 3, xpRequired: 250, title: 'Student', tier: 'bronze' },
-    { level: 4, xpRequired: 500, title: 'Apprentice', tier: 'bronze' },
-    { level: 5, xpRequired: 850, title: 'Scholar', tier: 'bronze' },
-    { level: 6, xpRequired: 1300, title: 'Adept', tier: 'bronze' },
-    { level: 7, xpRequired: 1850, title: 'Expert', tier: 'bronze' },
-    { level: 8, xpRequired: 2500, title: 'Specialist', tier: 'bronze' },
-    { level: 9, xpRequired: 3300, title: 'Authority', tier: 'bronze' },
-    { level: 10, xpRequired: 4200, title: 'Bronze Scholar', tier: 'bronze' },
-    { level: 11, xpRequired: 5200, title: 'Thinker', tier: 'silver' },
-    { level: 12, xpRequired: 6400, title: 'Analyst', tier: 'silver' },
-    { level: 13, xpRequired: 7800, title: 'Researcher', tier: 'silver' },
-    { level: 14, xpRequired: 9400, title: 'Intellectual', tier: 'silver' },
-    { level: 15, xpRequired: 11200, title: 'Philosopher', tier: 'silver' },
-    { level: 16, xpRequired: 13200, title: 'Mentor', tier: 'silver' },
-    { level: 17, xpRequired: 15500, title: 'Professor', tier: 'silver' },
-    { level: 18, xpRequired: 18000, title: 'Savant', tier: 'silver' },
-    { level: 19, xpRequired: 20800, title: 'Virtuoso', tier: 'silver' },
-    { level: 20, xpRequired: 24000, title: 'Silver Sage', tier: 'silver' },
-    { level: 25, xpRequired: 40000, title: 'Gold Guardian', tier: 'gold' },
-    { level: 30, xpRequired: 60000, title: 'Platinum Professor', tier: 'platinum' },
-    { level: 40, xpRequired: 100000, title: 'Diamond Master', tier: 'diamond' },
-    { level: 50, xpRequired: 150000, title: 'Legendary', tier: 'legendary' },
-];
-
-// ==================== ACHIEVEMENTS ====================
-const ACHIEVEMENTS = {
-    // Learning Milestones
-    first_quiz: { id: 'first_quiz', name: 'First Steps', desc: 'Complete your first quiz', icon: 'ðŸ“š', xp: 50, secret: false },
-    ten_quizzes: { id: 'ten_quizzes', name: 'Getting Started', desc: 'Complete 10 quizzes', icon: 'ðŸ“–', xp: 100, secret: false },
-    fifty_quizzes: { id: 'fifty_quizzes', name: 'Marathon Runner', desc: 'Complete 50 quizzes', icon: 'ðŸƒ', xp: 250, secret: false },
-    hundred_correct: { id: 'hundred_correct', name: 'Century Club', desc: 'Answer 100 questions correctly', icon: 'ðŸ’¯', xp: 150, secret: false },
-    thousand_correct: { id: 'thousand_correct', name: 'Big Brain', desc: 'Answer 1000 questions correctly', icon: 'ðŸ§ ', xp: 500, secret: false },
-    
-    // Perfect Scores
-    first_perfect: { id: 'first_perfect', name: 'Flawless', desc: 'Get your first perfect score', icon: 'â­', xp: 75, secret: false },
-    five_perfect: { id: 'five_perfect', name: 'Perfectionist', desc: 'Get 5 perfect scores', icon: 'ðŸŒŸ', xp: 150, secret: false },
-    ten_perfect: { id: 'ten_perfect', name: 'Sharpshooter', desc: 'Get 10 perfect scores', icon: 'ðŸŽ¯', xp: 300, secret: false },
-    
-    // Streaks - Daily
-    streak_3: { id: 'streak_3', name: 'Spark', desc: '3-day study streak', icon: 'ðŸ”¥', xp: 50, secret: false },
-    streak_7: { id: 'streak_7', name: 'On Fire', desc: '7-day study streak', icon: 'ðŸ”¥', xp: 100, secret: false },
-    streak_14: { id: 'streak_14', name: 'Blazing', desc: '14-day study streak', icon: 'ðŸ”¥', xp: 200, secret: false },
-    streak_30: { id: 'streak_30', name: 'Inferno', desc: '30-day study streak', icon: 'ðŸŒ‹', xp: 400, secret: false },
-    streak_100: { id: 'streak_100', name: 'Eternal Flame', desc: '100-day study streak', icon: 'â˜€ï¸', xp: 1000, secret: false },
-    
-    // Streaks - In Quiz
-    quiz_streak_10: { id: 'quiz_streak_10', name: 'Hot Streak', desc: '10 correct answers in a row', icon: 'âš¡', xp: 50, secret: false },
-    quiz_streak_20: { id: 'quiz_streak_20', name: 'Unstoppable', desc: '20 correct answers in a row', icon: 'ðŸ’«', xp: 100, secret: false },
-    quiz_streak_50: { id: 'quiz_streak_50', name: 'Legendary Run', desc: '50 correct answers in a row', icon: 'ðŸ‘‘', xp: 300, secret: false },
-    
-    // Creation
-    first_create: { id: 'first_create', name: 'Creator', desc: 'Create your first quiz', icon: 'âœï¸', xp: 50, secret: false },
-    five_create: { id: 'five_create', name: 'Author', desc: 'Create 5 quizzes', icon: 'ðŸ“', xp: 150, secret: false },
-    
-    // Speed
-    speed_demon: { id: 'speed_demon', name: 'Speed Demon', desc: 'Answer 10 questions in under 60 seconds', icon: 'âš¡', xp: 100, secret: false },
-    
-    // Levels
-    level_10: { id: 'level_10', name: 'Bronze Scholar', desc: 'Reach level 10', icon: 'ðŸ¥‰', xp: 200, secret: false },
-    level_20: { id: 'level_20', name: 'Silver Sage', desc: 'Reach level 20', icon: 'ðŸ¥ˆ', xp: 400, secret: false },
-    level_30: { id: 'level_30', name: 'Gold Guardian', desc: 'Reach level 30', icon: 'ðŸ¥‡', xp: 600, secret: false },
-    
-    // Hidden/Secret
-    night_owl: { id: 'night_owl', name: 'Night Owl', desc: 'Study between 2-5 AM', icon: 'ðŸ¦‰', xp: 75, secret: true },
-    early_bird: { id: 'early_bird', name: 'Early Bird', desc: 'Study before 6 AM', icon: 'ðŸ¦', xp: 75, secret: true },
-    weekend_warrior: { id: 'weekend_warrior', name: 'Weekend Warrior', desc: 'Study on both Saturday and Sunday', icon: 'âš”ï¸', xp: 50, secret: true },
-};
-
-// ==================== XP REWARDS ====================
-const XP_REWARDS = {
-    correctAnswer: 10,
-    streakBonus: 2, // per streak count
-    quizComplete: 50,
-    perfectScore: 100,
-    dailyLogin: 25,
-    createQuiz: 75,
-};
-
-// ==================== INITIAL STATE ====================
-const initialState = {
+let state = {
     // Auth
-    view: 'login',
     isAuthenticated: false,
     user: null,
-    token: null,
     authMode: 'login',
-    randomizeOptions: false,  // NEW: Add this
-    optionShuffles: {},       // NEW: Stores shuffle mapping per question
-    // Player Profile
-    playerProfile: {
-        xp: 0,
-        level: 1,
-        title: 'Novice',
-        tier: 'bronze',
-        gems: 0,
-        dailyStreak: 0,
-        longestDailyStreak: 0,
-        lastStudyDate: null,
-        totalCorrect: 0,
-        totalAnswered: 0,
-        quizzesCompleted: 0,
-        perfectScores: 0,
-        quizzesCreated: 0,
-        achievements: [],
-        joinDate: null,
-        studyHistory: {}, // { 'YYYY-MM-DD': { count: N, xpEarned: N } }
-    },
     
-    // Pending rewards (to show animations)
-    pendingXP: 0,
-    pendingAchievements: [],
-    pendingLevelUp: null,
-    showRewardAnimation: false,
+    // Views
+    view: 'login',
     
     // Library
     quizzes: [],
     searchQuery: '',
     sortBy: 'recent',
-    categoryFilter: 'all',
+    filterCategory: '',
+    openMenuId: null,
     
-    // Quiz
+    // Quiz taking
     currentQuiz: null,
     currentQuestionIndex: 0,
     answers: [],
-    studyMode: false,
-    showAnswer: false,
     flaggedQuestions: new Set(),
-    matchingShuffled: {},
-    matchingSelectedLeft: null,  // For tap-to-match interaction
-    
-    // In-quiz stats
+    studyMode: true,
+    randomizeOptions: false,
+    optionShuffles: {},
+    showAnswer: false,
     quizStreak: 0,
     maxQuizStreak: 0,
-    quizStartTime: null,
-    questionTimes: [],
-    
-    // Timer
+    matchingShuffled: {},
+    matchingSelectedLeft: null,
     timerEnabled: false,
     timerMinutes: 15,
-    timeRemaining: 0,
+    timeRemaining: 900,
+    quizStartTime: null,
     
-    // Settings
-    soundEnabled: true,
-    animationsEnabled: true,
-    theme: 'dark',
+    // Results
+    quizResults: null,
+    reviewFilter: 'all',
     
-    // UI
-    loading: false,
-    
-    // Create
+    // Create/Edit
     quizTitle: '',
     quizData: '',
     quizCategory: '',
@@ -164,448 +46,317 @@ const initialState = {
     visualEditorMode: false,
     parsedQuestions: null,
     currentEditQuestion: 0,
-    showFormatHelp: false
+    showFormatHelp: false,
+    
+    // Gamification
+    xp: 0,
+    level: 1,
+    gems: 0,
+    dailyStreak: 0,
+    lastActiveDate: null,
+    achievements: [],
+    pendingLevelUp: null,
+    pendingAchievements: [],
+    
+    // Settings
+    soundEnabled: true,
+    animationsEnabled: true,
 };
 
-let state = { ...initialState };
-const listeners = new Set();
+const listeners = [];
 
-// ==================== CORE STATE FUNCTIONS ====================
 export function getState() {
     return state;
 }
 
-export function setState(updates) {
-    state = { ...state, ...(typeof updates === 'function' ? updates(state) : updates) };
-    listeners.forEach(fn => fn(state));
-}
-
-export function subscribe(listener) {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-}
-
-export function resetState() {
-    state = { ...initialState };
-    listeners.forEach(fn => fn(state));
-}
-
-// ==================== LEVEL CALCULATIONS ====================
-export function getLevelInfo(xp) {
-    let currentLevel = LEVELS[0];
-    let nextLevel = LEVELS[1];
+/**
+ * Update state
+ * @param {Object} newState - New state values to merge
+ * @param {boolean} skipRender - If true, don't trigger re-render (for targeted DOM updates)
+ */
+export function setState(newState, skipRender = false) {
+    state = { ...state, ...newState };
     
-    for (let i = 0; i < LEVELS.length; i++) {
-        if (xp >= LEVELS[i].xpRequired) {
-            currentLevel = LEVELS[i];
-            nextLevel = LEVELS[i + 1] || null;
-        } else {
-            break;
-        }
+    // Only notify listeners (trigger render) if skipRender is false
+    if (!skipRender) {
+        listeners.forEach(fn => fn(state));
     }
-    
-    const xpInCurrentLevel = xp - currentLevel.xpRequired;
-    const xpForNextLevel = nextLevel ? nextLevel.xpRequired - currentLevel.xpRequired : 0;
-    const progress = nextLevel ? xpInCurrentLevel / xpForNextLevel : 1;
-    
-    return {
-        level: currentLevel.level,
-        title: currentLevel.title,
-        tier: currentLevel.tier,
-        currentXP: xp,
-        xpInLevel: xpInCurrentLevel,
-        xpForNext: xpForNextLevel,
-        progress: Math.min(progress, 1),
-        nextLevel: nextLevel
+}
+
+export function subscribe(fn) {
+    listeners.push(fn);
+    return () => {
+        const idx = listeners.indexOf(fn);
+        if (idx > -1) listeners.splice(idx, 1);
     };
 }
 
-export function getTierColor(tier) {
-    const colors = {
-        bronze: '#cd7f32',
-        silver: '#c0c0c0',
-        gold: '#ffd700',
-        platinum: '#e5e4e2',
-        diamond: '#b9f2ff',
-        legendary: '#ff6b6b'
-    };
-    return colors[tier] || colors.bronze;
-}
-
-// ==================== XP & REWARDS ====================
-export function awardXP(amount, reason = '') {
-    const profile = { ...state.playerProfile };
-    const oldXP = profile.xp;
-    const oldLevel = getLevelInfo(oldXP);
-    
-    profile.xp += amount;
-    
-    const newLevel = getLevelInfo(profile.xp);
-    
-    // Update today's study history
-    const today = new Date().toISOString().split('T')[0];
-    if (!profile.studyHistory[today]) {
-        profile.studyHistory[today] = { count: 0, xpEarned: 0 };
-    }
-    profile.studyHistory[today].xpEarned += amount;
-    
-    // Check for level up
-    let levelUp = null;
-    if (newLevel.level > oldLevel.level) {
-        levelUp = newLevel;
-        profile.level = newLevel.level;
-        profile.title = newLevel.title;
-        profile.tier = newLevel.tier;
-        
-        // Bonus gems for leveling up
-        profile.gems += newLevel.level * 5;
-        
-        // Check level achievements
-        checkAchievement('level_10', profile.level >= 10);
-        checkAchievement('level_20', profile.level >= 20);
-        checkAchievement('level_30', profile.level >= 30);
-    }
-    
-    setState({ 
-        playerProfile: profile,
-        pendingXP: state.pendingXP + amount,
-        pendingLevelUp: levelUp,
-        showRewardAnimation: true
-    });
-    
-    saveProfile();
-    
-    return { xpGained: amount, levelUp, newTotal: profile.xp };
-}
-
-export function awardGems(amount) {
-    const profile = { ...state.playerProfile };
-    profile.gems += amount;
-    setState({ playerProfile: profile });
-    saveProfile();
-}
-
-// ==================== ACHIEVEMENTS ====================
-export function checkAchievement(achievementId, condition) {
-    if (!condition) return false;
-    
-    const profile = { ...state.playerProfile };
-    if (profile.achievements.includes(achievementId)) return false;
-    
-    const achievement = ACHIEVEMENTS[achievementId];
-    if (!achievement) return false;
-    
-    // Unlock achievement
-    profile.achievements.push(achievementId);
-    profile.xp += achievement.xp;
-    profile.gems += 10; // Bonus gems for achievements
-    
-    setState({ 
-        playerProfile: profile,
-        pendingAchievements: [...state.pendingAchievements, achievement]
-    });
-    
-    saveProfile();
-    return true;
-}
-
-export function getAchievements() {
-    return ACHIEVEMENTS;
-}
-
-export function getUnlockedAchievements() {
-    return state.playerProfile.achievements.map(id => ACHIEVEMENTS[id]).filter(Boolean);
-}
-
-// ==================== STREAKS ====================
-export function updateDailyStreak() {
-    const profile = { ...state.playerProfile };
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
-    if (profile.lastStudyDate === today) {
-        // Already studied today
-        return profile.dailyStreak;
-    }
-    
-    if (profile.lastStudyDate === yesterday) {
-        // Continue streak
-        profile.dailyStreak += 1;
-    } else if (profile.lastStudyDate !== today) {
-        // Streak broken or first time
-        profile.dailyStreak = 1;
-    }
-    
-    profile.lastStudyDate = today;
-    profile.longestDailyStreak = Math.max(profile.longestDailyStreak, profile.dailyStreak);
-    
-    // Update study history
-    if (!profile.studyHistory[today]) {
-        profile.studyHistory[today] = { count: 0, xpEarned: 0 };
-    }
-    profile.studyHistory[today].count += 1;
-    
-    // Check streak achievements
-    checkAchievement('streak_3', profile.dailyStreak >= 3);
-    checkAchievement('streak_7', profile.dailyStreak >= 7);
-    checkAchievement('streak_14', profile.dailyStreak >= 14);
-    checkAchievement('streak_30', profile.dailyStreak >= 30);
-    checkAchievement('streak_100', profile.dailyStreak >= 100);
-    
-    // Check time-based achievements
-    const hour = new Date().getHours();
-    checkAchievement('night_owl', hour >= 2 && hour < 5);
-    checkAchievement('early_bird', hour < 6);
-    
-    const day = new Date().getDay();
-    if (day === 0 && profile.studyHistory[yesterday]?.count > 0) {
-        checkAchievement('weekend_warrior', true);
-    }
-    
-    setState({ playerProfile: profile });
-    saveProfile();
-    
-    return profile.dailyStreak;
-}
-
-// ==================== QUIZ STATS ====================
-export function recordCorrectAnswer() {
-    const profile = { ...state.playerProfile };
-    profile.totalCorrect += 1;
-    profile.totalAnswered += 1;
-    
-    const newQuizStreak = state.quizStreak + 1;
-    const maxQuizStreak = Math.max(state.maxQuizStreak, newQuizStreak);
-    
-    // Check quiz streak achievements
-    checkAchievement('quiz_streak_10', maxQuizStreak >= 10);
-    checkAchievement('quiz_streak_20', maxQuizStreak >= 20);
-    checkAchievement('quiz_streak_50', maxQuizStreak >= 50);
-    
-    // Check total correct achievements
-    checkAchievement('hundred_correct', profile.totalCorrect >= 100);
-    checkAchievement('thousand_correct', profile.totalCorrect >= 1000);
-    
-    // Award XP with streak bonus
-    const streakBonus = Math.min(newQuizStreak, 10) * XP_REWARDS.streakBonus;
-    awardXP(XP_REWARDS.correctAnswer + streakBonus, 'correct_answer');
-    
-    setState({ 
-        playerProfile: profile,
-        quizStreak: newQuizStreak,
-        maxQuizStreak
-    });
-    
-    saveProfile();
-    return { streak: newQuizStreak, xp: XP_REWARDS.correctAnswer + streakBonus };
-}
-
-export function recordWrongAnswer() {
-    const profile = { ...state.playerProfile };
-    profile.totalAnswered += 1;
-    
-    setState({ 
-        playerProfile: profile,
-        quizStreak: 0 // Reset streak on wrong answer
-    });
-    
-    saveProfile();
-}
-
-export function recordQuizComplete(score, total) {
-    const profile = { ...state.playerProfile };
-    profile.quizzesCompleted += 1;
-    
-    const isPerfect = score === total;
-    if (isPerfect) {
-        profile.perfectScores += 1;
-    }
-    
-    // Check achievements
-    checkAchievement('first_quiz', profile.quizzesCompleted >= 1);
-    checkAchievement('ten_quizzes', profile.quizzesCompleted >= 10);
-    checkAchievement('fifty_quizzes', profile.quizzesCompleted >= 50);
-    checkAchievement('first_perfect', profile.perfectScores >= 1);
-    checkAchievement('five_perfect', profile.perfectScores >= 5);
-    checkAchievement('ten_perfect', profile.perfectScores >= 10);
-    
-    // Award XP
-    awardXP(XP_REWARDS.quizComplete, 'quiz_complete');
-    if (isPerfect) {
-        awardXP(XP_REWARDS.perfectScore, 'perfect_score');
-        awardGems(25); // Bonus gems for perfect
-    }
-    
-    // Award gems based on score
-    const percentage = (score / total) * 100;
-    if (percentage >= 90) awardGems(15);
-    else if (percentage >= 75) awardGems(10);
-    else if (percentage >= 50) awardGems(5);
-    
-    setState({ playerProfile: profile });
-    saveProfile();
-    
-    return { isPerfect, xpEarned: XP_REWARDS.quizComplete + (isPerfect ? XP_REWARDS.perfectScore : 0) };
-}
-
-export function recordQuizCreate() {
-    const profile = { ...state.playerProfile };
-    profile.quizzesCreated += 1;
-    
-    checkAchievement('first_create', profile.quizzesCreated >= 1);
-    checkAchievement('five_create', profile.quizzesCreated >= 5);
-    
-    awardXP(XP_REWARDS.createQuiz, 'create_quiz');
-    
-    setState({ playerProfile: profile });
-    saveProfile();
-}
-
-// ==================== REWARD ANIMATIONS ====================
-export function clearPendingRewards() {
-    setState({
-        pendingXP: 0,
-        pendingAchievements: [],
-        pendingLevelUp: null,
-        showRewardAnimation: false
-    });
-}
-
-// ==================== PERSISTENCE ====================
-export function saveAuth() {
-    if (state.token && state.user) {
-        localStorage.setItem('qmp_token', state.token);
-        localStorage.setItem('qmp_user', JSON.stringify(state.user));
-    }
-}
+// ==================== AUTH ====================
 
 export function loadAuth() {
-    const token = localStorage.getItem('qmp_token');
-    const user = localStorage.getItem('qmp_user');
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
     if (token && user) {
-        setState({ token, user: JSON.parse(user), isAuthenticated: true });
-        loadProfile();
+        setState({ isAuthenticated: true, user: JSON.parse(user), view: 'library' });
         return true;
     }
     return false;
 }
 
-export function clearAuth() {
-    localStorage.removeItem('qmp_token');
-    localStorage.removeItem('qmp_user');
-    resetState();
-    setState({ view: 'login' });
+export function saveAuth(token, user) {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setState({ isAuthenticated: true, user });
 }
 
-export function saveProfile() {
-    localStorage.setItem('qmp_profile', JSON.stringify(state.playerProfile));
+export function clearAuth() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setState({ isAuthenticated: false, user: null, view: 'login' });
 }
+
+// ==================== PROFILE/GAMIFICATION ====================
+
+const PROFILE_KEY = 'quizmaster_profile';
+const SETTINGS_KEY = 'quizmaster_settings';
 
 export function loadProfile() {
     try {
-        const saved = localStorage.getItem('qmp_profile');
+        const saved = localStorage.getItem(PROFILE_KEY);
         if (saved) {
             const profile = JSON.parse(saved);
-            // Merge with defaults for any new fields
-            const merged = { ...initialState.playerProfile, ...profile };
-            setState({ playerProfile: merged });
-        } else {
-            // Initialize new profile
-            const profile = { ...initialState.playerProfile, joinDate: new Date().toISOString() };
-            setState({ playerProfile: profile });
-            saveProfile();
+            setState({
+                xp: profile.xp || 0,
+                level: profile.level || 1,
+                gems: profile.gems || 0,
+                dailyStreak: profile.dailyStreak || 0,
+                lastActiveDate: profile.lastActiveDate || null,
+                achievements: profile.achievements || [],
+            }, true);
         }
     } catch (e) {
         console.error('Failed to load profile:', e);
     }
 }
 
-// ==================== QUIZ PROGRESS ====================
-export function saveQuizProgress() {
-    if (!state.currentQuiz) return;
-    
-    const progress = {
-        quizId: state.currentQuiz.id,
-        quizTitle: state.currentQuiz.title,
-        questionIndex: state.currentQuestionIndex,
-        answers: state.answers,
-        flagged: Array.from(state.flaggedQuestions),
-        studyMode: state.studyMode,
-        timerEnabled: state.timerEnabled,
-        timeRemaining: state.timeRemaining,
-        quizStreak: state.quizStreak,
-        maxQuizStreak: state.maxQuizStreak,
-        matchingShuffled: state.matchingShuffled,
-        randomizeOptions: state.randomizeOptions,   // NEW
-        optionShuffles: state.optionShuffles,       // NEW
-        timestamp: Date.now()
-    };
-    
-    localStorage.setItem(`qmp_progress_${state.currentQuiz.id}`, JSON.stringify(progress));
-    
-    const allProgress = getAllInProgressQuizzes();
-    const existing = allProgress.findIndex(p => p.quizId === state.currentQuiz.id);
-    if (existing >= 0) {
-        allProgress[existing] = { 
-            quizId: progress.quizId, 
-            quizTitle: progress.quizTitle, 
-            timestamp: progress.timestamp, 
-            questionIndex: progress.questionIndex, 
-            total: state.currentQuiz.questions.length 
-        };
-    } else {
-        allProgress.push({ 
-            quizId: progress.quizId, 
-            quizTitle: progress.quizTitle, 
-            timestamp: progress.timestamp, 
-            questionIndex: progress.questionIndex, 
-            total: state.currentQuiz.questions.length 
-        });
-    }
-    localStorage.setItem('qmp_all_progress', JSON.stringify(allProgress));
-}
-
-export function loadQuizProgress(quizId) {
-    const data = localStorage.getItem(`qmp_progress_${quizId}`);
-    if (!data) return null;
-    
-    const progress = JSON.parse(data);
-    if (Date.now() - progress.timestamp > 7 * 24 * 60 * 60 * 1000) {
-        clearQuizProgress(quizId);
-        return null;
-    }
-    return progress;
-}
-
-export function clearQuizProgress(quizId) {
-    localStorage.removeItem(`qmp_progress_${quizId}`);
-    const allProgress = getAllInProgressQuizzes().filter(p => p.quizId !== quizId);
-    localStorage.setItem('qmp_all_progress', JSON.stringify(allProgress));
-}
-
-export function getAllInProgressQuizzes() {
-    try {
-        return JSON.parse(localStorage.getItem('qmp_all_progress') || '[]');
-    } catch {
-        return [];
-    }
-}
-
-// ==================== SETTINGS ====================
-export function setSetting(key, value) {
-    setState({ [key]: value });
-    localStorage.setItem(`qmp_setting_${key}`, JSON.stringify(value));
+export function saveProfile() {
+    const s = getState();
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({
+        xp: s.xp,
+        level: s.level,
+        gems: s.gems,
+        dailyStreak: s.dailyStreak,
+        lastActiveDate: s.lastActiveDate,
+        achievements: s.achievements,
+    }));
 }
 
 export function loadSettings() {
-    const settings = ['soundEnabled', 'animationsEnabled', 'theme'];
-    settings.forEach(key => {
-        const saved = localStorage.getItem(`qmp_setting_${key}`);
-        if (saved !== null) {
-            setState({ [key]: JSON.parse(saved) });
+    try {
+        const saved = localStorage.getItem(SETTINGS_KEY);
+        if (saved) {
+            const settings = JSON.parse(saved);
+            setState({
+                soundEnabled: settings.soundEnabled ?? true,
+                animationsEnabled: settings.animationsEnabled ?? true,
+            }, true);
         }
-    });
+    } catch (e) {
+        console.error('Failed to load settings:', e);
+    }
 }
 
-// Export constants
-export { LEVELS, ACHIEVEMENTS, XP_REWARDS };
+export function saveSettings() {
+    const s = getState();
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        soundEnabled: s.soundEnabled,
+        animationsEnabled: s.animationsEnabled,
+    }));
+}
+
+// ==================== LEVEL SYSTEM ====================
+
+const XP_PER_LEVEL = 100;
+const LEVEL_MULTIPLIER = 1.5;
+
+export function getLevelInfo(level = null) {
+    const s = getState();
+    const currentLevel = level || s.level;
+    const xpForCurrentLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 1));
+    const xpForPrevLevel = currentLevel > 1 ? Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 2)) : 0;
+    
+    let totalXpForLevel = 0;
+    for (let i = 1; i < currentLevel; i++) {
+        totalXpForLevel += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
+    }
+    
+    const xpIntoLevel = s.xp - totalXpForLevel;
+    const progress = Math.min(100, Math.round((xpIntoLevel / xpForCurrentLevel) * 100));
+    
+    return {
+        level: currentLevel,
+        xp: s.xp,
+        xpIntoLevel,
+        xpForLevel: xpForCurrentLevel,
+        progress,
+        title: getLevelTitle(currentLevel),
+    };
+}
+
+function getLevelTitle(level) {
+    if (level >= 50) return 'Quiz Legend';
+    if (level >= 40) return 'Grandmaster';
+    if (level >= 30) return 'Master';
+    if (level >= 20) return 'Expert';
+    if (level >= 15) return 'Scholar';
+    if (level >= 10) return 'Apprentice';
+    if (level >= 5) return 'Learner';
+    return 'Novice';
+}
+
+function addXP(amount) {
+    const s = getState();
+    const newXP = s.xp + amount;
+    
+    // Check for level up
+    let newLevel = s.level;
+    let totalXpNeeded = 0;
+    for (let i = 1; i <= newLevel; i++) {
+        totalXpNeeded += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
+    }
+    
+    while (newXP >= totalXpNeeded) {
+        newLevel++;
+        totalXpNeeded += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, newLevel - 1));
+    }
+    
+    const leveledUp = newLevel > s.level;
+    
+    setState({
+        xp: newXP,
+        level: newLevel,
+        pendingLevelUp: leveledUp ? { oldLevel: s.level, newLevel, title: getLevelTitle(newLevel) } : null,
+    }, true);
+    
+    saveProfile();
+    return { xpGained: amount, leveledUp, newLevel };
+}
+
+// ==================== QUIZ PROGRESS ====================
+
+const PROGRESS_KEY = 'quizmaster_progress_';
+
+export function saveQuizProgress() {
+    const s = getState();
+    if (!s.currentQuiz) return;
+    
+    const progress = {
+        questionIndex: s.currentQuestionIndex,
+        answers: s.answers,
+        flagged: Array.from(s.flaggedQuestions),
+        studyMode: s.studyMode,
+        randomizeOptions: s.randomizeOptions,
+        optionShuffles: s.optionShuffles,
+        quizStreak: s.quizStreak,
+        maxQuizStreak: s.maxQuizStreak,
+        matchingShuffled: s.matchingShuffled,
+        timerEnabled: s.timerEnabled,
+        timeRemaining: s.timeRemaining,
+        savedAt: Date.now(),
+    };
+    
+    localStorage.setItem(PROGRESS_KEY + s.currentQuiz.id, JSON.stringify(progress));
+}
+
+export function loadQuizProgress(quizId) {
+    try {
+        const saved = localStorage.getItem(PROGRESS_KEY + quizId);
+        if (saved) {
+            const progress = JSON.parse(saved);
+            // Only restore if saved within last 24 hours
+            if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
+                return progress;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load progress:', e);
+    }
+    return null;
+}
+
+export function clearQuizProgress(quizId) {
+    localStorage.removeItem(PROGRESS_KEY + quizId);
+}
+
+// ==================== DAILY STREAK ====================
+
+export function updateDailyStreak() {
+    const s = getState();
+    const today = new Date().toDateString();
+    
+    if (s.lastActiveDate === today) return; // Already updated today
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toDateString();
+    
+    let newStreak = 1;
+    if (s.lastActiveDate === yesterdayStr) {
+        newStreak = s.dailyStreak + 1;
+    }
+    
+    setState({
+        dailyStreak: newStreak,
+        lastActiveDate: today,
+    }, true);
+    
+    saveProfile();
+}
+
+// ==================== ANSWER RECORDING ====================
+
+export function recordCorrectAnswer() {
+    const s = getState();
+    const newStreak = s.quizStreak + 1;
+    const maxStreak = Math.max(s.maxQuizStreak, newStreak);
+    
+    // XP rewards
+    let xpGain = 10; // Base XP
+    if (newStreak >= 10) xpGain += 15;
+    else if (newStreak >= 5) xpGain += 10;
+    else if (newStreak >= 3) xpGain += 5;
+    
+    setState({
+        quizStreak: newStreak,
+        maxQuizStreak: maxStreak,
+    }, true);
+    
+    addXP(xpGain);
+}
+
+export function recordWrongAnswer() {
+    setState({ quizStreak: 0 }, true);
+}
+
+export function recordQuizComplete(correct, total) {
+    const s = getState();
+    const percentage = Math.round((correct / total) * 100);
+    
+    // XP rewards
+    let xpGain = correct * 5; // 5 XP per correct answer
+    if (percentage === 100) xpGain += 50; // Perfect bonus
+    else if (percentage >= 90) xpGain += 25;
+    else if (percentage >= 75) xpGain += 10;
+    
+    // Gems
+    let gemsGain = 0;
+    if (percentage === 100) gemsGain = 10;
+    else if (percentage >= 90) gemsGain = 5;
+    else if (percentage >= 75) gemsGain = 2;
+    
+    setState({
+        gems: s.gems + gemsGain,
+    }, true);
+    
+    addXP(xpGain);
+}
