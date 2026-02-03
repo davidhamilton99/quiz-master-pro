@@ -378,15 +378,15 @@ function addXP(amount) {
 // ==================== ACHIEVEMENTS ====================
 
 const ACHIEVEMENTS = {
-    first_quiz: { id: 'first_quiz', name: 'First Steps', description: 'Complete your first quiz', icon: '🎯' },
-    perfect_score: { id: 'perfect_score', name: 'Perfectionist', description: 'Get 100% on a quiz', icon: '💯' },
-    streak_5: { id: 'streak_5', name: 'On Fire', description: 'Get 5 correct answers in a row', icon: '🔥' },
-    streak_10: { id: 'streak_10', name: 'Unstoppable', description: 'Get 10 correct answers in a row', icon: '⚡' },
-    daily_streak_7: { id: 'daily_streak_7', name: 'Dedicated', description: 'Maintain a 7-day streak', icon: '📅' },
-    quizzes_10: { id: 'quizzes_10', name: 'Quiz Enthusiast', description: 'Complete 10 quizzes', icon: '📚' },
-    quizzes_50: { id: 'quizzes_50', name: 'Quiz Master', description: 'Complete 50 quizzes', icon: '🏆' },
-    level_10: { id: 'level_10', name: 'Rising Star', description: 'Reach level 10', icon: '⭐' },
-    level_25: { id: 'level_25', name: 'Expert', description: 'Reach level 25', icon: '🌟' },
+    first_quiz: { id: 'first_quiz', name: 'First Steps', description: 'Complete your first quiz', icon: '🎯', xp: 50, gems: 5 },
+    perfect_score: { id: 'perfect_score', name: 'Perfectionist', description: 'Get 100% on a quiz', icon: '💯', xp: 100, gems: 10 },
+    streak_5: { id: 'streak_5', name: 'On Fire', description: 'Get 5 correct answers in a row', icon: '🔥', xp: 75, gems: 5 },
+    streak_10: { id: 'streak_10', name: 'Unstoppable', description: 'Get 10 correct answers in a row', icon: '⚡', xp: 150, gems: 10 },
+    daily_streak_7: { id: 'daily_streak_7', name: 'Dedicated', description: 'Maintain a 7-day streak', icon: '📅', xp: 200, gems: 20 },
+    quizzes_10: { id: 'quizzes_10', name: 'Quiz Enthusiast', description: 'Complete 10 quizzes', icon: '📚', xp: 100, gems: 10 },
+    quizzes_50: { id: 'quizzes_50', name: 'Quiz Master', description: 'Complete 50 quizzes', icon: '🏆', xp: 500, gems: 50 },
+    level_10: { id: 'level_10', name: 'Rising Star', description: 'Reach level 10', icon: '⭐', xp: 0, gems: 25 },
+    level_25: { id: 'level_25', name: 'Expert', description: 'Reach level 25', icon: '🌟', xp: 0, gems: 50 },
 };
 
 export function getUnlockedAchievements() {
@@ -402,11 +402,27 @@ export function unlockAchievement(achievementId) {
     if (!achievement) return false;
     
     const newAchievements = [...s.achievements, achievementId];
-    const pending = [...(s.pendingAchievements || []), achievement];
+    
+    // Award XP and gems from achievement
+    const currentXP = (typeof s.xp === 'number' && isFinite(s.xp)) ? s.xp : 0;
+    const currentGems = (typeof s.gems === 'number' && isFinite(s.gems)) ? s.gems : 0;
+    const newXP = achievement.xp ? Math.min(currentXP + achievement.xp, 1000000000) : currentXP;
+    const newGems = achievement.gems ? currentGems + achievement.gems : currentGems;
+    const newLevel = calculateLevelFromXP(newXP);
+    
+    // Create pending achievement with proper values
+    const pending = [...(s.pendingAchievements || []), {
+        ...achievement,
+        xp: achievement.xp || 0,
+        gems: achievement.gems || 0,
+    }];
     
     setState({ 
         achievements: newAchievements,
         pendingAchievements: pending,
+        xp: newXP,
+        gems: newGems,
+        level: newLevel,
     }, true);
     
     saveProfile();
