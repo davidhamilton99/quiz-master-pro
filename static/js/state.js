@@ -281,18 +281,21 @@ export function getTierColor(levelOrTier) {
 export function getLevelInfo(xpOrLevel = null) {
     const s = getState();
     
-    // If a large number is passed, treat it as XP and calculate level from it
-    // If small number or null, use state values
-    let currentXP = s.xp;
-    let currentLevel = s.level;
+    // Safety: ensure valid numbers, default to 0/1 if corrupted
+    let currentXP = (typeof s.xp === 'number' && isFinite(s.xp) && s.xp >= 0) ? s.xp : 0;
+    let currentLevel = (typeof s.level === 'number' && isFinite(s.level) && s.level >= 1) ? s.level : 1;
     
-    if (xpOrLevel !== null && xpOrLevel > 100) {
-        // Passed XP value, calculate level from it
-        currentXP = xpOrLevel;
-        currentLevel = calculateLevelFromXP(currentXP);
-    } else if (xpOrLevel !== null && xpOrLevel <= 100) {
-        // Passed a level number
-        currentLevel = xpOrLevel;
+    // Cap at reasonable values to prevent overflow
+    currentXP = Math.min(currentXP, 1000000000); // 1 billion max
+    currentLevel = Math.min(currentLevel, 100);   // 100 max level
+    
+    if (xpOrLevel !== null && typeof xpOrLevel === 'number' && isFinite(xpOrLevel)) {
+        if (xpOrLevel > 100) {
+            currentXP = Math.min(xpOrLevel, 1000000000);
+            currentLevel = calculateLevelFromXP(currentXP);
+        } else if (xpOrLevel >= 1) {
+            currentLevel = Math.floor(xpOrLevel);
+        }
     }
     
     const xpForCurrentLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 1));
@@ -303,9 +306,9 @@ export function getLevelInfo(xpOrLevel = null) {
         totalXpForLevel += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
     }
     
-    const xpIntoLevel = currentXP - totalXpForLevel;
-    const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForCurrentLevel) * 100));
-    const progressDecimal = Math.min(1, xpIntoLevel / xpForCurrentLevel);
+    const xpIntoLevel = Math.max(0, currentXP - totalXpForLevel);
+    const progressPercent = Math.min(100, Math.max(0, Math.round((xpIntoLevel / xpForCurrentLevel) * 100)));
+    const progressDecimal = Math.min(1, Math.max(0, xpIntoLevel / xpForCurrentLevel));
     const tier = getTierFromLevel(currentLevel);
     
     return {
@@ -327,10 +330,14 @@ export function getLevelInfo(xpOrLevel = null) {
 }
 
 function calculateLevelFromXP(xp) {
+    // Safety check
+    if (typeof xp !== 'number' || !isFinite(xp) || xp < 0) return 1;
+    xp = Math.min(xp, 1000000000); // Cap at 1 billion
+    
     let level = 1;
     let totalXpNeeded = 0;
     
-    while (true) {
+    while (level < 100) { // Max level 100
         const xpForThisLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
         if (totalXpNeeded + xpForThisLevel > xp) break;
         totalXpNeeded += xpForThisLevel;
@@ -345,15 +352,23 @@ function getLevelTitle(level) {
 }
 
 function addXP(amount) {
+    // Safety check
+    if (typeof amount !== 'number' || !isFinite(amount) || amount <= 0) {
+        return { xpGained: 0, leveledUp: false, newLevel: getState().level };
+    }
+    
     const s = getState();
-    const newXP = s.xp + amount;
+    const currentXP = (typeof s.xp === 'number' && isFinite(s.xp)) ? s.xp : 0;
+    const currentLevel = (typeof s.level === 'number' && isFinite(s.level)) ? s.level : 1;
+    
+    const newXP = Math.min(currentXP + amount, 1000000000); // Cap at 1 billion
     const newLevel = calculateLevelFromXP(newXP);
-    const leveledUp = newLevel > s.level;
+    const leveledUp = newLevel > currentLevel;
     
     setState({
         xp: newXP,
         level: newLevel,
-        pendingLevelUp: leveledUp ? { oldLevel: s.level, newLevel, title: getLevelTitle(newLevel) } : null,
+        pendingLevelUp: leveledUp ? { oldLevel: currentLevel, newLevel, title: getLevelTitle(newLevel) } : null,
     }, true);
     
     saveProfile();
