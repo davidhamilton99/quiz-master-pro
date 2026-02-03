@@ -13,7 +13,7 @@ let state = {
     quizzes: [],
     searchQuery: '',
     sortBy: 'recent',
-    filterCategory: '',
+    categoryFilter: 'all',
     openMenuId: null,
     
     // Quiz taking
