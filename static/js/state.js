@@ -1,4 +1,4 @@
-/* State Management - Updated with skipRender support */
+/* State Management - Complete with all required exports */
 
 let state = {
     // Auth
@@ -48,7 +48,7 @@ let state = {
     currentEditQuestion: 0,
     showFormatHelp: false,
     
-    // Gamification
+    // Gamification / Profile
     xp: 0,
     level: 1,
     gems: 0,
@@ -69,21 +69,23 @@ let state = {
 
 const listeners = [];
 
+/**
+ * Get current state with computed properties
+ */
 export function getState() {
-    // Add computed playerProfile property for compatibility with playerHud.js
+    // Add computed playerProfile for playerHud.js compatibility
     return {
         ...state,
         playerProfile: {
-            xp: state.xp || 0,
-            level: state.level || 1,
-            gems: state.gems || 0,
-            dailyStreak: state.dailyStreak || 0,
-            lastActiveDate: state.lastActiveDate || null,
-            achievements: state.achievements || [],
-            totalAnswered: state.totalAnswered || 0,
-            totalCorrect: state.totalCorrect || 0,
-            quizzesCompleted: state.quizzesCompleted || 0,
-            perfectScores: state.perfectScores || 0,
+            xp: state.xp,
+            level: state.level,
+            gems: state.gems,
+            dailyStreak: state.dailyStreak,
+            achievements: state.achievements,
+            totalAnswered: state.totalAnswered,
+            totalCorrect: state.totalCorrect,
+            quizzesCompleted: state.quizzesCompleted,
+            perfectScores: state.perfectScores,
         }
     };
 }
@@ -96,9 +98,8 @@ export function getState() {
 export function setState(newState, skipRender = false) {
     state = { ...state, ...newState };
     
-    // Only notify listeners (trigger render) if skipRender is false
     if (!skipRender) {
-        listeners.forEach(fn => fn(state));
+        listeners.forEach(fn => fn(getState()));
     }
 }
 
@@ -115,10 +116,11 @@ export function subscribe(fn) {
 export function loadAuth() {
     try {
         const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        if (token && user) {
-            const parsedUser = JSON.parse(user);
-            setState({ isAuthenticated: true, user: parsedUser, view: 'library' });
+        const userStr = localStorage.getItem('user');
+        
+        if (token && userStr) {
+            const user = JSON.parse(userStr);
+            setState({ isAuthenticated: true, user, view: 'library' }, true);
             return true;
         }
     } catch (e) {
@@ -142,6 +144,10 @@ export function clearAuth() {
     setState({ isAuthenticated: false, user: null, view: 'login' });
 }
 
+export function logout() {
+    clearAuth();
+}
+
 // ==================== PROFILE/GAMIFICATION ====================
 
 const PROFILE_KEY = 'quizmaster_profile';
@@ -159,6 +165,10 @@ export function loadProfile() {
                 dailyStreak: profile.dailyStreak || 0,
                 lastActiveDate: profile.lastActiveDate || null,
                 achievements: profile.achievements || [],
+                totalAnswered: profile.totalAnswered || 0,
+                totalCorrect: profile.totalCorrect || 0,
+                quizzesCompleted: profile.quizzesCompleted || 0,
+                perfectScores: profile.perfectScores || 0,
             }, true);
         }
     } catch (e) {
@@ -175,7 +185,34 @@ export function saveProfile() {
         dailyStreak: s.dailyStreak,
         lastActiveDate: s.lastActiveDate,
         achievements: s.achievements,
+        totalAnswered: s.totalAnswered,
+        totalCorrect: s.totalCorrect,
+        quizzesCompleted: s.quizzesCompleted,
+        perfectScores: s.perfectScores,
     }));
+}
+
+export function getProfile() {
+    const s = getState();
+    return {
+        xp: s.xp,
+        level: s.level,
+        gems: s.gems,
+        dailyStreak: s.dailyStreak,
+        achievements: s.achievements,
+        totalAnswered: s.totalAnswered,
+        totalCorrect: s.totalCorrect,
+        quizzesCompleted: s.quizzesCompleted,
+        perfectScores: s.perfectScores,
+    };
+}
+
+export function getPlayerHudData() {
+    const s = getState();
+    return {
+        profile: getProfile(),
+        levelInfo: getLevelInfo(),
+    };
 }
 
 export function loadSettings() {
@@ -206,80 +243,111 @@ export function saveSettings() {
 const XP_PER_LEVEL = 100;
 const LEVEL_MULTIPLIER = 1.5;
 
-export function getLevelInfo(level = null) {
+const TIER_THRESHOLDS = [1, 5, 10, 15, 20, 30, 40, 50];
+const TIER_NAMES = ['Novice', 'Learner', 'Apprentice', 'Scholar', 'Expert', 'Master', 'Grandmaster', 'Legend'];
+const TIER_COLORS = ['#9ca3af', '#60a5fa', '#34d399', '#a78bfa', '#f472b6', '#fbbf24', '#f97316', '#ef4444'];
+
+export function getTierFromLevel(level) {
+    for (let i = TIER_THRESHOLDS.length - 1; i >= 0; i--) {
+        if (level >= TIER_THRESHOLDS[i]) return i;
+    }
+    return 0;
+}
+
+export function getTierName(levelOrTier) {
+    // If it's a small number (0-7), treat as tier index
+    if (levelOrTier >= 0 && levelOrTier <= 7) {
+        return TIER_NAMES[levelOrTier] || 'Novice';
+    }
+    // Otherwise treat as level
+    const tier = getTierFromLevel(levelOrTier);
+    return TIER_NAMES[tier] || 'Novice';
+}
+
+export function getTierColor(levelOrTier) {
+    // If it's a small number (0-7), treat as tier index
+    if (levelOrTier >= 0 && levelOrTier <= 7) {
+        return TIER_COLORS[levelOrTier] || TIER_COLORS[0];
+    }
+    // Otherwise treat as level
+    const tier = getTierFromLevel(levelOrTier);
+    return TIER_COLORS[tier] || TIER_COLORS[0];
+}
+
+/**
+ * Get level info - compatible with playerHud.js
+ * @param {number} xpOrLevel - Can be XP value or null to use current state
+ */
+export function getLevelInfo(xpOrLevel = null) {
     const s = getState();
-    const currentLevel = level || s.level;
-    const xpForCurrentLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 1));
-    const xpForPrevLevel = currentLevel > 1 ? Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 2)) : 0;
     
+    // If a large number is passed, treat it as XP and calculate level from it
+    // If small number or null, use state values
+    let currentXP = s.xp;
+    let currentLevel = s.level;
+    
+    if (xpOrLevel !== null && xpOrLevel > 100) {
+        // Passed XP value, calculate level from it
+        currentXP = xpOrLevel;
+        currentLevel = calculateLevelFromXP(currentXP);
+    } else if (xpOrLevel !== null && xpOrLevel <= 100) {
+        // Passed a level number
+        currentLevel = xpOrLevel;
+    }
+    
+    const xpForCurrentLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 1));
+    
+    // Calculate total XP needed to reach current level
     let totalXpForLevel = 0;
     for (let i = 1; i < currentLevel; i++) {
         totalXpForLevel += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
     }
     
-    const xpIntoLevel = s.xp - totalXpForLevel;
+    const xpIntoLevel = currentXP - totalXpForLevel;
     const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForCurrentLevel) * 100));
     const progressDecimal = Math.min(1, xpIntoLevel / xpForCurrentLevel);
+    const tier = getTierFromLevel(currentLevel);
     
     return {
         level: currentLevel,
-        xp: s.xp,
-        xpInLevel: xpIntoLevel,  // For playerHud.js compatibility
-        xpIntoLevel,  // Keep for backward compatibility
-        xpForNext: xpForCurrentLevel,  // For playerHud.js compatibility
-        xpForLevel: xpForCurrentLevel,  // Keep for backward compatibility
-        progress: progressDecimal,  // 0-1 decimal for playerHud.js
-        progressPercent: progressPercent,  // 0-100 integer
-        title: getLevelTitle(currentLevel),
-        tier: getTierFromLevel(currentLevel),  // For playerHud.js compatibility
-        profile: {
-            xp: s.xp || 0,
-            level: s.level || 1,
-            gems: s.gems || 0,
-            dailyStreak: s.dailyStreak || 0,
-            achievements: s.achievements || [],
-        },
+        xp: currentXP,
+        xpIntoLevel,
+        xpInLevel: xpIntoLevel,       // Alias for playerHud.js
+        xpForLevel: xpForCurrentLevel,
+        xpForNext: xpForCurrentLevel,  // Alias for playerHud.js
+        progress: progressDecimal,     // 0-1 for progress bar
+        progressPercent,               // 0-100
+        tier,
+        title: getTierName(currentLevel),
+        tierName: getTierName(tier),
+        tierColor: getTierColor(tier),
+        // Include profile for compatibility
+        profile: getProfile(),
     };
 }
 
-function getLevelTitle(level) {
-    if (level >= 50) return 'Quiz Legend';
-    if (level >= 40) return 'Grandmaster';
-    if (level >= 30) return 'Master';
-    if (level >= 20) return 'Expert';
-    if (level >= 15) return 'Scholar';
-    if (level >= 10) return 'Apprentice';
-    if (level >= 5) return 'Learner';
-    return 'Novice';
+function calculateLevelFromXP(xp) {
+    let level = 1;
+    let totalXpNeeded = 0;
+    
+    while (true) {
+        const xpForThisLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
+        if (totalXpNeeded + xpForThisLevel > xp) break;
+        totalXpNeeded += xpForThisLevel;
+        level++;
+    }
+    
+    return level;
 }
 
-function getTierFromLevel(level) {
-    if (level >= 50) return 7; // Legend
-    if (level >= 40) return 6; // Grandmaster
-    if (level >= 30) return 5; // Master
-    if (level >= 20) return 4; // Expert
-    if (level >= 15) return 3; // Scholar
-    if (level >= 10) return 2; // Apprentice
-    if (level >= 5) return 1;  // Learner
-    return 0; // Novice
+function getLevelTitle(level) {
+    return getTierName(level);
 }
 
 function addXP(amount) {
     const s = getState();
     const newXP = s.xp + amount;
-    
-    // Check for level up
-    let newLevel = s.level;
-    let totalXpNeeded = 0;
-    for (let i = 1; i <= newLevel; i++) {
-        totalXpNeeded += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
-    }
-    
-    while (newXP >= totalXpNeeded) {
-        newLevel++;
-        totalXpNeeded += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, newLevel - 1));
-    }
-    
+    const newLevel = calculateLevelFromXP(newXP);
     const leveledUp = newLevel > s.level;
     
     setState({
@@ -290,6 +358,69 @@ function addXP(amount) {
     
     saveProfile();
     return { xpGained: amount, leveledUp, newLevel };
+}
+
+// ==================== ACHIEVEMENTS ====================
+
+const ACHIEVEMENTS = {
+    first_quiz: { id: 'first_quiz', name: 'First Steps', description: 'Complete your first quiz', icon: '🎯' },
+    perfect_score: { id: 'perfect_score', name: 'Perfectionist', description: 'Get 100% on a quiz', icon: '💯' },
+    streak_5: { id: 'streak_5', name: 'On Fire', description: 'Get 5 correct answers in a row', icon: '🔥' },
+    streak_10: { id: 'streak_10', name: 'Unstoppable', description: 'Get 10 correct answers in a row', icon: '⚡' },
+    daily_streak_7: { id: 'daily_streak_7', name: 'Dedicated', description: 'Maintain a 7-day streak', icon: '📅' },
+    quizzes_10: { id: 'quizzes_10', name: 'Quiz Enthusiast', description: 'Complete 10 quizzes', icon: '📚' },
+    quizzes_50: { id: 'quizzes_50', name: 'Quiz Master', description: 'Complete 50 quizzes', icon: '🏆' },
+    level_10: { id: 'level_10', name: 'Rising Star', description: 'Reach level 10', icon: '⭐' },
+    level_25: { id: 'level_25', name: 'Expert', description: 'Reach level 25', icon: '🌟' },
+};
+
+export function getUnlockedAchievements() {
+    const s = getState();
+    return s.achievements || [];
+}
+
+export function unlockAchievement(achievementId) {
+    const s = getState();
+    if (s.achievements.includes(achievementId)) return false;
+    
+    const achievement = ACHIEVEMENTS[achievementId];
+    if (!achievement) return false;
+    
+    const newAchievements = [...s.achievements, achievementId];
+    const pending = [...(s.pendingAchievements || []), achievement];
+    
+    setState({ 
+        achievements: newAchievements,
+        pendingAchievements: pending,
+    }, true);
+    
+    saveProfile();
+    return true;
+}
+
+export function checkAchievements() {
+    const s = getState();
+    
+    // First quiz
+    if (s.quizzesCompleted >= 1) unlockAchievement('first_quiz');
+    
+    // Quiz counts
+    if (s.quizzesCompleted >= 10) unlockAchievement('quizzes_10');
+    if (s.quizzesCompleted >= 50) unlockAchievement('quizzes_50');
+    
+    // Streaks
+    if (s.maxQuizStreak >= 5) unlockAchievement('streak_5');
+    if (s.maxQuizStreak >= 10) unlockAchievement('streak_10');
+    
+    // Daily streak
+    if (s.dailyStreak >= 7) unlockAchievement('daily_streak_7');
+    
+    // Levels
+    if (s.level >= 10) unlockAchievement('level_10');
+    if (s.level >= 25) unlockAchievement('level_25');
+    
+    // Perfect scores
+    if (s.perfectScores >= 1) unlockAchievement('perfect_score');
 }
 
 // ==================== QUIZ PROGRESS ====================
@@ -338,25 +469,38 @@ export function clearQuizProgress(quizId) {
     localStorage.removeItem(PROGRESS_KEY + quizId);
 }
 
-
+/**
+ * Get all in-progress quizzes (for library display)
+ */
 export function getAllInProgressQuizzes() {
-    const progressList = [];
     const s = getState();
+    const inProgress = [];
     
-    // Iterate through all quizzes and check for saved progress
-    s.quizzes.forEach(quiz => {
-        const progress = loadQuizProgress(quiz.id);
-        if (progress) {
-            progressList.push({
-                quizId: quiz.id,
-                questionIndex: progress.questionIndex,
-                total: quiz.questions?.length || 0,
-                savedAt: progress.savedAt,
-            });
+    if (!s.quizzes || !Array.isArray(s.quizzes)) return inProgress;
+    
+    for (const quiz of s.quizzes) {
+        try {
+            const saved = localStorage.getItem(PROGRESS_KEY + quiz.id);
+            if (saved) {
+                const progress = JSON.parse(saved);
+                // Only include if saved within last 24 hours
+                if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
+                    inProgress.push({
+                        quizId: quiz.id,
+                        quizTitle: quiz.title,
+                        questionIndex: progress.questionIndex,
+                        totalQuestions: quiz.questions?.length || 0,
+                        answeredCount: progress.answers?.filter(a => a !== undefined).length || 0,
+                        savedAt: progress.savedAt,
+                    });
+                }
+            }
+        } catch (e) {
+            // Skip corrupted progress data
         }
-    });
+    }
     
-    return progressList;
+    return inProgress;
 }
 
 // ==================== DAILY STREAK ====================
@@ -365,7 +509,7 @@ export function updateDailyStreak() {
     const s = getState();
     const today = new Date().toDateString();
     
-    if (s.lastActiveDate === today) return; // Already updated today
+    if (s.lastActiveDate === today) return;
     
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -382,6 +526,7 @@ export function updateDailyStreak() {
     }, true);
     
     saveProfile();
+    checkAchievements();
 }
 
 // ==================== ANSWER RECORDING ====================
@@ -391,8 +536,7 @@ export function recordCorrectAnswer() {
     const newStreak = s.quizStreak + 1;
     const maxStreak = Math.max(s.maxQuizStreak, newStreak);
     
-    // XP rewards
-    let xpGain = 10; // Base XP
+    let xpGain = 10;
     if (newStreak >= 10) xpGain += 15;
     else if (newStreak >= 5) xpGain += 10;
     else if (newStreak >= 3) xpGain += 5;
@@ -400,160 +544,43 @@ export function recordCorrectAnswer() {
     setState({
         quizStreak: newStreak,
         maxQuizStreak: maxStreak,
+        totalAnswered: s.totalAnswered + 1,
+        totalCorrect: s.totalCorrect + 1,
     }, true);
     
     addXP(xpGain);
+    checkAchievements();
 }
 
 export function recordWrongAnswer() {
-    setState({ quizStreak: 0 }, true);
+    const s = getState();
+    setState({ 
+        quizStreak: 0,
+        totalAnswered: s.totalAnswered + 1,
+    }, true);
 }
 
 export function recordQuizComplete(correct, total) {
     const s = getState();
     const percentage = Math.round((correct / total) * 100);
+    const isPerfect = correct === total;
     
-    // XP rewards
-    let xpGain = correct * 5; // 5 XP per correct answer
-    if (percentage === 100) xpGain += 50; // Perfect bonus
+    let xpGain = correct * 5;
+    if (isPerfect) xpGain += 50;
     else if (percentage >= 90) xpGain += 25;
     else if (percentage >= 75) xpGain += 10;
     
-    // Gems
     let gemsGain = 0;
-    if (percentage === 100) gemsGain = 10;
+    if (isPerfect) gemsGain = 10;
     else if (percentage >= 90) gemsGain = 5;
     else if (percentage >= 75) gemsGain = 2;
     
     setState({
         gems: s.gems + gemsGain,
+        quizzesCompleted: s.quizzesCompleted + 1,
+        perfectScores: isPerfect ? s.perfectScores + 1 : s.perfectScores,
     }, true);
     
     addXP(xpGain);
-}
-// ==================== ACHIEVEMENTS ====================
-
-export function getUnlockedAchievements() {
-    const s = getState();
-    return s.achievements || [];
-}
-
-export function unlockAchievement(achievementId) {
-    const s = getState();
-    if (!s.achievements.includes(achievementId)) {
-        const newAchievements = [...s.achievements, achievementId];
-        setState({
-            achievements: newAchievements,
-            pendingAchievements: [...(s.pendingAchievements || []), achievementId],
-        }, true);
-        saveProfile();
-        return true;
-    }
-    return false;
-}
-
-export function checkAchievements() {
-    const s = getState();
-    const newAchievements = [];
-    
-    // First Quiz
-    if (!s.achievements.includes('first_quiz') && s.quizzes.length >= 1) {
-        unlockAchievement('first_quiz');
-        newAchievements.push('first_quiz');
-    }
-    
-    // Perfect Score
-    if (!s.achievements.includes('perfect_score')) {
-        // This would be checked in quiz results
-    }
-    
-    // Level milestones
-    if (!s.achievements.includes('level_5') && s.level >= 5) {
-        unlockAchievement('level_5');
-        newAchievements.push('level_5');
-    }
-    if (!s.achievements.includes('level_10') && s.level >= 10) {
-        unlockAchievement('level_10');
-        newAchievements.push('level_10');
-    }
-    if (!s.achievements.includes('level_25') && s.level >= 25) {
-        unlockAchievement('level_25');
-        newAchievements.push('level_25');
-    }
-    
-    // Streak milestones
-    if (!s.achievements.includes('streak_7') && s.dailyStreak >= 7) {
-        unlockAchievement('streak_7');
-        newAchievements.push('streak_7');
-    }
-    if (!s.achievements.includes('streak_30') && s.dailyStreak >= 30) {
-        unlockAchievement('streak_30');
-        newAchievements.push('streak_30');
-    }
-    
-    return newAchievements;
-}
-
-// ==================== TIER SYSTEM ====================
-
-export function getTierColor(tierOrLevel = null) {
-    let currentLevel;
-    
-    if (tierOrLevel === null) {
-        currentLevel = getState().level;
-    } else if (tierOrLevel <= 7) {
-        // Tier number (0-7), convert to minimum level for that tier
-        const tierToLevel = [1, 5, 10, 15, 20, 30, 40, 50];
-        currentLevel = tierToLevel[tierOrLevel] || 1;
-    } else {
-        // Level number
-        currentLevel = tierOrLevel;
-    }
-    
-    if (currentLevel >= 50) return '#FFD700'; // Gold - Legend
-    if (currentLevel >= 40) return '#E5E4E2'; // Platinum - Grandmaster
-    if (currentLevel >= 30) return '#CD7F32'; // Bronze - Master
-    if (currentLevel >= 20) return '#C0C0C0'; // Silver - Expert
-    if (currentLevel >= 15) return '#8B4513'; // Brown - Scholar
-    if (currentLevel >= 10) return '#4169E1'; // Blue - Apprentice
-    if (currentLevel >= 5) return '#32CD32';  // Green - Learner
-    return '#9CA3AF'; // Gray - Novice
-}
-
-export function getTierName(level = null) {
-    const currentLevel = level || getState().level;
-    return getLevelTitle(currentLevel);
-}
-
-// ==================== PROFILE GETTER ====================
-
-export function getProfile() {
-    const s = getState();
-    return {
-        xp: s.xp || 0,
-        level: s.level || 1,
-        gems: s.gems || 0,
-        dailyStreak: s.dailyStreak || 0,
-        achievements: s.achievements || [],
-    };
-}
-
-// ==================== PLAYER HUD DATA ====================
-
-export function getPlayerHudData() {
-    const s = getState();
-    const levelInfo = getLevelInfo();
-    
-    return {
-        profile: {
-            xp: s.xp || 0,
-            level: s.level || 1,
-            gems: s.gems || 0,
-            dailyStreak: s.dailyStreak || 0,
-            achievements: s.achievements || [],
-        },
-        levelInfo: levelInfo,
-        tierColor: getTierColor(),
-        tierName: getTierName(),
-    };
+    checkAchievements();
 }
