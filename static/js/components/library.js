@@ -20,6 +20,9 @@ export function renderLibrary() {
         <div class="flex items-center gap-2">
             <button class="btn btn-ghost btn-sm" onclick="window.app.showImportModal()" title="Import">📥</button>
             <button class="btn btn-primary" onclick="window.app.navigate('create')">+ New</button>
+            <button class="btn btn-secondary" onclick="window.app.navigate('studyGuide')">
+    📚 Study Guide Builder
+</button>
             <div class="dropdown"><button class="btn btn-icon btn-ghost" onclick="window.app.toggleMenu()">👤</button>
                 <div id="user-menu" class="dropdown-menu hidden">
                     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border)"><div class="font-medium">${escapeHtml(state.user?.username)}</div></div>

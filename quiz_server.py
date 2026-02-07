@@ -10,7 +10,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from functools import wraps
-
+from services.study_guide import register_study_guide_routes
 app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
 CORS(app)
 
@@ -283,3 +283,4 @@ def health():
 if __name__ == '__main__':
     init_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
+register_study_guide_routes(app, db)

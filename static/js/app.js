@@ -26,6 +26,18 @@ import * as animations from './utils/animations.js';
 import { renderPlayerHUD, renderLevelUpModal, renderAchievementUnlock } from './utils/playerHud.js';
 import { copyCode, showImageModal } from './components/quiz.js';
 import { clearImage, previewImage } from './components/create.js';
+// Add to imports at top
+import { 
+    renderStudyGuide, 
+    handleStudyGuideFile, 
+    handleStudyGuideDrop,
+    clearStudyGuideFile,
+    generateStudyGuide,
+    openStudyGuide,
+    downloadStudyGuide,
+    resetStudyGuide,
+    studyGuideStyles 
+} from './components/studyGuide.js';
 // Make sounds and animations available globally for quiz.js to use
 window.sounds = sounds;
 window.animations = animations;
@@ -254,6 +266,10 @@ function render() {
     if (state.pendingLevelUp || (state.pendingAchievements && state.pendingAchievements.length > 0)) {
         setTimeout(showPendingRewards, 500);
     }
+    if (state.view === 'studyGuide') {
+        app.innerHTML = renderStudyGuide();
+        return;
+    }
 }
 
 // Subscribe to state changes
@@ -397,6 +413,15 @@ window.app = {
     
     // Rewards
     showPendingRewards,
+
+    // Study Guide Builder
+    handleStudyGuideFile,
+    handleStudyGuideDrop,
+    clearStudyGuideFile,
+    generateStudyGuide,
+    openStudyGuide,
+    downloadStudyGuide,
+    resetStudyGuide,
 };
 
 // ==================== INITIALIZE ====================
