@@ -301,9 +301,102 @@ except ImportError:
 class StudyGuideBuilder:
     ICONS = ['🔐', '🧮', '📊', '#️⃣', '⚛️', '🔒', '📝', '💡', '🎯', '🔍', '📚', '🌐', '⚙️', '🔧', '📡']
     
+    # Common words to ignore as key terms
+    STOP_WORDS = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+        'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had',
+        'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must',
+        'shall', 'can', 'need', 'dare', 'ought', 'used', 'it', 'its', 'this', 'that',
+        'these', 'those', 'i', 'you', 'he', 'she', 'we', 'they', 'what', 'which', 'who',
+        'whom', 'whose', 'where', 'when', 'why', 'how', 'all', 'each', 'every', 'both',
+        'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+        'same', 'so', 'than', 'too', 'very', 'just', 'also', 'now', 'here', 'there', 'then',
+        'once', 'if', 'unless', 'until', 'while', 'although', 'because', 'since', 'about',
+        'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'under',
+        'again', 'further', 'once', 'always', 'never', 'often', 'sometimes', 'usually',
+        'example', 'examples', 'way', 'ways', 'much', 'many', 'several', 'eve', 'even',
+        'first', 'second', 'third', 'one', 'two', 'three', 'new', 'old', 'good', 'best'
+    }
+    
     def __init__(self):
         self.key_terms = set()
         
+    def _is_valid_term(self, term):
+        """Check if a term is worth highlighting."""
+        term = term.strip()
+        
+        # Too short or too long
+        if len(term) < 4 or len(term) > 100:
+            return False
+        
+        # Single word checks
+        words = term.lower().split()
+        if len(words) == 1:
+            # Single word must be at least 4 chars and not a stop word
+            if term.lower() in self.STOP_WORDS:
+                return False
+            # Must contain letters
+            if not any(c.isalpha() for c in term):
+                return False
+            return True
+        
+        # Multi-word phrase checks
+        # Filter out phrases that are mostly stop words
+        non_stop_words = [w for w in words if w not in self.STOP_WORDS]
+        if len(non_stop_words) < len(words) * 0.4:  # Less than 40% meaningful words
+            return False
+        
+        # Must have at least one substantial word
+        if not any(len(w) >= 4 for w in non_stop_words):
+            return False
+            
+        return True
+    
+    def _clean_term(self, term):
+        """Clean up a term for consistency."""
+        term = term.strip()
+        # Remove trailing punctuation
+        term = term.rstrip('.,;:!?')
+        # Remove leading/trailing quotes
+        term = term.strip('"\'""''')
+        return term
+    
+    def _extract_key_terms_from_paragraph(self, para):
+        """Extract key terms from bold/highlighted runs, combining adjacent runs."""
+        terms = []
+        current_term_parts = []
+        
+        for run in para.runs:
+            is_key = run.bold or run.font.highlight_color
+            text = run.text
+            
+            if is_key and text.strip():
+                current_term_parts.append(text)
+            else:
+                # End of a key term sequence
+                if current_term_parts:
+                    full_term = ''.join(current_term_parts)
+                    full_term = self._clean_term(full_term)
+                    if self._is_valid_term(full_term):
+                        terms.append(full_term)
+                    current_term_parts = []
+        
+        # Don't forget the last term
+        if current_term_parts:
+            full_term = ''.join(current_term_parts)
+            full_term = self._clean_term(full_term)
+            if self._is_valid_term(full_term):
+                terms.append(full_term)
+        
+        return terms
+    
+    def _extract_acronyms(self, text):
+        """Extract acronyms like PKI, PFS, D-H, SHA-256, etc."""
+        # Pattern for acronyms: 2+ uppercase letters, optionally with numbers/hyphens
+        acronym_pattern = r'\b[A-Z][A-Z0-9][-A-Z0-9]*[A-Z0-9]\b'
+        matches = re.findall(acronym_pattern, text)
+        return [m for m in matches if len(m) >= 2 and m not in {'II', 'III', 'IV'}]
+    
     def parse_docx(self, file_stream):
         if not DOCX_AVAILABLE:
             raise ImportError("python-docx required")
@@ -312,18 +405,20 @@ class StudyGuideBuilder:
         content = {'title': '', 'subtitle': '', 'sections': [], 'key_terms': []}
         current_section = None
         current_subsection = None
+        all_text = []  # Collect all text for acronym extraction
         
         for para in doc.paragraphs:
             text = para.text.strip()
             if not text:
                 continue
+            
+            all_text.append(text)
             style = para.style.name if para.style else 'Normal'
             
-            for run in para.runs:
-                if run.bold or run.font.highlight_color:
-                    term = run.text.strip()
-                    if 2 < len(term) < 80:
-                        self.key_terms.add(term)
+            # Extract key terms from bold/highlighted runs
+            para_terms = self._extract_key_terms_from_paragraph(para)
+            for term in para_terms:
+                self.key_terms.add(term)
             
             if style == 'Title':
                 content['title'] = text
@@ -344,19 +439,51 @@ class StudyGuideBuilder:
                 target = current_subsection or current_section
                 if target:
                     if target['content'] and target['content'][-1].get('type') == 'list':
-                        target['content'][-1]['items'].append(self._process_text(text))
+                        target['content'][-1]['items'].append(text)  # Store raw, process later
                     else:
-                        target['content'].append({'type': 'list', 'items': [self._process_text(text)]})
+                        target['content'].append({'type': 'list', 'items': [text]})
             else:
                 target = current_subsection or current_section
                 if target:
-                    if any(x in text for x in ['=', '(mod', '×', '÷', '^']) and len(text) < 200:
+                    if any(x in text for x in ['=', '(mod', '×', '÷']) and len(text) < 200:
                         target['content'].append({'type': 'formula', 'text': text})
                     else:
-                        target['content'].append({'type': 'paragraph', 'text': self._process_text(text)})
+                        target['content'].append({'type': 'paragraph', 'text': text})
         
-        content['key_terms'] = list(self.key_terms)
+        # Extract acronyms from all text
+        full_text = ' '.join(all_text)
+        acronyms = self._extract_acronyms(full_text)
+        for acr in acronyms:
+            if len(acr) >= 2:
+                self.key_terms.add(acr)
+        
+        # Now process all text with final key terms
+        self._process_all_content(content)
+        
+        content['key_terms'] = sorted(list(self.key_terms), key=lambda x: (-len(x), x.lower()))
         return content
+    
+    def _process_all_content(self, content):
+        """Process all content to add key term highlighting."""
+        for section in content.get('sections', []):
+            new_content = []
+            for item in section.get('content', []):
+                if item['type'] == 'paragraph':
+                    item['text'] = self._process_text(item['text'])
+                elif item['type'] == 'list':
+                    item['items'] = [self._process_text(i) for i in item['items']]
+                new_content.append(item)
+            section['content'] = new_content
+            
+            for sub in section.get('subsections', []):
+                new_sub_content = []
+                for item in sub.get('content', []):
+                    if item['type'] == 'paragraph':
+                        item['text'] = self._process_text(item['text'])
+                    elif item['type'] == 'list':
+                        item['items'] = [self._process_text(i) for i in item['items']]
+                    new_sub_content.append(item)
+                sub['content'] = new_sub_content
     
     def parse_pdf(self, file_stream):
         if not PDF_AVAILABLE:
@@ -366,8 +493,13 @@ class StudyGuideBuilder:
         content = {'title': 'Imported PDF', 'sections': [], 'key_terms': []}
         
         full_text = '\n'.join(page.extract_text() or '' for page in reader.pages)
-        lines = full_text.split('\n')
         
+        # Extract acronyms
+        acronyms = self._extract_acronyms(full_text)
+        for acr in acronyms:
+            self.key_terms.add(acr)
+        
+        lines = full_text.split('\n')
         current_section = None
         current_content = []
         
@@ -383,10 +515,11 @@ class StudyGuideBuilder:
                 current_content = []
             elif current_section:
                 if line.startswith(('•', '-', '*', '·')):
+                    text = line[1:].strip()
                     if current_content and current_content[-1].get('type') == 'list':
-                        current_content[-1]['items'].append(self._process_text(line[1:].strip()))
+                        current_content[-1]['items'].append(self._process_text(text))
                     else:
-                        current_content.append({'type': 'list', 'items': [self._process_text(line[1:].strip())]})
+                        current_content.append({'type': 'list', 'items': [self._process_text(text)]})
                 else:
                     current_content.append({'type': 'paragraph', 'text': self._process_text(line)})
         
@@ -400,16 +533,44 @@ class StudyGuideBuilder:
         if content['sections']:
             content['title'] = content['sections'][0]['title']
         
-        content['key_terms'] = list(self.key_terms)
+        content['key_terms'] = sorted(list(self.key_terms), key=lambda x: (-len(x), x.lower()))
         return content
     
     def _process_text(self, text):
+        """Add key term highlighting to text."""
         text = html_module.escape(text)
-        for term in sorted(self.key_terms, key=len, reverse=True):
-            escaped = html_module.escape(term)
-            if escaped.lower() in text.lower():
-                pattern = re.compile(re.escape(escaped), re.IGNORECASE)
-                text = pattern.sub(lambda m: f'<span class="key-term">{m.group()}</span>', text, count=1)
+        
+        # Track which positions are already highlighted to avoid overlaps
+        highlighted = set()
+        
+        # Sort terms by length (longest first) to avoid partial matches
+        sorted_terms = sorted(self.key_terms, key=len, reverse=True)
+        
+        for term in sorted_terms:
+            escaped_term = html_module.escape(term)
+            # Use word boundaries to avoid partial matches
+            pattern = re.compile(r'\b' + re.escape(escaped_term) + r'\b', re.IGNORECASE)
+            
+            # Find all matches
+            for match in pattern.finditer(text):
+                start, end = match.start(), match.end()
+                
+                # Check if this region is already highlighted
+                if any(start < h_end and end > h_start for h_start, h_end in highlighted):
+                    continue
+                
+                # Only highlight first occurrence
+                original = match.group()
+                replacement = f'<span class="key-term">{original}</span>'
+                text = text[:start] + replacement + text[end:]
+                
+                # Update highlighted positions (accounting for added HTML)
+                added_len = len(replacement) - len(original)
+                highlighted = {(s + added_len if s >= end else s, e + added_len if e >= end else e) for s, e in highlighted}
+                highlighted.add((start, start + len(replacement)))
+                
+                break  # Only highlight first occurrence per term
+        
         return text
     
     def _looks_like_heading(self, line):
