@@ -315,7 +315,7 @@ class StudyGuideBuilder:
         # Quantifiers
         'all', 'each', 'every', 'both', 'few', 'more', 'most', 'other', 'some', 'such',
         'any', 'none', 'either', 'neither', 'enough', 'less', 'least', 'little',
-        # Negation and emphasis (important - these were showing up highlighted)
+        # Negation and emphasis
         'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just',
         'also', 'now', 'here', 'there', 'then', 'once', 'still', 'already', 'ever',
         # Conjunctions and transitions  
@@ -345,7 +345,14 @@ class StudyGuideBuilder:
         'exactly', 'especially', 'particularly', 'specifically', 'mainly', 'mostly',
         'kind', 'sort', 'type', 'thing', 'things', 'stuff', 'part', 'parts', 'point',
         'fact', 'case', 'issue', 'problem', 'problems', 'question', 'answer', 'result',
-        'able', 'sure', 'true', 'false', 'real', 'right', 'wrong', 'different', 'similar'
+        'able', 'sure', 'true', 'false', 'real', 'right', 'wrong', 'different', 'similar',
+        # Generic action/technical words that aren't terms
+        'divide', 'solve', 'grouping', 'regular', 'process', 'system', 'systems',
+        'input', 'output', 'inputs', 'outputs', 'message', 'messages', 'data',
+        'value', 'values', 'number', 'numbers', 'function', 'functions', 'method',
+        'easy', 'hard', 'simple', 'complex', 'basic', 'advanced', 'standard',
+        'alice', 'bob', 'eve',  # Cryptography placeholder names
+        'homework', 'review', 'note', 'notes', 'section', 'chapter', 'appendix'
     }
     
     def __init__(self):
@@ -356,7 +363,7 @@ class StudyGuideBuilder:
         term = term.strip()
         
         # Too short or too long
-        if len(term) < 5 or len(term) > 50:
+        if len(term) < 5 or len(term) > 45:
             return False
         
         # Skip things that look like math/calculations
@@ -367,11 +374,13 @@ class StudyGuideBuilder:
         if term[0].isdigit():
             return False
         
-        # Skip things with colons (paths, URLs, data formats) 
-        if ':' in term:
+        # Skip things with colons, quotes (embedded quotes are messy)
+        if any(x in term for x in [':', '"', '"', '"', "'"]):
             return False
         
-        # Skip things that look like hex/hashes
+        # Skip things that look like hex/hashes or random alphanumeric
+        if re.match(r'^[A-Z0-9]{6,}$', term):  # Like OEG20021111S0036
+            return False
         if re.match(r'^[a-f0-9]{8,}$', term.lower()):
             return False
         
@@ -388,14 +397,18 @@ class StudyGuideBuilder:
             # Must contain letters (not just numbers/symbols)
             if not re.search(r'[a-zA-Z]{3,}', term):
                 return False
-            # Skip ALL CAPS short words (likely emphasis, not terms)
-            if term.isupper() and len(term) < 8:
-                return False
+            # Skip ALL CAPS words that are likely emphasis or section titles
+            if term.isupper():
+                # Allow known acronyms but skip generic caps words
+                allowed_caps = {'SHA-256', 'SSL-TLS', 'SHA256', 'MD5', 'AES', 'RSA', 'PKI', 'PFS', 
+                               'TLS', 'SSL', 'QEC', 'DHM', 'ECDH', 'HMAC', 'SHA1', 'SHA3', 'SAM'}
+                if term not in allowed_caps and len(term) < 10:
+                    return False
             return True
         
         # Multi-word phrase checks
-        # Max 6 words (avoid whole sentences)
-        if len(words) > 6:
+        # Max 5 words (avoid sentence fragments)
+        if len(words) > 5:
             return False
         
         # Filter out phrases that are mostly stop words
@@ -403,16 +416,19 @@ class StudyGuideBuilder:
         if len(non_stop_words) < 2:  # Need at least 2 meaningful words
             return False
         
-        # Skip instruction-like phrases
-        instruction_starts = ['perform', 'divide', 'thus', 'note', 'determine', 'review', 'read', 
-                              'make', 'take', 'when', 'what', 'where', 'which', 'this', 'that',
-                              'there', 'these', 'those', 'here', 'they', 'your', 'first', 'most']
-        if words[0] in instruction_starts:
+        # Skip phrases starting with bad words
+        bad_starts = ['perform', 'divide', 'thus', 'note', 'determine', 'review', 'read', 
+                      'make', 'take', 'when', 'what', 'where', 'which', 'this', 'that',
+                      'there', 'these', 'those', 'here', 'they', 'your', 'first', 'most',
+                      'above', 'below', 'essentially', 'input', 'output', 'easy', 'hard',
+                      'can', 'cannot', 'should', 'would', 'could', 'will', 'shall']
+        if words[0] in bad_starts:
             return False
         
-        # Skip phrases ending with common verbs/generic words
-        generic_ends = ['way', 'ways', 'used', 'them', 'this', 'that', 'here', 'there']
-        if words[-1] in generic_ends:
+        # Skip phrases ending with generic words
+        bad_ends = ['way', 'ways', 'used', 'them', 'this', 'that', 'here', 'there',
+                    'states', 'related', 'needed', 'required', 'done', 'help']
+        if words[-1] in bad_ends:
             return False
             
         return True
@@ -515,10 +531,20 @@ class StudyGuideBuilder:
         # Extract acronyms from all text (but be selective)
         full_text = ' '.join(all_text)
         acronyms = self._extract_acronyms(full_text)
-        # Common acronyms to skip
-        skip_acronyms = {'DNA', 'RNA', 'USA', 'UK', 'EU', 'UN', 'TV', 'PC', 'IT', 'ID', 
-                         'OK', 'AM', 'PM', 'VS', 'IE', 'EG', 'AKA', 'FAQ', 'DIY', 'CEO',
-                         'NOT', 'AND', 'THE', 'FOR', 'BUT', 'ARE', 'WAS', 'HAS', 'HAD'}
+        # Common acronyms/caps words to skip (not technical terms)
+        skip_acronyms = {
+            # General
+            'DNA', 'RNA', 'USA', 'UK', 'EU', 'UN', 'TV', 'PC', 'IT', 'ID', 
+            'OK', 'AM', 'PM', 'VS', 'IE', 'EG', 'AKA', 'FAQ', 'DIY', 'CEO',
+            'NOT', 'AND', 'THE', 'FOR', 'BUT', 'ARE', 'WAS', 'HAS', 'HAD',
+            # Document/section markers
+            'HOMEWORK', 'NOTE', 'NOTES', 'TODO', 'TBD', 'NB', 'PS', 'FYI',
+            # Generic technical words
+            'SYSTEM', 'SOLVE', 'SALT', 'UNIX', 'SAM', 'NSA', 'CIA', 'FBI',
+            # Action words that get caps'd
+            'READ', 'WRITE', 'SEND', 'RECEIVE', 'GET', 'SET', 'PUT', 'POST',
+            'TRUE', 'FALSE', 'NULL', 'VOID', 'INT', 'CHAR', 'BOOL'
+        }
         for acr in acronyms:
             if len(acr) >= 3 and acr not in skip_acronyms:
                 self.key_terms.add(acr)
