@@ -18,11 +18,9 @@ export function renderLibrary() {
     return `<nav class="navbar"><div class="container"><div class="navbar-inner">
         <div class="navbar-brand"><div class="navbar-logo">Q</div><span class="hide-mobile">Quiz Master Pro</span></div>
         <div class="flex items-center gap-2">
+            <button class="btn btn-ghost btn-sm" onclick="window.app.navigate('studyGuide')" title="Study Guide Builder">📚</button>
             <button class="btn btn-ghost btn-sm" onclick="window.app.showImportModal()" title="Import">📥</button>
             <button class="btn btn-primary" onclick="window.app.navigate('create')">+ New</button>
-            <button class="btn btn-secondary" onclick="window.app.navigate('studyGuide')">
-    📚 Study Guide Builder
-</button>
             <div class="dropdown"><button class="btn btn-icon btn-ghost" onclick="window.app.toggleMenu()">👤</button>
                 <div id="user-menu" class="dropdown-menu hidden">
                     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border)"><div class="font-medium">${escapeHtml(state.user?.username)}</div></div>
@@ -93,7 +91,7 @@ function renderCard(quiz, progressList) {
             <div class="quiz-card-title">${escapeHtml(quiz.title)}</div>
             ${quiz.description ? `<span class="badge">${escapeHtml(quiz.description)}</span>` : ''}
             <div class="quiz-card-meta"><span>📝 ${count}</span><span>📅 ${formatDate(quiz.last_modified || quiz.created_at)}</span></div>
-            ${progress ? `<div class="in-progress-badge mt-2">⏸ Q${progress.questionIndex + 1}/${progress.totalQuestions}</div>` : ''}
+            ${progress ? `<div class="in-progress-badge mt-2">⏸ Q${progress.questionIndex + 1}/${progress.total}</div>` : ''}
             <div class="quiz-card-footer">
                 <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();window.app.showQuizOptions(${quiz.id})">${progress ? 'Resume' : 'Start'}</button>
                 <div class="quiz-card-actions">
@@ -120,7 +118,7 @@ function getFilteredQuizzes() {
     }
     
     // Apply category filter
-    if (state.categoryFilter && state.categoryFilter !== 'all') {
+    if (state.categoryFilter !== 'all') {
         q = q.filter(x => x.description === state.categoryFilter);
     }
     

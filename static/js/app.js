@@ -5,7 +5,7 @@ import { ExportService, ImportService, showExportModal, showImportModal } from '
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
-import { renderLibrary, setSearch, setSort, setCategory, clearFilters, toggleMenu, confirmDelete } from './components/library.js';
+import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
@@ -19,25 +19,15 @@ import {
     toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
     saveField, changeType, savePair, saveOption
 } from './components/create.js';
+import {
+    renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
+} from './components/studyGuide.js';
 
 // Import sounds, animations, and playerHUD
 import * as sounds from './utils/sounds.js';
 import * as animations from './utils/animations.js';
 import { renderPlayerHUD, renderLevelUpModal, renderAchievementUnlock } from './utils/playerHud.js';
-import { copyCode, showImageModal } from './components/quiz.js';
-import { clearImage, previewImage } from './components/create.js';
-// Add to imports at top
-import { 
-    renderStudyGuide, 
-    handleStudyGuideFile, 
-    handleStudyGuideDrop,
-    clearStudyGuideFile,
-    generateStudyGuide,
-    openStudyGuide,
-    downloadStudyGuide,
-    resetStudyGuide,
-    studyGuideStyles 
-} from './components/studyGuide.js';
+
 // Make sounds and animations available globally for quiz.js to use
 window.sounds = sounds;
 window.animations = animations;
@@ -250,6 +240,12 @@ function render() {
             showHUD = true;
             content = renderCreate();
             break;
+        case 'studyGuide':
+            showHUD = true;
+            content = renderStudyGuide();
+            // Initialize drag & drop after render
+            setTimeout(initStudyGuideDragDrop, 50);
+            break;
         default:
             showHUD = true;
             content = renderLibrary();
@@ -265,10 +261,6 @@ function render() {
     // Check for pending rewards after render
     if (state.pendingLevelUp || (state.pendingAchievements && state.pendingAchievements.length > 0)) {
         setTimeout(showPendingRewards, 500);
-    }
-    if (state.view === 'studyGuide') {
-        app.innerHTML = renderStudyGuide();
-        return;
     }
 }
 
@@ -335,7 +327,6 @@ window.app = {
     setSearch,
     setSort,
     setCategory,
-    clearFilters,
     toggleMenu,
     confirmDelete,
     
@@ -405,23 +396,16 @@ window.app = {
     savePair,
     saveOption,
     
-    // Phase 2: Code & Images
-    copyCode,
-    showImageModal,
-    clearImage,
-    previewImage,
+    // Study Guide Builder
+    sgHandleFile,
+    sgClearFile,
+    sgGenerate,
+    sgOpen,
+    sgDownload,
+    sgReset,
     
     // Rewards
     showPendingRewards,
-
-    // Study Guide Builder
-    handleStudyGuideFile,
-    handleStudyGuideDrop,
-    clearStudyGuideFile,
-    generateStudyGuide,
-    openStudyGuide,
-    downloadStudyGuide,
-    resetStudyGuide,
 };
 
 // ==================== INITIALIZE ====================
