@@ -356,28 +356,63 @@ class StudyGuideBuilder:
         term = term.strip()
         
         # Too short or too long
-        if len(term) < 4 or len(term) > 100:
+        if len(term) < 5 or len(term) > 50:
+            return False
+        
+        # Skip things that look like math/calculations
+        if any(x in term for x in ['=', '+', '×', '÷', '/', '*', ' x ', '(mod', 'mod ']):
+            return False
+        
+        # Skip things starting with numbers
+        if term[0].isdigit():
+            return False
+        
+        # Skip things with colons (paths, URLs, data formats) 
+        if ':' in term:
+            return False
+        
+        # Skip things that look like hex/hashes
+        if re.match(r'^[a-f0-9]{8,}$', term.lower()):
+            return False
+        
+        # Skip URLs and URL fragments
+        if any(x in term.lower() for x in ['http', 'www.', '.com', '.org', '.pdf', 'youtube', '.html']):
             return False
         
         # Single word checks
         words = term.lower().split()
         if len(words) == 1:
-            # Single word must be at least 4 chars and not a stop word
+            # Single word must be at least 5 chars and not a stop word
             if term.lower() in self.STOP_WORDS:
                 return False
-            # Must contain letters
-            if not any(c.isalpha() for c in term):
+            # Must contain letters (not just numbers/symbols)
+            if not re.search(r'[a-zA-Z]{3,}', term):
+                return False
+            # Skip ALL CAPS short words (likely emphasis, not terms)
+            if term.isupper() and len(term) < 8:
                 return False
             return True
         
         # Multi-word phrase checks
-        # Filter out phrases that are mostly stop words
-        non_stop_words = [w for w in words if w not in self.STOP_WORDS]
-        if len(non_stop_words) < len(words) * 0.4:  # Less than 40% meaningful words
+        # Max 6 words (avoid whole sentences)
+        if len(words) > 6:
             return False
         
-        # Must have at least one substantial word
-        if not any(len(w) >= 4 for w in non_stop_words):
+        # Filter out phrases that are mostly stop words
+        non_stop_words = [w for w in words if w not in self.STOP_WORDS and len(w) > 2]
+        if len(non_stop_words) < 2:  # Need at least 2 meaningful words
+            return False
+        
+        # Skip instruction-like phrases
+        instruction_starts = ['perform', 'divide', 'thus', 'note', 'determine', 'review', 'read', 
+                              'make', 'take', 'when', 'what', 'where', 'which', 'this', 'that',
+                              'there', 'these', 'those', 'here', 'they', 'your', 'first', 'most']
+        if words[0] in instruction_starts:
+            return False
+        
+        # Skip phrases ending with common verbs/generic words
+        generic_ends = ['way', 'ways', 'used', 'them', 'this', 'that', 'here', 'there']
+        if words[-1] in generic_ends:
             return False
             
         return True
@@ -475,17 +510,26 @@ class StudyGuideBuilder:
             else:
                 target = current_subsection or current_section
                 if target:
-                    if any(x in text for x in ['=', '(mod', '×', '÷']) and len(text) < 200:
-                        target['content'].append({'type': 'formula', 'text': text})
-                    else:
-                        target['content'].append({'type': 'paragraph', 'text': text})
+                    target['content'].append({'type': 'paragraph', 'text': text})
         
-        # Extract acronyms from all text
+        # Extract acronyms from all text (but be selective)
         full_text = ' '.join(all_text)
         acronyms = self._extract_acronyms(full_text)
+        # Common acronyms to skip
+        skip_acronyms = {'DNA', 'RNA', 'USA', 'UK', 'EU', 'UN', 'TV', 'PC', 'IT', 'ID', 
+                         'OK', 'AM', 'PM', 'VS', 'IE', 'EG', 'AKA', 'FAQ', 'DIY', 'CEO',
+                         'NOT', 'AND', 'THE', 'FOR', 'BUT', 'ARE', 'WAS', 'HAS', 'HAD'}
         for acr in acronyms:
-            if len(acr) >= 2:
+            if len(acr) >= 3 and acr not in skip_acronyms:
                 self.key_terms.add(acr)
+        
+        # Deduplicate case-insensitively (keep first occurrence's casing)
+        seen_lower = {}
+        for term in self.key_terms:
+            lower = term.lower()
+            if lower not in seen_lower:
+                seen_lower[lower] = term
+        self.key_terms = set(seen_lower.values())
         
         # Now process all text with final key terms
         self._process_all_content(content)
@@ -601,6 +645,10 @@ class StudyGuideBuilder:
                 
                 break  # Only highlight first occurrence per term
         
+        # Linkify URLs
+        url_pattern = r'(https?://[^\s<>"\']+)'
+        text = re.sub(url_pattern, r'<a href="\1" target="_blank" rel="noopener" class="link">\1</a>', text)
+        
         return text
     
     def _looks_like_heading(self, line):
@@ -616,6 +664,17 @@ class StudyGuideBuilder:
         text = re.sub(r'[^\w\s-]', '', text.lower())
         return re.sub(r'[\s_]+', '-', text)[:50]
     
+    def _truncate_title(self, title, max_len=35):
+        """Truncate title at word boundary."""
+        if len(title) <= max_len:
+            return title
+        # Find last space before max_len
+        truncated = title[:max_len]
+        last_space = truncated.rfind(' ')
+        if last_space > max_len * 0.5:  # Only truncate at space if reasonable
+            return truncated[:last_space] + '…'
+        return truncated + '…'
+    
     def generate_html(self, content):
         title = content.get('title', 'Study Guide')
         subtitle = content.get('subtitle', '')
@@ -625,8 +684,8 @@ class StudyGuideBuilder:
         total_items = sum(len(s.get('content', [])) + sum(len(sub.get('content', [])) for sub in s.get('subsections', [])) for s in sections)
         read_time = max(5, total_items // 3)
         
-        nav = '\n'.join(f'<a href="#{self._slugify(s["title"])}" class="nav-link">{self.ICONS[i % len(self.ICONS)]} {html_module.escape(s["title"][:30])}</a>' for i, s in enumerate(sections))
-        nav += '\n<a href="#terms" class="nav-link">📋 Terms</a>'
+        nav = '\n'.join(f'<a href="#{self._slugify(s["title"])}" class="nav-link">{self.ICONS[i % len(self.ICONS)]} {html_module.escape(self._truncate_title(s["title"]))}</a>' for i, s in enumerate(sections))
+        nav += '\n<a href="#terms" class="nav-link">📋 Key Terms</a>'
         
         sections_html = self._render_sections(sections)
         terms_html = self._render_terms(key_terms)
@@ -682,7 +741,7 @@ class StudyGuideBuilder:
         return f'<section id="terms" class="quick-ref"><h2>📋 Key Terms Reference</h2><div class="terms-cloud">{chips}</div></section>'
     
     def _get_css(self):
-        return ''':root{--bg-dark:#0f0f14;--bg-card:#16161e;--bg-elevated:#1e1e28;--text-primary:#e4e4e7;--text-secondary:#a1a1aa;--text-muted:#71717a;--primary:#a78bfa;--primary-soft:#c4b5fd;--accent:#67e8f9;--accent-soft:#a5f3fc;--success:#34d399;--border:rgba(255,255,255,0.06);--glow:rgba(167,139,250,0.15)}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg-dark);color:var(--text-primary);line-height:1.8;font-size:16px;-webkit-font-smoothing:antialiased}.hero{position:relative;padding:4rem 2rem 3rem;background:linear-gradient(180deg,rgba(167,139,250,0.08) 0%,transparent 100%);border-bottom:1px solid var(--border)}.hero-content{position:relative;max-width:800px;margin:0 auto}.course-tag{display:inline-block;padding:0.4rem 1rem;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.2);border-radius:2rem;font-size:0.75rem;font-weight:600;color:var(--primary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1.25rem}.hero h1{font-size:2.25rem;font-weight:700;line-height:1.2;margin-bottom:1rem;color:#fff}.hero-subtitle{font-size:1.05rem;color:var(--text-secondary);margin-bottom:2rem;line-height:1.6}.hero-stats{display:flex;gap:2.5rem}.stat{text-align:left}.stat-value{font-size:1.75rem;font-weight:700;color:#fff;margin-bottom:0.125rem}.stat-label{font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em}.nav-container{position:sticky;top:0;z-index:100;background:rgba(15,15,20,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}.nav-scroll{max-width:1000px;margin:0 auto;padding:0 1.5rem;overflow-x:auto;scrollbar-width:none}.nav-scroll::-webkit-scrollbar{display:none}.nav-links{display:flex;gap:0.25rem;padding:0.625rem 0}.nav-link{padding:0.5rem 0.875rem;color:var(--text-muted);text-decoration:none;font-size:0.8rem;font-weight:500;border-radius:6px;transition:all 0.2s;white-space:nowrap}.nav-link:hover{color:var(--text-primary);background:var(--bg-elevated)}.nav-link.active{color:var(--primary);background:rgba(167,139,250,0.1)}.main-content{max-width:760px;margin:0 auto;padding:3rem 1.5rem 5rem}.section{margin-bottom:4rem;scroll-margin-top:70px}.section-header{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.75rem}.section-icon{width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(167,139,250,0.2),rgba(103,232,249,0.15));border:1px solid rgba(167,139,250,0.15);border-radius:12px;font-size:1.375rem;flex-shrink:0}.section-meta{flex:1;padding-top:0.25rem}.section-number{font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--primary);margin-bottom:0.375rem;opacity:0.8}.section-title{font-size:1.5rem;font-weight:600;line-height:1.3;color:#fff}.subsection{margin:2.5rem 0;padding-left:1.25rem;border-left:2px solid var(--border)}.subsection-title{color:var(--accent);font-size:1.05rem;font-weight:600;margin-bottom:1rem}.content-subheading{color:var(--primary-soft);font-size:1rem;font-weight:600;margin:2rem 0 0.75rem}p{margin:1.25rem 0;color:var(--text-secondary);font-size:0.9375rem}.key-term{color:var(--text-primary);font-weight:500;border-bottom:1px dotted rgba(167,139,250,0.4)}.bullet-list{list-style:none;margin:1.5rem 0;padding:0}.bullet-list li{position:relative;padding:0.75rem 0 0.75rem 1.5rem;color:var(--text-secondary);font-size:0.9375rem;border-bottom:1px solid var(--border)}.bullet-list li:last-child{border-bottom:none}.bullet-list li::before{content:'';position:absolute;left:0;top:1.1rem;width:6px;height:6px;background:var(--primary);border-radius:50%;opacity:0.6}.formula{font-family:'JetBrains Mono',monospace;font-size:0.875rem;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin:1.25rem 0;overflow-x:auto;color:var(--accent-soft)}.quick-ref{margin-top:4rem;padding-top:2.5rem;border-top:1px solid var(--border)}.quick-ref h2{font-size:1.25rem;font-weight:600;margin-bottom:1.25rem;color:#fff}.terms-cloud{display:flex;flex-wrap:wrap;gap:0.5rem}.term-chip{padding:0.5rem 1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:2rem;font-size:0.8rem;color:var(--text-secondary);transition:all 0.2s}.term-chip:hover{border-color:rgba(167,139,250,0.3);color:var(--primary-soft)}.progress-tracker{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:0.75rem 1rem;display:flex;align-items:center;gap:0.75rem;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:100}.progress-ring{width:40px;height:40px;transform:rotate(-90deg)}.progress-ring circle{fill:none;stroke-width:3}.progress-ring .bg{stroke:var(--border)}.progress-ring .progress{stroke:var(--primary);stroke-linecap:round;transition:stroke-dashoffset 0.5s}.progress-percent{font-size:1rem;font-weight:600;color:var(--primary)}.print-btn{position:fixed;bottom:1.5rem;left:1.5rem;width:42px;height:42px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.125rem;cursor:pointer;transition:all 0.2s;z-index:100}.print-btn:hover{background:var(--bg-elevated);border-color:var(--primary)}@media(max-width:768px){.hero{padding:2rem 1.25rem}.hero h1{font-size:1.75rem}.section-header{flex-direction:column;gap:0.625rem}.section-icon{width:42px;height:42px;font-size:1.25rem}.section-title{font-size:1.25rem}.progress-tracker{bottom:1rem;right:1rem;padding:0.625rem 0.875rem}.print-btn{bottom:1rem;left:1rem}}@media print{.nav-container,.progress-tracker,.print-btn{display:none!important}body{background:#fff;color:#222;font-size:11pt}.hero{background:none;padding:1rem 0}.hero h1{color:#000;font-size:18pt}.section{page-break-inside:avoid}.key-term{color:#000;font-weight:600;border-bottom:none}}'''
+        return ''':root{--bg-dark:#0f0f14;--bg-card:#16161e;--bg-elevated:#1e1e28;--text-primary:#e4e4e7;--text-secondary:#a1a1aa;--text-muted:#71717a;--primary:#a78bfa;--primary-soft:#c4b5fd;--accent:#67e8f9;--accent-soft:#a5f3fc;--success:#34d399;--border:rgba(255,255,255,0.06);--glow:rgba(167,139,250,0.15)}*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg-dark);color:var(--text-primary);line-height:1.8;font-size:16px;-webkit-font-smoothing:antialiased}.hero{position:relative;padding:4rem 2rem 3rem;background:linear-gradient(180deg,rgba(167,139,250,0.08) 0%,transparent 100%);border-bottom:1px solid var(--border)}.hero-content{position:relative;max-width:800px;margin:0 auto}.course-tag{display:inline-block;padding:0.4rem 1rem;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.2);border-radius:2rem;font-size:0.75rem;font-weight:600;color:var(--primary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1.25rem}.hero h1{font-size:2.25rem;font-weight:700;line-height:1.2;margin-bottom:1rem;color:#fff}.hero-subtitle{font-size:1.05rem;color:var(--text-secondary);margin-bottom:2rem;line-height:1.6}.hero-stats{display:flex;gap:2.5rem}.stat{text-align:left}.stat-value{font-size:1.75rem;font-weight:700;color:#fff;margin-bottom:0.125rem}.stat-label{font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em}.nav-container{position:sticky;top:0;z-index:100;background:rgba(15,15,20,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}.nav-scroll{max-width:1000px;margin:0 auto;padding:0 1.5rem;overflow-x:auto;scrollbar-width:none}.nav-scroll::-webkit-scrollbar{display:none}.nav-links{display:flex;gap:0.25rem;padding:0.625rem 0}.nav-link{padding:0.5rem 0.875rem;color:var(--text-muted);text-decoration:none;font-size:0.8rem;font-weight:500;border-radius:6px;transition:all 0.2s;white-space:nowrap}.nav-link:hover{color:var(--text-primary);background:var(--bg-elevated)}.nav-link.active{color:var(--primary);background:rgba(167,139,250,0.1)}.main-content{max-width:760px;margin:0 auto;padding:3rem 1.5rem 5rem}.section{margin-bottom:4rem;scroll-margin-top:70px}.section-header{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.75rem}.section-icon{width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(167,139,250,0.2),rgba(103,232,249,0.15));border:1px solid rgba(167,139,250,0.15);border-radius:12px;font-size:1.375rem;flex-shrink:0}.section-meta{flex:1;padding-top:0.25rem}.section-number{font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--primary);margin-bottom:0.375rem;opacity:0.8}.section-title{font-size:1.5rem;font-weight:600;line-height:1.3;color:#fff}.subsection{margin:2.5rem 0;padding-left:1.25rem;border-left:2px solid var(--border)}.subsection-title{color:var(--accent);font-size:1.05rem;font-weight:600;margin-bottom:1rem}.content-subheading{color:var(--primary-soft);font-size:1rem;font-weight:600;margin:2rem 0 0.75rem}p{margin:1.25rem 0;color:var(--text-secondary);font-size:0.9375rem}.key-term{color:var(--text-primary);font-weight:500;border-bottom:1px dotted rgba(167,139,250,0.4)}.link{color:var(--accent);text-decoration:none;word-break:break-all}.link:hover{text-decoration:underline}.bullet-list{list-style:none;margin:1.5rem 0;padding:0}.bullet-list li{position:relative;padding:0.75rem 0 0.75rem 1.5rem;color:var(--text-secondary);font-size:0.9375rem;border-bottom:1px solid var(--border)}.bullet-list li:last-child{border-bottom:none}.bullet-list li::before{content:'';position:absolute;left:0;top:1.1rem;width:6px;height:6px;background:var(--primary);border-radius:50%;opacity:0.6}.formula{font-family:'JetBrains Mono',monospace;font-size:0.875rem;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin:1.25rem 0;overflow-x:auto;color:var(--accent-soft)}.quick-ref{margin-top:4rem;padding-top:2.5rem;border-top:1px solid var(--border)}.quick-ref h2{font-size:1.25rem;font-weight:600;margin-bottom:1.25rem;color:#fff}.terms-cloud{display:flex;flex-wrap:wrap;gap:0.5rem}.term-chip{padding:0.5rem 1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:2rem;font-size:0.8rem;color:var(--text-secondary);transition:all 0.2s}.term-chip:hover{border-color:rgba(167,139,250,0.3);color:var(--primary-soft)}.progress-tracker{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:0.75rem 1rem;display:flex;align-items:center;gap:0.75rem;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:100}.progress-ring{width:40px;height:40px;transform:rotate(-90deg)}.progress-ring circle{fill:none;stroke-width:3}.progress-ring .bg{stroke:var(--border)}.progress-ring .progress{stroke:var(--primary);stroke-linecap:round;transition:stroke-dashoffset 0.5s}.progress-percent{font-size:1rem;font-weight:600;color:var(--primary)}.print-btn{position:fixed;bottom:1.5rem;left:1.5rem;width:42px;height:42px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.125rem;cursor:pointer;transition:all 0.2s;z-index:100}.print-btn:hover{background:var(--bg-elevated);border-color:var(--primary)}@media(max-width:768px){.hero{padding:2rem 1.25rem}.hero h1{font-size:1.75rem}.section-header{flex-direction:column;gap:0.625rem}.section-icon{width:42px;height:42px;font-size:1.25rem}.section-title{font-size:1.25rem}.progress-tracker{bottom:1rem;right:1rem;padding:0.625rem 0.875rem}.print-btn{bottom:1rem;left:1rem}}@media print{.nav-container,.progress-tracker,.print-btn{display:none!important}body{background:#fff;color:#222;font-size:11pt}.hero{background:none;padding:1rem 0}.hero h1{color:#000;font-size:18pt}.section{page-break-inside:avoid}.key-term{color:#000;font-weight:600;border-bottom:none}.link{color:#333;text-decoration:underline}}'''
     
     def _get_js(self):
         return '''const sections=document.querySelectorAll('.section'),navLinks=document.querySelectorAll('.nav-link'),progressCircle=document.querySelector('.progress-ring .progress'),progressText=document.querySelector('.progress-percent'),circumference=113;function update(){const scrollHeight=document.documentElement.scrollHeight-window.innerHeight,progress=scrollHeight>0?(window.scrollY/scrollHeight)*100:0;progressCircle.style.strokeDashoffset=circumference-(progress/100)*circumference;progressText.textContent=Math.round(progress)+'%';let current='';sections.forEach(s=>{if(window.scrollY>=s.offsetTop-100)current=s.id});navLinks.forEach(l=>{l.classList.remove('active');if(l.getAttribute('href')==='#'+current)l.classList.add('active')})}window.addEventListener('scroll',update);update();navLinks.forEach(l=>l.addEventListener('click',e=>{e.preventDefault();document.querySelector(l.getAttribute('href'))?.scrollIntoView({behavior:'smooth'})}))'''
