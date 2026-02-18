@@ -1,4 +1,4 @@
-/* Library Component - IMPROVED with Debounced Search */
+/* Library Component - v2.0 with improved empty state and create flow */
 import { getState, setState, getAllInProgressQuizzes } from '../state.js';
 import { logout, deleteQuiz } from '../services/api.js';
 import { showExportModal, showImportModal } from '../services/export.js';
@@ -16,11 +16,11 @@ export function renderLibrary() {
     const progressList = getAllInProgressQuizzes();
 
     return `<nav class="navbar"><div class="container"><div class="navbar-inner">
-        <div class="navbar-brand"><div class="navbar-logo">Q</div><span class="hide-mobile">Quiz Master Pro</span></div>
+        <div class="navbar-brand"><div class="navbar-logo">🎓</div><span class="hide-mobile">Quiz Master Pro</span></div>
         <div class="flex items-center gap-2">
             <button class="btn btn-ghost btn-sm" onclick="window.app.navigate('studyGuide')" title="Study Guide Builder">📚</button>
             <button class="btn btn-ghost btn-sm" onclick="window.app.showImportModal()" title="Import">📥</button>
-            <button class="btn btn-primary" onclick="window.app.navigate('create')">+ New</button>
+            <button class="btn btn-primary" onclick="window.app.showCreateOptions()">+ Create Quiz</button>
             <div class="dropdown"><button class="btn btn-icon btn-ghost" onclick="window.app.toggleMenu()">👤</button>
                 <div id="user-menu" class="dropdown-menu hidden">
                     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border)"><div class="font-medium">${escapeHtml(state.user?.username)}</div></div>
@@ -31,7 +31,7 @@ export function renderLibrary() {
     </div></div></nav>
     <main class="container" style="padding-bottom:3rem">
         <div class="library-header"><div><h1>My Quizzes</h1><p class="text-muted text-sm">${state.quizzes.length} quizzes · ${total} questions</p></div></div>
-        <div class="library-toolbar">
+        ${state.quizzes.length > 0 ? `<div class="library-toolbar">
             <div class="search-box">
                 <span class="search-icon">🔍</span>
                 <input type="text" 
@@ -50,7 +50,7 @@ export function renderLibrary() {
                 <option value="all">All Categories</option>
                 ${categories.map(c => `<option value="${escapeHtml(c)}" ${state.categoryFilter === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
             </select>` : ''}
-        </div>
+        </div>` : ''}
         ${quizzes.length === 0 ? renderEmptyState(state) : `<div class="quiz-grid">${quizzes.map(q => renderCard(q, progressList)).join('')}</div>`}
     </main>`;
 }
@@ -69,15 +69,46 @@ function renderEmptyState(state) {
         `;
     }
     
+    // First-time user empty state - more welcoming and instructional
     return `
-        <div class="empty-state">
-            <div class="empty-icon">📚</div>
-            <h3>No quizzes yet</h3>
-            <p class="text-muted">Create your first quiz to get started</p>
-            <div class="flex gap-2 justify-center mt-4">
-                <button class="btn btn-primary" onclick="window.app.navigate('create')">+ Create Quiz</button>
-                <button class="btn btn-secondary" onclick="window.app.showImportModal()">📥 Import Quiz</button>
+        <div class="empty-state welcome-state">
+            <div class="welcome-icon">🎉</div>
+            <h2>Welcome to Quiz Master Pro!</h2>
+            <p class="welcome-text">Turn your study materials into interactive quizzes using AI. Here's how to get started:</p>
+            
+            <div class="welcome-steps">
+                <div class="welcome-step">
+                    <div class="welcome-step-num">1</div>
+                    <div class="welcome-step-content">
+                        <strong>Gather your notes</strong>
+                        <span>Copy text from your textbook, lecture slides, or study notes</span>
+                    </div>
+                </div>
+                <div class="welcome-step">
+                    <div class="welcome-step-num">2</div>
+                    <div class="welcome-step-content">
+                        <strong>Use AI to create questions</strong>
+                        <span>We'll give you the exact prompt to use with ChatGPT or Claude</span>
+                    </div>
+                </div>
+                <div class="welcome-step">
+                    <div class="welcome-step-num">3</div>
+                    <div class="welcome-step-content">
+                        <strong>Study and ace your exams</strong>
+                        <span>Practice with instant feedback and track your progress</span>
+                    </div>
+                </div>
             </div>
+            
+            <div class="welcome-actions">
+                <button class="btn btn-primary btn-lg" onclick="window.app.showCreateOptions()">
+                    🚀 Create Your First Quiz
+                </button>
+            </div>
+            
+            <p class="welcome-alt">
+                Or <button class="btn-link" onclick="window.app.showImportModal()">import an existing quiz</button>
+            </p>
         </div>
     `;
 }

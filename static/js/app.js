@@ -1,4 +1,4 @@
-/* Quiz Master Pro - Main Entry Point - FIXED with Export */
+/* Quiz Master Pro - Main Entry Point - v2.0 with Landing Page & Wizard */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings } from './state.js';
 import { loadQuizzes, logout, createQuiz } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
@@ -22,6 +22,14 @@ import {
 import {
     renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
 } from './components/studyGuide.js';
+
+// NEW: Landing page and wizard
+import { renderLanding, scrollToHowItWorks } from './components/landing.js';
+import { 
+    renderWizard, resetWizard, wizardSetTitle, wizardSetCategory, wizardToggleType,
+    wizardSetCount, wizardNext, wizardBack, wizardCopyPrompt, wizardSetContent,
+    wizardPreviewContent, wizardFinish, exitWizard
+} from './components/wizard.js';
 
 // Import sounds, animations, and playerHUD
 import * as sounds from './utils/sounds.js';
@@ -49,7 +57,6 @@ async function exportAs(quizId, format) {
     
     try {
         ExportService.export(quiz, format);
-        // Close the modal after export
         const modal = document.getElementById('export-modal');
         if (modal) modal.remove();
     } catch (error) {
@@ -64,11 +71,8 @@ async function handleImport(file) {
     try {
         showLoading();
         const quizData = await ImportService.fromFile(file);
-        
-        // Create the quiz
         await createQuiz(quizData);
         
-        // Close modal
         const modal = document.getElementById('import-modal');
         if (modal) modal.remove();
         
@@ -111,9 +115,9 @@ function showQuizOptions(quizId) {
                 <div class="form-group">
                     <label class="flex items-center gap-2">
                         <input type="checkbox" id="randomize-toggle">
-                        <span>Randomize Options</span>
+                        <span>Shuffle Choices</span>
                     </label>
-                    <p class="helper-text">Shuffle answer choices to prevent memorizing positions</p>
+                    <p class="helper-text">Randomize answer order to prevent memorization</p>
                 </div>
                 
                 <div class="form-group">
@@ -137,14 +141,12 @@ function showQuizOptions(quizId) {
     
     document.body.appendChild(modal);
     
-    // Toggle timer options visibility
     const timerToggle = modal.querySelector('#timer-toggle');
     const timerOptions = modal.querySelector('#timer-options');
     timerToggle.addEventListener('change', () => {
         timerOptions.style.display = timerToggle.checked ? 'block' : 'none';
     });
     
-    // Close on overlay click
     modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
     });
@@ -153,13 +155,12 @@ function showQuizOptions(quizId) {
 function launchQuiz(quizId) {
     const modal = document.querySelector('.modal-overlay');
     const studyMode = modal?.querySelector('#study-mode-toggle')?.checked ?? true;
-    const randomizeOptions = modal?.querySelector('#randomize-toggle')?.checked ?? false;  // NEW
+    const randomizeOptions = modal?.querySelector('#randomize-toggle')?.checked ?? false;
     const timed = modal?.querySelector('#timer-toggle')?.checked ?? false;
     const minutes = parseInt(modal?.querySelector('#timer-minutes')?.value) || 15;
     
     if (modal) modal.remove();
-    
-    startQuiz(quizId, { studyMode, randomizeOptions, timed, minutes });  // Pass new option
+    startQuiz(quizId, { studyMode, randomizeOptions, timed, minutes });
 }
 
 // ==================== PENDING REWARDS ====================
@@ -167,7 +168,6 @@ function launchQuiz(quizId) {
 function showPendingRewards() {
     const state = getState();
     
-    // Show level up modal
     if (state.pendingLevelUp) {
         if (window.sounds) window.sounds.playLevelUp();
         if (window.animations) window.animations.showLevelUpEffect();
@@ -177,10 +177,9 @@ function showPendingRewards() {
         document.body.appendChild(modal.firstElementChild);
         
         setState({ pendingLevelUp: null });
-        return; // Show one at a time
+        return;
     }
     
-    // Show achievement modals
     if (state.pendingAchievements && state.pendingAchievements.length > 0) {
         const achievement = state.pendingAchievements[0];
         if (window.sounds) window.sounds.playAchievement();
@@ -196,8 +195,63 @@ function showPendingRewards() {
     }
 }
 
-// Make it available globally
 window.showPendingRewards = showPendingRewards;
+
+// ==================== CREATE OPTIONS MODAL ====================
+
+function showCreateOptions() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Quiz</h2>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-4">How would you like to create your quiz?</p>
+                
+                <div class="create-options">
+                    <button class="create-option" onclick="window.app.startWizard()">
+                        <div class="create-option-icon">🤖</div>
+                        <div class="create-option-content">
+                            <h3>AI-Assisted</h3>
+                            <p>Get step-by-step help using ChatGPT or Claude to generate questions from your notes</p>
+                        </div>
+                        <span class="create-option-badge">Recommended</span>
+                    </button>
+                    
+                    <button class="create-option" onclick="window.app.startManualCreate()">
+                        <div class="create-option-icon">✍️</div>
+                        <div class="create-option-content">
+                            <h3>Manual Entry</h3>
+                            <p>Type or paste questions directly using our text format or visual editor</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+}
+
+function startWizard() {
+    const modal = document.querySelector('.modal-overlay');
+    if (modal) modal.remove();
+    resetWizard();
+    setState({ view: 'wizard' });
+}
+
+function startManualCreate() {
+    const modal = document.querySelector('.modal-overlay');
+    if (modal) modal.remove();
+    setState({ view: 'create', editingQuizId: null, quizTitle: '', quizCategory: '', quizData: '' });
+}
 
 // ==================== RENDER ====================
 
@@ -208,6 +262,9 @@ function render() {
     let showHUD = false;
     
     switch (state.view) {
+        case 'landing':
+            content = renderLanding();
+            break;
         case 'login':
         case 'register':
             content = renderAuth();
@@ -216,11 +273,11 @@ function render() {
             showHUD = true;
             content = renderLibrary();
             break;
+        case 'wizard':
+            content = renderWizard();
+            break;
         case 'quiz':
-            // Quiz has its own streak display, no top HUD needed
             content = renderQuiz();
-            
-            // Initialize matching/ordering handlers after render
             setTimeout(() => {
                 if (window.app.initQuizHandlers) {
                     window.app.initQuizHandlers();
@@ -230,7 +287,6 @@ function render() {
         case 'results':
             showHUD = true;
             content = renderResults();
-            // Animate score counter after render
             setTimeout(animateScoreCounter, 100);
             break;
         case 'review':
@@ -243,12 +299,16 @@ function render() {
         case 'studyGuide':
             showHUD = true;
             content = renderStudyGuide();
-            // Initialize drag & drop after render
             setTimeout(initStudyGuideDragDrop, 50);
             break;
         default:
-            showHUD = true;
-            content = renderLibrary();
+            // Default based on auth state
+            if (state.isAuthenticated) {
+                showHUD = true;
+                content = renderLibrary();
+            } else {
+                content = renderLanding();
+            }
     }
     
     // Wrap content with HUD if needed
@@ -273,13 +333,11 @@ document.addEventListener('keydown', (e) => {
     const state = getState();
     if (state.view !== 'quiz') return;
     
-    // Don't intercept if user is typing in an input
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     
     const q = state.currentQuiz?.questions[state.currentQuestionIndex];
     if (!q) return;
     
-    // Number keys 1-9 for options
     if (e.key >= '1' && e.key <= '9') {
         const idx = parseInt(e.key) - 1;
         if (q.type === 'truefalse') {
@@ -290,13 +348,11 @@ document.addEventListener('keydown', (e) => {
         }
     }
     
-    // T/Y for True, F/N for False
     if (q.type === 'truefalse') {
         if (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'y') selectTF(true);
         if (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'n') selectTF(false);
     }
     
-    // Arrow keys for navigation
     if (e.key === 'ArrowRight' || e.key === 'Enter') {
         if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
             nextQuestion();
@@ -306,7 +362,6 @@ document.addEventListener('keydown', (e) => {
         prevQuestion();
     }
     
-    // Escape to exit
     if (e.key === 'Escape') {
         exitQuiz();
     }
@@ -321,7 +376,10 @@ window.app = {
     // Auth
     setAuthMode,
     handleAuth,
-    logout: () => { logout(); setState({ view: 'login', isAuthenticated: false }); },
+    logout: () => { logout(); setState({ view: 'landing', isAuthenticated: false }); },
+    
+    // Landing page
+    scrollToHowItWorks,
     
     // Library
     setSearch,
@@ -330,7 +388,25 @@ window.app = {
     toggleMenu,
     confirmDelete,
     
-    // Export/Import - FIXED
+    // Create options
+    showCreateOptions,
+    startWizard,
+    startManualCreate,
+    
+    // Wizard
+    wizardSetTitle,
+    wizardSetCategory,
+    wizardToggleType,
+    wizardSetCount,
+    wizardNext,
+    wizardBack,
+    wizardCopyPrompt,
+    wizardSetContent,
+    wizardPreviewContent,
+    wizardFinish,
+    exitWizard,
+    
+    // Export/Import
     showExportModal: (quizId) => {
         const state = getState();
         const quiz = state.quizzes.find(q => q.id === quizId);
@@ -355,7 +431,7 @@ window.app = {
     exitQuiz,
     submitQuiz,
     
-    // Matching & Ordering (tap-to-select system)
+    // Matching & Ordering
     selectMatchLeft,
     selectMatchRight,
     unmatchItem,
@@ -370,7 +446,7 @@ window.app = {
     reviewQuiz,
     setReviewFilter,
     
-    // Create
+    // Create (manual)
     setTitle,
     setCat,
     setData,
@@ -425,7 +501,8 @@ async function init() {
             console.error('Failed to load quizzes:', e);
         }
     } else {
-        setState({ view: 'login' });
+        // Not logged in - show landing page
+        setState({ view: 'landing' });
     }
     
     render();

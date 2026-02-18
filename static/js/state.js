@@ -1,13 +1,16 @@
-/* State Management - Complete with all required exports */
+/* State Management - v2.0 with Database Sync */
+
+const API_BASE = '/api';
 
 let state = {
     // Auth
     isAuthenticated: false,
     user: null,
     authMode: 'login',
+    authError: null,
     
     // Views
-    view: 'login',
+    view: 'landing',
     
     // Library
     quizzes: [],
@@ -48,7 +51,7 @@ let state = {
     currentEditQuestion: 0,
     showFormatHelp: false,
     
-    // Gamification / Profile
+    // Gamification / Profile (synced to server)
     xp: 0,
     level: 1,
     gems: 0,
@@ -65,15 +68,21 @@ let state = {
     // Settings
     soundEnabled: true,
     animationsEnabled: true,
+    
+    // Sync status
+    profileLoaded: false,
+    syncPending: false,
 };
 
 const listeners = [];
+
+// Debounce timer for profile sync
+let syncTimeout = null;
 
 /**
  * Get current state with computed properties
  */
 export function getState() {
-    // Add computed playerProfile for playerHud.js compatibility
     return {
         ...state,
         playerProfile: {
@@ -92,8 +101,6 @@ export function getState() {
 
 /**
  * Update state
- * @param {Object} newState - New state values to merge
- * @param {boolean} skipRender - If true, don't trigger re-render (for targeted DOM updates)
  */
 export function setState(newState, skipRender = false) {
     state = { ...state, ...newState };
@@ -111,6 +118,33 @@ export function subscribe(fn) {
     };
 }
 
+// ==================== API HELPERS ====================
+
+function getAuthToken() {
+    return localStorage.getItem('token');
+}
+
+async function apiCall(endpoint, options = {}) {
+    const token = getAuthToken();
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
+    };
+    
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+    });
+    
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || 'Request failed');
+    }
+    
+    return response.json();
+}
+
 // ==================== AUTH ====================
 
 export function loadAuth() {
@@ -125,7 +159,6 @@ export function loadAuth() {
         }
     } catch (e) {
         console.error('Failed to load auth from localStorage:', e);
-        // Clear corrupted data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
     }
@@ -141,19 +174,97 @@ export function saveAuth(token, user) {
 export function clearAuth() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setState({ isAuthenticated: false, user: null, view: 'login' });
+    setState({ isAuthenticated: false, user: null, view: 'landing', profileLoaded: false });
 }
 
 export function logout() {
     clearAuth();
 }
 
-// ==================== PROFILE/GAMIFICATION ====================
+// ==================== PROFILE/GAMIFICATION (SERVER SYNC) ====================
 
+/**
+ * Load profile from server
+ */
+export async function loadProfile() {
+    try {
+        const data = await apiCall('/profile');
+        
+        if (data.profile) {
+            const p = data.profile;
+            setState({
+                xp: p.xp || 0,
+                level: p.level || 1,
+                gems: p.gems || 0,
+                dailyStreak: p.daily_streak || 0,
+                lastActiveDate: p.last_active_date || null,
+                achievements: p.achievements || [],
+                totalAnswered: p.total_answered || 0,
+                totalCorrect: p.total_correct || 0,
+                quizzesCompleted: p.quizzes_completed || 0,
+                perfectScores: p.perfect_scores || 0,
+                soundEnabled: p.settings?.soundEnabled ?? true,
+                animationsEnabled: p.settings?.animationsEnabled ?? true,
+                profileLoaded: true,
+            }, true);
+        }
+        
+        if (data.user) {
+            setState({ user: data.user }, true);
+        }
+    } catch (e) {
+        console.error('Failed to load profile from server:', e);
+        // Fall back to local storage if server fails
+        loadProfileFromLocalStorage();
+    }
+}
+
+/**
+ * Save profile to server (debounced)
+ */
+export function saveProfile() {
+    // Clear previous timeout
+    clearTimeout(syncTimeout);
+    
+    // Debounce - save after 1 second of no changes
+    syncTimeout = setTimeout(async () => {
+        try {
+            const s = getState();
+            await apiCall('/profile', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    xp: s.xp,
+                    level: s.level,
+                    gems: s.gems,
+                    daily_streak: s.dailyStreak,
+                    last_active_date: s.lastActiveDate,
+                    achievements: s.achievements,
+                    total_answered: s.totalAnswered,
+                    total_correct: s.totalCorrect,
+                    quizzes_completed: s.quizzesCompleted,
+                    perfect_scores: s.perfectScores,
+                    settings: {
+                        soundEnabled: s.soundEnabled,
+                        animationsEnabled: s.animationsEnabled,
+                    },
+                }),
+            });
+            console.log('Profile synced to server');
+        } catch (e) {
+            console.error('Failed to sync profile to server:', e);
+            // Save to localStorage as backup
+            saveProfileToLocalStorage();
+        }
+    }, 1000);
+    
+    // Also save to localStorage immediately as backup
+    saveProfileToLocalStorage();
+}
+
+// Fallback localStorage functions
 const PROFILE_KEY = 'quizmaster_profile';
-const SETTINGS_KEY = 'quizmaster_settings';
 
-export function loadProfile() {
+function loadProfileFromLocalStorage() {
     try {
         const saved = localStorage.getItem(PROFILE_KEY);
         if (saved) {
@@ -169,14 +280,15 @@ export function loadProfile() {
                 totalCorrect: profile.totalCorrect || 0,
                 quizzesCompleted: profile.quizzesCompleted || 0,
                 perfectScores: profile.perfectScores || 0,
+                profileLoaded: true,
             }, true);
         }
     } catch (e) {
-        console.error('Failed to load profile:', e);
+        console.error('Failed to load profile from localStorage:', e);
     }
 }
 
-export function saveProfile() {
+function saveProfileToLocalStorage() {
     const s = getState();
     localStorage.setItem(PROFILE_KEY, JSON.stringify({
         xp: s.xp,
@@ -215,7 +327,12 @@ export function getPlayerHudData() {
     };
 }
 
+// Settings
+const SETTINGS_KEY = 'quizmaster_settings';
+
 export function loadSettings() {
+    // Settings are loaded as part of profile now
+    // This function exists for backward compatibility
     try {
         const saved = localStorage.getItem(SETTINGS_KEY);
         if (saved) {
@@ -236,6 +353,8 @@ export function saveSettings() {
         soundEnabled: s.soundEnabled,
         animationsEnabled: s.animationsEnabled,
     }));
+    // Also sync to server with profile
+    saveProfile();
 }
 
 // ==================== LEVEL SYSTEM ====================
@@ -255,104 +374,75 @@ export function getTierFromLevel(level) {
 }
 
 export function getTierName(levelOrTier) {
-    // If it's a small number (0-7), treat as tier index
     if (levelOrTier >= 0 && levelOrTier <= 7) {
         return TIER_NAMES[levelOrTier] || 'Novice';
     }
-    // Otherwise treat as level
     const tier = getTierFromLevel(levelOrTier);
     return TIER_NAMES[tier] || 'Novice';
 }
 
 export function getTierColor(levelOrTier) {
-    // If it's a small number (0-7), treat as tier index
     if (levelOrTier >= 0 && levelOrTier <= 7) {
         return TIER_COLORS[levelOrTier] || TIER_COLORS[0];
     }
-    // Otherwise treat as level
     const tier = getTierFromLevel(levelOrTier);
     return TIER_COLORS[tier] || TIER_COLORS[0];
 }
 
-/**
- * Get level info - compatible with playerHud.js
- * @param {number} xpOrLevel - Can be XP value or null to use current state
- */
-export function getLevelInfo(xpOrLevel = null) {
-    const s = getState();
-    
-    // Safety: ensure valid numbers, default to 0/1 if corrupted
-    let currentXP = (typeof s.xp === 'number' && isFinite(s.xp) && s.xp >= 0) ? s.xp : 0;
-    let currentLevel = (typeof s.level === 'number' && isFinite(s.level) && s.level >= 1) ? s.level : 1;
-    
-    // Cap at reasonable values to prevent overflow
-    currentXP = Math.min(currentXP, 1000000000); // 1 billion max
-    currentLevel = Math.min(currentLevel, 100);   // 100 max level
-    
-    if (xpOrLevel !== null && typeof xpOrLevel === 'number' && isFinite(xpOrLevel)) {
-        if (xpOrLevel > 100) {
-            currentXP = Math.min(xpOrLevel, 1000000000);
-            currentLevel = calculateLevelFromXP(currentXP);
-        } else if (xpOrLevel >= 1) {
-            currentLevel = Math.floor(xpOrLevel);
-        }
+export function getXpForLevel(level) {
+    if (level <= 1) return 0;
+    let total = 0;
+    for (let i = 1; i < level; i++) {
+        total += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
     }
-    
-    const xpForCurrentLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, currentLevel - 1));
-    
-    // Calculate total XP needed to reach current level
-    let totalXpForLevel = 0;
-    for (let i = 1; i < currentLevel; i++) {
-        totalXpForLevel += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
-    }
-    
-    const xpIntoLevel = Math.max(0, currentXP - totalXpForLevel);
-    const progressPercent = Math.min(100, Math.max(0, Math.round((xpIntoLevel / xpForCurrentLevel) * 100)));
-    const progressDecimal = Math.min(1, Math.max(0, xpIntoLevel / xpForCurrentLevel));
-    const tier = getTierFromLevel(currentLevel);
-    
-    return {
-        level: currentLevel,
-        xp: currentXP,
-        xpIntoLevel,
-        xpInLevel: xpIntoLevel,       // Alias for playerHud.js
-        xpForLevel: xpForCurrentLevel,
-        xpForNext: xpForCurrentLevel,  // Alias for playerHud.js
-        progress: progressDecimal,     // 0-1 for progress bar
-        progressPercent,               // 0-100
-        tier,
-        title: getTierName(currentLevel),
-        tierName: getTierName(tier),
-        tierColor: getTierColor(tier),
-        // Include profile for compatibility
-        profile: getProfile(),
-    };
+    return total;
 }
 
-function calculateLevelFromXP(xp) {
-    // Safety check
-    if (typeof xp !== 'number' || !isFinite(xp) || xp < 0) return 1;
-    xp = Math.min(xp, 1000000000); // Cap at 1 billion
-    
+export function getXpToNextLevel(level) {
+    return Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
+}
+
+export function calculateLevelFromXP(xp) {
     let level = 1;
+    let xpNeeded = XP_PER_LEVEL;
     let totalXpNeeded = 0;
     
-    while (level < 100) { // Max level 100
-        const xpForThisLevel = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
-        if (totalXpNeeded + xpForThisLevel > xp) break;
-        totalXpNeeded += xpForThisLevel;
+    while (totalXpNeeded + xpNeeded <= xp) {
+        totalXpNeeded += xpNeeded;
         level++;
+        xpNeeded = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
     }
     
     return level;
 }
 
-function getLevelTitle(level) {
+export function getLevelInfo() {
+    const s = getState();
+    const level = s.level || 1;
+    const xp = s.xp || 0;
+    
+    const xpForCurrentLevel = getXpForLevel(level);
+    const xpToNext = getXpToNextLevel(level);
+    const xpInLevel = xp - xpForCurrentLevel;
+    const progress = Math.min(100, Math.floor((xpInLevel / xpToNext) * 100));
+    
+    return {
+        level,
+        xp,
+        xpInLevel,
+        xpToNext,
+        progress,
+        tier: getTierFromLevel(level),
+        tierName: getTierName(level),
+        tierColor: getTierColor(level),
+    };
+}
+
+export function getLevelTitle(level) {
     return getTierName(level);
 }
 
 function addXP(amount) {
-    // Safety check
     if (typeof amount !== 'number' || !isFinite(amount) || amount <= 0) {
         return { xpGained: 0, leveledUp: false, newLevel: getState().level };
     }
@@ -361,7 +451,7 @@ function addXP(amount) {
     const currentXP = (typeof s.xp === 'number' && isFinite(s.xp)) ? s.xp : 0;
     const currentLevel = (typeof s.level === 'number' && isFinite(s.level)) ? s.level : 1;
     
-    const newXP = Math.min(currentXP + amount, 1000000000); // Cap at 1 billion
+    const newXP = Math.min(currentXP + amount, 1000000000);
     const newLevel = calculateLevelFromXP(newXP);
     const leveledUp = newLevel > currentLevel;
     
@@ -403,14 +493,12 @@ export function unlockAchievement(achievementId) {
     
     const newAchievements = [...s.achievements, achievementId];
     
-    // Award XP and gems from achievement
     const currentXP = (typeof s.xp === 'number' && isFinite(s.xp)) ? s.xp : 0;
     const currentGems = (typeof s.gems === 'number' && isFinite(s.gems)) ? s.gems : 0;
     const newXP = achievement.xp ? Math.min(currentXP + achievement.xp, 1000000000) : currentXP;
     const newGems = achievement.gems ? currentGems + achievement.gems : currentGems;
     const newLevel = calculateLevelFromXP(newXP);
     
-    // Create pending achievement with proper values
     const pending = [...(s.pendingAchievements || []), {
         ...achievement,
         xp: achievement.xp || 0,
@@ -432,78 +520,125 @@ export function unlockAchievement(achievementId) {
 export function checkAchievements() {
     const s = getState();
     
-    // First quiz
     if (s.quizzesCompleted >= 1) unlockAchievement('first_quiz');
-    
-    // Quiz counts
     if (s.quizzesCompleted >= 10) unlockAchievement('quizzes_10');
     if (s.quizzesCompleted >= 50) unlockAchievement('quizzes_50');
-    
-    // Streaks
     if (s.maxQuizStreak >= 5) unlockAchievement('streak_5');
     if (s.maxQuizStreak >= 10) unlockAchievement('streak_10');
-    
-    // Daily streak
     if (s.dailyStreak >= 7) unlockAchievement('daily_streak_7');
-    
-    // Levels
     if (s.level >= 10) unlockAchievement('level_10');
     if (s.level >= 25) unlockAchievement('level_25');
-    
-    // Perfect scores
     if (s.perfectScores >= 1) unlockAchievement('perfect_score');
 }
 
-// ==================== QUIZ PROGRESS ====================
+// ==================== QUIZ PROGRESS (SERVER SYNC) ====================
 
-const PROGRESS_KEY = 'quizmaster_progress_';
-
-export function saveQuizProgress() {
+/**
+ * Save quiz progress to server
+ */
+export async function saveQuizProgress() {
     const s = getState();
     if (!s.currentQuiz) return;
     
-    const progress = {
-        questionIndex: s.currentQuestionIndex,
+    const progressData = {
+        question_index: s.currentQuestionIndex,
         answers: s.answers,
         flagged: Array.from(s.flaggedQuestions),
-        studyMode: s.studyMode,
-        randomizeOptions: s.randomizeOptions,
-        optionShuffles: s.optionShuffles,
-        quizStreak: s.quizStreak,
-        maxQuizStreak: s.maxQuizStreak,
-        matchingShuffled: s.matchingShuffled,
-        timerEnabled: s.timerEnabled,
-        timeRemaining: s.timeRemaining,
-        savedAt: Date.now(),
+        study_mode: s.studyMode,
+        randomize_options: s.randomizeOptions,
+        option_shuffles: s.optionShuffles,
+        quiz_streak: s.quizStreak,
+        max_quiz_streak: s.maxQuizStreak,
+        timer_enabled: s.timerEnabled,
+        time_remaining: s.timeRemaining,
     };
     
-    localStorage.setItem(PROGRESS_KEY + s.currentQuiz.id, JSON.stringify(progress));
+    try {
+        await apiCall(`/progress/${s.currentQuiz.id}`, {
+            method: 'PUT',
+            body: JSON.stringify(progressData),
+        });
+    } catch (e) {
+        console.error('Failed to save progress to server:', e);
+        // Fallback to localStorage
+        localStorage.setItem(`quizmaster_progress_${s.currentQuiz.id}`, JSON.stringify({
+            ...progressData,
+            savedAt: Date.now(),
+        }));
+    }
 }
 
-export function loadQuizProgress(quizId) {
+/**
+ * Load quiz progress from server
+ */
+export async function loadQuizProgress(quizId) {
     try {
-        const saved = localStorage.getItem(PROGRESS_KEY + quizId);
-        if (saved) {
-            const progress = JSON.parse(saved);
-            // Only restore if saved within last 24 hours
-            if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
-                return progress;
-            }
+        const data = await apiCall(`/progress/${quizId}`);
+        if (data.progress) {
+            const p = data.progress;
+            return {
+                questionIndex: p.question_index,
+                answers: p.answers || [],
+                flagged: p.flagged || [],
+                studyMode: p.study_mode,
+                randomizeOptions: p.randomize_options,
+                optionShuffles: p.option_shuffles || {},
+                quizStreak: p.quiz_streak || 0,
+                maxQuizStreak: p.max_quiz_streak || 0,
+                timerEnabled: p.timer_enabled,
+                timeRemaining: p.time_remaining,
+            };
         }
     } catch (e) {
-        console.error('Failed to load progress:', e);
+        console.error('Failed to load progress from server:', e);
+        // Fallback to localStorage
+        try {
+            const saved = localStorage.getItem(`quizmaster_progress_${quizId}`);
+            if (saved) {
+                const progress = JSON.parse(saved);
+                if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
+                    return progress;
+                }
+            }
+        } catch (e2) {
+            console.error('Failed to load progress from localStorage:', e2);
+        }
     }
     return null;
 }
 
-export function clearQuizProgress(quizId) {
-    localStorage.removeItem(PROGRESS_KEY + quizId);
+/**
+ * Clear quiz progress on server
+ */
+export async function clearQuizProgress(quizId) {
+    try {
+        await apiCall(`/progress/${quizId}`, { method: 'DELETE' });
+    } catch (e) {
+        console.error('Failed to clear progress on server:', e);
+    }
+    localStorage.removeItem(`quizmaster_progress_${quizId}`);
 }
 
 /**
- * Get all in-progress quizzes (for library display)
+ * Get all in-progress quizzes
  */
-export function getAllInProgressQuizzes() {
+export async function getAllInProgressQuizzes() {
+    try {
+        const data = await apiCall('/progress');
+        if (data.progress) {
+            return data.progress.map(p => ({
+                quizId: p.quiz_id,
+                quizTitle: p.quiz_title,
+                questionIndex: p.question_index,
+                total: p.total_questions,
+                answeredCount: (p.answers || []).filter(a => a !== undefined && a !== null).length,
+            }));
+        }
+    } catch (e) {
+        console.error('Failed to load all progress from server:', e);
+    }
+    
+    // Fallback: check localStorage
     const s = getState();
     const inProgress = [];
     
@@ -511,18 +646,16 @@ export function getAllInProgressQuizzes() {
     
     for (const quiz of s.quizzes) {
         try {
-            const saved = localStorage.getItem(PROGRESS_KEY + quiz.id);
+            const saved = localStorage.getItem(`quizmaster_progress_${quiz.id}`);
             if (saved) {
                 const progress = JSON.parse(saved);
-                // Only include if saved within last 24 hours
                 if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
                     inProgress.push({
                         quizId: quiz.id,
                         quizTitle: quiz.title,
-                        questionIndex: progress.questionIndex,
-                        totalQuestions: quiz.questions?.length || 0,
-                        answeredCount: progress.answers?.filter(a => a !== undefined).length || 0,
-                        savedAt: progress.savedAt,
+                        questionIndex: progress.question_index || progress.questionIndex || 0,
+                        total: quiz.questions?.length || 0,
+                        answeredCount: (progress.answers || []).filter(a => a !== undefined).length,
                     });
                 }
             }

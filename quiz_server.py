@@ -94,8 +94,48 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )''')
     
+    # NEW: User profiles for gamification data sync
+    c.execute('''CREATE TABLE IF NOT EXISTS user_profiles (
+        user_id INTEGER PRIMARY KEY,
+        xp INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 1,
+        gems INTEGER DEFAULT 0,
+        daily_streak INTEGER DEFAULT 0,
+        last_active_date TEXT,
+        achievements TEXT DEFAULT '[]',
+        total_answered INTEGER DEFAULT 0,
+        total_correct INTEGER DEFAULT 0,
+        quizzes_completed INTEGER DEFAULT 0,
+        perfect_scores INTEGER DEFAULT 0,
+        settings TEXT DEFAULT '{"soundEnabled":true,"animationsEnabled":true}',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+    
+    # NEW: In-progress quiz state for cross-device sync
+    c.execute('''CREATE TABLE IF NOT EXISTS quiz_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        quiz_id INTEGER NOT NULL,
+        question_index INTEGER DEFAULT 0,
+        answers TEXT DEFAULT '[]',
+        flagged TEXT DEFAULT '[]',
+        study_mode BOOLEAN DEFAULT 1,
+        randomize_options BOOLEAN DEFAULT 0,
+        option_shuffles TEXT DEFAULT '{}',
+        quiz_streak INTEGER DEFAULT 0,
+        max_quiz_streak INTEGER DEFAULT 0,
+        timer_enabled BOOLEAN DEFAULT 0,
+        time_remaining INTEGER,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, quiz_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+    )''')
+    
     c.execute('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_quizzes_user ON quizzes(user_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_progress_user_quiz ON quiz_progress(user_id, quiz_id)')
     
     conn.commit()
     conn.close()
@@ -278,6 +318,216 @@ def record_attempt(id):
     conn.commit()
     conn.close()
     return jsonify({'message': 'Recorded'}), 201
+
+# === Profile & Stats (Synced to Database) ===
+
+@app.route('/api/profile', methods=['GET'])
+@token_required
+def get_profile():
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Get user info
+    c.execute('SELECT id, username, email, created_at FROM users WHERE id = ?', (request.user_id,))
+    user = dict(c.fetchone())
+    
+    # Get or create profile
+    c.execute('SELECT * FROM user_profiles WHERE user_id = ?', (request.user_id,))
+    profile_row = c.fetchone()
+    
+    if profile_row:
+        profile = dict(profile_row)
+        profile['achievements'] = json.loads(profile['achievements'] or '[]')
+        profile['settings'] = json.loads(profile['settings'] or '{}')
+    else:
+        # Create default profile
+        c.execute('''INSERT INTO user_profiles (user_id) VALUES (?)''', (request.user_id,))
+        conn.commit()
+        profile = {
+            'xp': 0, 'level': 1, 'gems': 0, 'daily_streak': 0,
+            'last_active_date': None, 'achievements': [],
+            'total_answered': 0, 'total_correct': 0,
+            'quizzes_completed': 0, 'perfect_scores': 0,
+            'settings': {'soundEnabled': True, 'animationsEnabled': True}
+        }
+    
+    # Get quiz count
+    c.execute('SELECT COUNT(*) as count FROM quizzes WHERE user_id = ?', (request.user_id,))
+    user['quiz_count'] = c.fetchone()['count']
+    
+    conn.close()
+    
+    return jsonify({
+        'user': user,
+        'profile': profile
+    })
+
+@app.route('/api/profile', methods=['PUT'])
+@token_required
+def update_profile():
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Upsert profile
+    c.execute('''INSERT INTO user_profiles (user_id, xp, level, gems, daily_streak, last_active_date,
+                 achievements, total_answered, total_correct, quizzes_completed, perfect_scores, settings, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                 xp=excluded.xp, level=excluded.level, gems=excluded.gems,
+                 daily_streak=excluded.daily_streak, last_active_date=excluded.last_active_date,
+                 achievements=excluded.achievements, total_answered=excluded.total_answered,
+                 total_correct=excluded.total_correct, quizzes_completed=excluded.quizzes_completed,
+                 perfect_scores=excluded.perfect_scores, settings=excluded.settings, updated_at=excluded.updated_at''',
+        (request.user_id,
+         data.get('xp', 0),
+         data.get('level', 1),
+         data.get('gems', 0),
+         data.get('daily_streak', 0),
+         data.get('last_active_date'),
+         json.dumps(data.get('achievements', [])),
+         data.get('total_answered', 0),
+         data.get('total_correct', 0),
+         data.get('quizzes_completed', 0),
+         data.get('perfect_scores', 0),
+         json.dumps(data.get('settings', {})),
+         datetime.now()))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Profile updated'})
+
+@app.route('/api/stats', methods=['GET'])
+@token_required
+def get_stats():
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Recent attempts (last 10)
+    c.execute('''
+        SELECT a.*, q.title as quiz_title 
+        FROM attempts a 
+        JOIN quizzes q ON a.quiz_id = q.id 
+        WHERE a.user_id = ? 
+        ORDER BY a.created_at DESC 
+        LIMIT 10
+    ''', (request.user_id,))
+    recent = [dict(r) for r in c.fetchall()]
+    
+    # Best scores per quiz
+    c.execute('''
+        SELECT q.id, q.title, MAX(a.percentage) as best_score, COUNT(a.id) as attempts
+        FROM quizzes q
+        LEFT JOIN attempts a ON q.id = a.quiz_id
+        WHERE q.user_id = ?
+        GROUP BY q.id
+        ORDER BY q.last_modified DESC
+    ''', (request.user_id,))
+    quizzes = [dict(r) for r in c.fetchall()]
+    
+    conn.close()
+    return jsonify({
+        'recent_attempts': recent,
+        'quiz_stats': quizzes
+    })
+
+# === Quiz Progress Sync ===
+
+@app.route('/api/progress/<int:quiz_id>', methods=['GET'])
+@token_required
+def get_quiz_progress(quiz_id):
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute('SELECT * FROM quiz_progress WHERE user_id = ? AND quiz_id = ?', 
+              (request.user_id, quiz_id))
+    row = c.fetchone()
+    conn.close()
+    
+    if not row:
+        return jsonify({'progress': None})
+    
+    progress = dict(row)
+    progress['answers'] = json.loads(progress['answers'] or '[]')
+    progress['flagged'] = json.loads(progress['flagged'] or '[]')
+    progress['option_shuffles'] = json.loads(progress['option_shuffles'] or '{}')
+    
+    return jsonify({'progress': progress})
+
+@app.route('/api/progress/<int:quiz_id>', methods=['PUT'])
+@token_required
+def save_quiz_progress(quiz_id):
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute('''INSERT INTO quiz_progress 
+                 (user_id, quiz_id, question_index, answers, flagged, study_mode, 
+                  randomize_options, option_shuffles, quiz_streak, max_quiz_streak,
+                  timer_enabled, time_remaining, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id, quiz_id) DO UPDATE SET
+                 question_index=excluded.question_index, answers=excluded.answers,
+                 flagged=excluded.flagged, study_mode=excluded.study_mode,
+                 randomize_options=excluded.randomize_options, option_shuffles=excluded.option_shuffles,
+                 quiz_streak=excluded.quiz_streak, max_quiz_streak=excluded.max_quiz_streak,
+                 timer_enabled=excluded.timer_enabled, time_remaining=excluded.time_remaining,
+                 updated_at=excluded.updated_at''',
+        (request.user_id, quiz_id,
+         data.get('question_index', 0),
+         json.dumps(data.get('answers', [])),
+         json.dumps(data.get('flagged', [])),
+         data.get('study_mode', True),
+         data.get('randomize_options', False),
+         json.dumps(data.get('option_shuffles', {})),
+         data.get('quiz_streak', 0),
+         data.get('max_quiz_streak', 0),
+         data.get('timer_enabled', False),
+         data.get('time_remaining'),
+         datetime.now()))
+    
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Progress saved'})
+
+@app.route('/api/progress/<int:quiz_id>', methods=['DELETE'])
+@token_required
+def clear_quiz_progress(quiz_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM quiz_progress WHERE user_id = ? AND quiz_id = ?',
+              (request.user_id, quiz_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Progress cleared'})
+
+@app.route('/api/progress', methods=['GET'])
+@token_required
+def get_all_progress():
+    """Get all in-progress quizzes for the library display."""
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute('''
+        SELECT p.*, q.title as quiz_title, 
+               json_array_length(q.questions) as total_questions
+        FROM quiz_progress p
+        JOIN quizzes q ON p.quiz_id = q.id
+        WHERE p.user_id = ?
+        ORDER BY p.updated_at DESC
+    ''', (request.user_id,))
+    
+    rows = c.fetchall()
+    conn.close()
+    
+    progress_list = []
+    for row in rows:
+        p = dict(row)
+        p['answers'] = json.loads(p['answers'] or '[]')
+        p['flagged'] = json.loads(p['flagged'] or '[]')
+        progress_list.append(p)
+    
+    return jsonify({'progress': progress_list})
 
 # === Study Guide Builder ===
 
