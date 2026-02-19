@@ -47,9 +47,10 @@ export function initFlashcards(quiz) {
 function getAnswerText(q) {
     switch (q.type) {
         case 'truefalse': {
-            // Handle all formats: boolean true/false, string 'true'/'false', or index 0/1
             const c = q.correct;
-            const isTrue = c === true || c === 'true' || c === 0;
+            // Handle array [0]/[1], boolean, string, or number
+            const val = Array.isArray(c) ? c[0] : c;
+            const isTrue = val === 0 || val === true || val === 'true';
             return isTrue ? 'True ✓' : 'False ✗';
         }
         case 'matching':
