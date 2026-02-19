@@ -514,6 +514,7 @@ export function fcTouchStart(e) {
     touch.currentX = touch.startX;
     touch.currentY = touch.startY;
     touch.isDragging = false;
+    touch.wasDragging = false;
 }
 
 export function fcTouchMove(e) {
@@ -527,6 +528,7 @@ export function fcTouchMove(e) {
     // Only handle horizontal swipes
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
         touch.isDragging = true;
+        touch.wasDragging = true;
         e.preventDefault();
         
         const card = document.getElementById('fc2-card');
@@ -581,13 +583,13 @@ export function fcTouchEnd(e) {
         } else {
             fcFlip();
         }
-    } else if (!touch.isDragging) {
+    } else if (!touch.wasDragging) {
         // Never entered drag mode = tap, flip the card
         fcFlip();
     }
-    // isDragging but didn't reach threshold = aborted swipe, do nothing
+    // wasDragging but didn't reach threshold = aborted swipe, do nothing
 
-    touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false };
+    touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false, wasDragging: false };
 }
 
 // ==================== Keyboard ====================
