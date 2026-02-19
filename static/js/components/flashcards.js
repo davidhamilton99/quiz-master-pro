@@ -143,7 +143,7 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
-                 onclick="window.app.fcFlip()">
+>
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -512,6 +512,7 @@ export function fcTouchStart(e) {
     touch.startX = e.touches[0].clientX;
     touch.startY = e.touches[0].clientY;
     touch.currentX = touch.startX;
+    touch.currentY = touch.startY;
     touch.isDragging = false;
 }
 
@@ -519,8 +520,9 @@ export function fcTouchMove(e) {
     if (!touch.startX) return;
     
     touch.currentX = e.touches[0].clientX;
+    touch.currentY = e.touches[0].clientY;
     const deltaX = touch.currentX - touch.startX;
-    const deltaY = Math.abs(e.touches[0].clientY - touch.startY);
+    const deltaY = Math.abs(touch.currentY - touch.startY);
     
     // Only handle horizontal swipes
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
@@ -555,6 +557,11 @@ export function fcTouchMove(e) {
 
 export function fcTouchEnd(e) {
     const deltaX = touch.currentX - touch.startX;
+    const deltaY = Math.abs(touch.currentY - touch.startY);
+    const totalMovement = Math.abs(deltaX) + deltaY;
+
+    // Always prevent the synthetic click the browser fires after touchend
+    e.preventDefault();
     
     // Reset card position
     const card = document.getElementById('fc2-card');
@@ -567,23 +574,20 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    if (touch.isDragging) {
-        // A drag happened - intercept the upcoming synthetic click so it doesn't flip
-        const suppressClick = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
-        document.addEventListener('click', suppressClick, { capture: true, once: true });
-
-        if (Math.abs(deltaX) > 100) {
-            // Completed swipe
-            if (fc.isFlipped) {
-                fcRate(deltaX > 0 ? 'good' : 'again');
-            } else {
-                fcFlip();
-            }
+    if (touch.isDragging && Math.abs(deltaX) > 100) {
+        // Completed swipe
+        if (fc.isFlipped) {
+            fcRate(deltaX > 0 ? 'good' : 'again');
+        } else {
+            fcFlip();
         }
-        // else: aborted swipe - do nothing, click already suppressed
+    } else if (!touch.isDragging) {
+        // Never entered drag mode = tap, flip the card
+        fcFlip();
     }
-    
-    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
+    // isDragging but didn't reach threshold = aborted swipe, do nothing
+
+    touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false };
 }
 
 // ==================== Keyboard ====================
