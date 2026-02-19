@@ -89,7 +89,7 @@ function renderStep1() {
                     class="input input-lg" 
                     placeholder="e.g., Chapter 5 - Network Security"
                     value="${escapeHtml(s.title)}"
-                    onchange="window.app.wizardSetTitle(this.value)"
+                    oninput="window.app.wizardSetTitle(this.value)"
                     autofocus
                 >
                 <p class="helper-text">Give your quiz a descriptive name</p>
@@ -102,7 +102,7 @@ function renderStep1() {
                     class="input" 
                     placeholder="e.g., Networking, Biology, History"
                     value="${escapeHtml(s.category)}"
-                    onchange="window.app.wizardSetCategory(this.value)"
+                    oninput="window.app.wizardSetCategory(this.value)"
                 >
             </div>
             
@@ -214,7 +214,9 @@ function renderStep1() {
             >
                 Next: Get Your AI Prompt →
             </button>
-            ${!s.title.trim() ? '<p class="wizard-hint">Enter a quiz title to continue</p>' : ''}
+            <p class="wizard-hint" style="${s.title.trim() && s.questionTypes.length > 0 ? 'display:none' : ''}">
+                ${!s.title.trim() ? 'Enter a quiz title to continue' : 'Select at least one question type'}
+            </p>
         </div>
     </div>
     `;
@@ -505,10 +507,34 @@ function getQuestionBreakdown(questions) {
 // Wizard actions
 export function wizardSetTitle(title) {
     wizardState.title = title;
+    updateNextButtonState();
 }
 
 export function wizardSetCategory(category) {
     wizardState.category = category;
+}
+
+function updateNextButtonState() {
+    // Update button state without full re-render
+    const btn = document.querySelector('.wizard-card-footer .btn-primary');
+    const hint = document.querySelector('.wizard-hint');
+    
+    if (btn) {
+        const isValid = wizardState.title.trim() && wizardState.questionTypes.length > 0;
+        btn.disabled = !isValid;
+        
+        if (hint) {
+            if (!wizardState.title.trim()) {
+                hint.textContent = 'Enter a quiz title to continue';
+                hint.style.display = 'block';
+            } else if (wizardState.questionTypes.length === 0) {
+                hint.textContent = 'Select at least one question type';
+                hint.style.display = 'block';
+            } else {
+                hint.style.display = 'none';
+            }
+        }
+    }
 }
 
 export function wizardToggleType(type) {
@@ -531,7 +557,9 @@ export function wizardToggleCode() {
 
 export function wizardSetCount(count) {
     wizardState.questionCount = count;
-    setState({ view: 'wizard' }); // Re-render
+    // Update just the input, not full re-render
+    const input = document.querySelector('.question-count-input');
+    if (input) input.value = count;
 }
 
 export function wizardNext() {

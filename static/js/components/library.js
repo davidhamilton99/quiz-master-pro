@@ -128,7 +128,9 @@ function renderCard(quiz, progressList) {
             <div class="quiz-card-footer">
                 <div class="quiz-card-main-actions">
                     <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();window.app.showQuizOptions(${quiz.id})">${progress ? 'Resume' : 'Start'}</button>
-                    <button class="btn btn-sm btn-ghost flashcard-btn" onclick="event.stopPropagation();window.app.startFlashcards(${quiz.id})" title="Flashcards">🃏</button>
+                    <button class="btn btn-sm btn-secondary flashcard-btn" onclick="event.stopPropagation();window.app.startFlashcards(${quiz.id})" title="Study with Flashcards">
+                        <span style="margin-right:4px">🃏</span>Cards
+                    </button>
                 </div>
                 <div class="quiz-card-actions">
                     <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();window.app.showExportModal(${quiz.id})" title="Export">📤</button>
