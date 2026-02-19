@@ -38,7 +38,7 @@ function parseQuestion(lines, startIndex) {
     
     const questionText = line
         .replace(/^\d+\./, '')
-        .replace(/\[(order|match|tf|truefalse)\]/gi, '')
+        .replace(/\[(order|match|tf|truefalse|multi)\]/gi, '')
         .trim();
     
     const question = {
