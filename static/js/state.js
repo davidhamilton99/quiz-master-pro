@@ -46,6 +46,8 @@ let state = {
     timerMinutes: 15,
     timeRemaining: 900,
     quizStartTime: null,
+    questionStartTime: null,   // Timestamp when current question was shown
+    questionTimes: {},         // {questionIndex: totalMs} per-question time tracking
     
     // Results
     quizResults: null,

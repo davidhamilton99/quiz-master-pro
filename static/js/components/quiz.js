@@ -1079,13 +1079,26 @@ export function orderDragEnd(e) {
 
 // ==================== NAVIGATION ====================
 
+function recordQuestionTime() {
+    const state = getState();
+    if (state.questionStartTime) {
+        const elapsed = Date.now() - state.questionStartTime;
+        const times = { ...state.questionTimes };
+        const idx = state.currentQuestionIndex;
+        times[idx] = (times[idx] || 0) + elapsed;
+        setState({ questionTimes: times, questionStartTime: Date.now() }, true);
+    }
+}
+
 export function nextQuestion() {
     const state = getState();
     if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
-        setState({ 
+        recordQuestionTime();
+        setState({
             currentQuestionIndex: state.currentQuestionIndex + 1,
             showAnswer: false,
-            matchingSelectedLeft: null  // Clear selection when changing questions
+            matchingSelectedLeft: null,
+            questionStartTime: Date.now()
         });
         saveQuizProgress();
     }
@@ -1094,10 +1107,12 @@ export function nextQuestion() {
 export function prevQuestion() {
     const state = getState();
     if (state.currentQuestionIndex > 0) {
-        setState({ 
+        recordQuestionTime();
+        setState({
             currentQuestionIndex: state.currentQuestionIndex - 1,
             showAnswer: false,
-            matchingSelectedLeft: null  // Clear selection when changing questions
+            matchingSelectedLeft: null,
+            questionStartTime: Date.now()
         });
         saveQuizProgress();
     }
@@ -1106,10 +1121,12 @@ export function prevQuestion() {
 export function goToQuestion(index) {
     const state = getState();
     if (index >= 0 && index < state.currentQuiz.questions.length) {
-        setState({ 
+        recordQuestionTime();
+        setState({
             currentQuestionIndex: index,
             showAnswer: false,
-            matchingSelectedLeft: null  // Clear selection when changing questions
+            matchingSelectedLeft: null,
+            questionStartTime: Date.now()
         });
         saveQuizProgress();
     }
@@ -1158,7 +1175,9 @@ export async function startQuiz(quizId, options = {}) {
                 timerEnabled: savedProgress.timerEnabled ?? options.timed ?? false,
                 timerMinutes: options.minutes || 15,
                 timeRemaining: savedProgress.timeRemaining || ((options.minutes || 15) * 60),
-                quizStartTime: Date.now()
+                quizStartTime: Date.now(),
+                questionStartTime: Date.now(),
+                questionTimes: savedProgress.questionTimes || {}
             });
             
             showToast('Resuming quiz...', 'info');
@@ -1180,7 +1199,9 @@ export async function startQuiz(quizId, options = {}) {
                 timerEnabled: options.timed ?? false,
                 timerMinutes: options.minutes || 15,
                 timeRemaining: (options.minutes || 15) * 60,
-                quizStartTime: Date.now()
+                quizStartTime: Date.now(),
+                questionStartTime: Date.now(),
+                questionTimes: {}
             });
             
             if (window.sounds) window.sounds.playQuizStart();
@@ -1238,22 +1259,24 @@ export function stopTimer() {
 
 export async function submitQuiz() {
     stopTimer();
+    // Record time on the final question before submitting
+    recordQuestionTime();
     const state = getState();
     const quiz = state.currentQuiz;
-    
+
     let correct = 0;
     quiz.questions.forEach((q, i) => {
         if (checkIfCorrect(state.answers[i], q, i)) {
             correct++;
         }
     });
-    
+
     const total = quiz.questions.length;
     const percentage = Math.round((correct / total) * 100);
     const isPerfect = correct === total;
-    
+
     recordQuizComplete(correct, total);
-    
+
     // Celebrations
     if (window.sounds && window.animations) {
         if (isPerfect) {
@@ -1265,13 +1288,27 @@ export async function submitQuiz() {
             window.animations.showConfetti(false);
         }
     }
-    
+
+    // Build per-question answer map for backend performance tracking
+    const answersMap = {};
+    state.answers.forEach((ans, i) => {
+        if (ans !== undefined && ans !== null) {
+            answersMap[String(i)] = ans;
+        }
+    });
+
     try {
         await saveAttempt(quiz.id, {
             score: correct,
             total,
-            answers: state.answers,
-            timeSpent: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) : null
+            percentage,
+            answers: answersMap,
+            question_times: state.questionTimes || {},
+            study_mode: state.studyMode,
+            timed: state.timerEnabled,
+            max_streak: state.maxQuizStreak,
+            time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) :
+                (state.quizStartTime ? Math.round((Date.now() - state.quizStartTime) / 1000) : null)
         });
     } catch (e) {
         console.error('Failed to save attempt:', e);

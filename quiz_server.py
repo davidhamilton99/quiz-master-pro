@@ -136,9 +136,278 @@ def init_db():
     c.execute('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_quizzes_user ON quizzes(user_id)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_progress_user_quiz ON quiz_progress(user_id, quiz_id)')
-    
+
+    # === Phase 1: Normalized question storage & certification support ===
+
+    c.execute('''CREATE TABLE IF NOT EXISTS certifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        vendor TEXT NOT NULL,
+        description TEXT,
+        passing_score INTEGER,
+        passing_scale TEXT DEFAULT 'percentage',
+        exam_duration_minutes INTEGER,
+        total_questions INTEGER,
+        is_active BOOLEAN DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS domains (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        certification_id INTEGER,
+        name TEXT NOT NULL,
+        code TEXT,
+        weight REAL,
+        parent_domain_id INTEGER,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (certification_id) REFERENCES certifications(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_domain_id) REFERENCES domains(id) ON DELETE SET NULL
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        quiz_id INTEGER NOT NULL,
+        question_index INTEGER NOT NULL,
+        question_text TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'choice',
+        options TEXT,
+        correct TEXT,
+        pairs TEXT,
+        code TEXT,
+        code_language TEXT,
+        image TEXT,
+        image_alt TEXT,
+        explanation TEXT,
+        difficulty INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS question_domains (
+        question_id INTEGER NOT NULL,
+        domain_id INTEGER NOT NULL,
+        PRIMARY KEY (question_id, domain_id),
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+        FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS question_performance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        times_seen INTEGER DEFAULT 0,
+        times_correct INTEGER DEFAULT 0,
+        times_incorrect INTEGER DEFAULT 0,
+        last_seen_at TIMESTAMP,
+        last_correct_at TIMESTAMP,
+        average_time_ms INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, question_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('CREATE INDEX IF NOT EXISTS idx_questions_quiz ON questions(quiz_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_questions_quiz_index ON questions(quiz_id, question_index)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_qd_domain ON question_domains(domain_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_qp_user ON question_performance(user_id)')
+
+    # === Phase 2: Certification tracking & exam simulation ===
+
+    c.execute('''CREATE TABLE IF NOT EXISTS user_certifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        certification_id INTEGER NOT NULL,
+        target_date DATE,
+        status TEXT DEFAULT 'studying',
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        UNIQUE(user_id, certification_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (certification_id) REFERENCES certifications(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS exam_simulations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        certification_id INTEGER NOT NULL,
+        score INTEGER NOT NULL,
+        total INTEGER NOT NULL,
+        percentage REAL NOT NULL,
+        passed BOOLEAN NOT NULL,
+        time_taken INTEGER,
+        time_limit INTEGER,
+        domain_scores TEXT NOT NULL,
+        answers TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (certification_id) REFERENCES certifications(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('CREATE INDEX IF NOT EXISTS idx_sim_user_cert ON exam_simulations(user_id, certification_id)')
+
+    # Add new columns to quizzes table (safe to run multiple times)
+    try:
+        c.execute('ALTER TABLE quizzes ADD COLUMN certification_id INTEGER REFERENCES certifications(id)')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        c.execute('ALTER TABLE quizzes ADD COLUMN is_migrated BOOLEAN DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     conn.commit()
     conn.close()
+
+# === Question Normalization Helpers ===
+
+def _insert_questions_for_quiz(c, quiz_id, questions_list):
+    """Insert parsed question objects into the normalized questions table."""
+    for idx, q in enumerate(questions_list):
+        c.execute('''INSERT INTO questions
+            (quiz_id, question_index, question_text, type, options, correct, pairs,
+             code, code_language, image, image_alt, explanation, difficulty)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (quiz_id, idx,
+             q.get('question', ''),
+             q.get('type', 'choice'),
+             json.dumps(q.get('options')) if q.get('options') is not None else None,
+             json.dumps(q.get('correct')) if q.get('correct') is not None else None,
+             json.dumps(q.get('pairs')) if q.get('pairs') is not None else None,
+             q.get('code'),
+             q.get('codeLanguage') or q.get('code_language'),
+             q.get('image'),
+             q.get('imageAlt') or q.get('image_alt'),
+             q.get('explanation'),
+             q.get('difficulty', 0)))
+
+def _read_questions_for_quiz(c, quiz_id):
+    """Read questions from normalized table and return as list of dicts matching frontend format."""
+    c.execute('SELECT * FROM questions WHERE quiz_id = ? AND is_active = 1 ORDER BY question_index', (quiz_id,))
+    rows = c.fetchall()
+    questions = []
+    for row in rows:
+        q = {
+            'id': row['id'],
+            'question': row['question_text'],
+            'type': row['type'],
+        }
+        if row['options'] is not None:
+            q['options'] = json.loads(row['options'])
+        if row['correct'] is not None:
+            q['correct'] = json.loads(row['correct'])
+        if row['pairs'] is not None:
+            q['pairs'] = json.loads(row['pairs'])
+        if row['code']:
+            q['code'] = row['code']
+        if row['code_language']:
+            q['codeLanguage'] = row['code_language']
+        if row['image']:
+            q['image'] = row['image']
+        if row['image_alt']:
+            q['imageAlt'] = row['image_alt']
+        if row['explanation']:
+            q['explanation'] = row['explanation']
+        questions.append(q)
+    return questions
+
+def _migrate_quiz(c, quiz_id, questions_json_str):
+    """Migrate a single quiz from JSON blob to normalized questions table."""
+    try:
+        questions_list = json.loads(questions_json_str)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not questions_list:
+        return False
+    _insert_questions_for_quiz(c, quiz_id, questions_list)
+    c.execute('UPDATE quizzes SET is_migrated = 1 WHERE id = ?', (quiz_id,))
+    return True
+
+def _update_question_performance(c, user_id, quiz_id, answers_data, question_times=None):
+    """Update question_performance table after an attempt.
+    answers_data: dict mapping question_index (str) -> user's answer
+    question_times: optional dict mapping question_index (str) -> time_ms
+    """
+    # Get question IDs for this quiz
+    c.execute('SELECT id, question_index, correct, type, pairs FROM questions WHERE quiz_id = ? ORDER BY question_index', (quiz_id,))
+    question_rows = c.fetchall()
+    if not question_rows:
+        return
+
+    for qrow in question_rows:
+        q_idx = str(qrow['question_index'])
+        if q_idx not in answers_data:
+            continue
+
+        user_answer = answers_data[q_idx]
+        correct_data = json.loads(qrow['correct']) if qrow['correct'] else []
+        q_type = qrow['type']
+
+        # Determine if answer is correct
+        is_correct = _check_answer_correct(user_answer, correct_data, q_type, qrow)
+
+        time_ms = question_times.get(q_idx) if question_times else None
+        now = datetime.now()
+
+        c.execute('''INSERT INTO question_performance
+            (user_id, question_id, times_seen, times_correct, times_incorrect,
+             last_seen_at, last_correct_at, average_time_ms)
+            VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, question_id) DO UPDATE SET
+            times_seen = times_seen + 1,
+            times_correct = times_correct + ?,
+            times_incorrect = times_incorrect + ?,
+            last_seen_at = ?,
+            last_correct_at = CASE WHEN ? = 1 THEN ? ELSE last_correct_at END,
+            average_time_ms = CASE
+                WHEN ? IS NOT NULL AND average_time_ms IS NOT NULL
+                THEN (average_time_ms * (times_seen - 1) + ?) / times_seen
+                WHEN ? IS NOT NULL THEN ?
+                ELSE average_time_ms END,
+            updated_at = ?''',
+            (user_id, qrow['id'],
+             1 if is_correct else 0,
+             0 if is_correct else 1,
+             now,
+             now if is_correct else None,
+             time_ms,
+             # ON CONFLICT params
+             1 if is_correct else 0,
+             0 if is_correct else 1,
+             now,
+             1 if is_correct else 0, now,
+             time_ms, time_ms,
+             time_ms, time_ms,
+             now))
+
+def _check_answer_correct(user_answer, correct_data, q_type, qrow):
+    """Check if a user's answer is correct for a given question."""
+    if user_answer is None:
+        return False
+    if q_type in ('choice', 'truefalse'):
+        if isinstance(correct_data, list) and len(correct_data) > 0:
+            if isinstance(user_answer, list):
+                return set(user_answer) == set(correct_data)
+            return user_answer == correct_data[0]
+        return user_answer == correct_data
+    elif q_type == 'matching':
+        # Matching is correct if all pairs are matched
+        if isinstance(user_answer, dict):
+            pairs = json.loads(qrow['pairs']) if qrow['pairs'] else []
+            return len(user_answer) == len(pairs)
+        return False
+    elif q_type == 'ordering':
+        if isinstance(user_answer, list):
+            expected = list(range(len(user_answer)))
+            actual = [item.get('origIndex', i) if isinstance(item, dict) else item for i, item in enumerate(user_answer)]
+            return actual == expected
+        return False
+    return False
 
 # === Auth Helpers ===
 
@@ -291,7 +560,11 @@ def get_quizzes():
     c.execute('SELECT * FROM quizzes WHERE user_id = ? ORDER BY last_modified DESC', (request.user_id,))
     quizzes = [dict(r) for r in c.fetchall()]
     for q in quizzes:
-        q['questions'] = json.loads(q['questions'])
+        # Dual-path: read from normalized table if migrated
+        if q.get('is_migrated'):
+            q['questions'] = _read_questions_for_quiz(c, q['id'])
+        else:
+            q['questions'] = json.loads(q['questions'])
     conn.close()
     return jsonify({'quizzes': quizzes})
 
@@ -302,14 +575,19 @@ def create_quiz():
     title = data.get('title', '').strip()
     if not title:
         return jsonify({'error': 'Title required'}), 400
-    
+
+    questions_list = data.get('questions', [])
     conn = get_db()
     c = conn.cursor()
-    c.execute('INSERT INTO quizzes (user_id, title, description, questions, color) VALUES (?, ?, ?, ?, ?)',
-        (request.user_id, title, data.get('description', ''), json.dumps(data.get('questions', [])), data.get('color', '#6366f1')))
+    # Dual-write: JSON blob + normalized questions table
+    c.execute('INSERT INTO quizzes (user_id, title, description, questions, color, certification_id, is_migrated) VALUES (?, ?, ?, ?, ?, ?, 1)',
+        (request.user_id, title, data.get('description', ''), json.dumps(questions_list),
+         data.get('color', '#6366f1'), data.get('certification_id')))
+    quiz_id = c.lastrowid
+    _insert_questions_for_quiz(c, quiz_id, questions_list)
     conn.commit()
     conn.close()
-    return jsonify({'message': 'Created', 'quiz_id': c.lastrowid}), 201
+    return jsonify({'message': 'Created', 'quiz_id': quiz_id}), 201
 
 @app.route('/api/quizzes/<int:id>', methods=['GET'])
 @token_required
@@ -318,23 +596,34 @@ def get_quiz(id):
     c = conn.cursor()
     c.execute('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', (id, request.user_id))
     quiz = c.fetchone()
-    conn.close()
-    
+
     if not quiz:
+        conn.close()
         return jsonify({'error': 'Not found'}), 404
-    
+
     q = dict(quiz)
-    q['questions'] = json.loads(q['questions'])
+    # Dual-path: read from normalized table if migrated, else JSON blob
+    if q.get('is_migrated'):
+        q['questions'] = _read_questions_for_quiz(c, id)
+    else:
+        q['questions'] = json.loads(q['questions'])
+    conn.close()
     return jsonify({'quiz': q})
 
 @app.route('/api/quizzes/<int:id>', methods=['PUT'])
 @token_required
 def update_quiz(id):
     data = request.get_json()
+    questions_list = data.get('questions', [])
     conn = get_db()
     c = conn.cursor()
-    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, last_modified=? WHERE id=? AND user_id=?',
-        (data.get('title'), data.get('description', ''), json.dumps(data.get('questions', [])), data.get('color', '#6366f1'), datetime.now(), id, request.user_id))
+    # Dual-write: update JSON blob AND normalized questions
+    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, certification_id=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
+        (data.get('title'), data.get('description', ''), json.dumps(questions_list),
+         data.get('color', '#6366f1'), data.get('certification_id'), datetime.now(), id, request.user_id))
+    # Replace normalized questions: delete old, insert new
+    c.execute('DELETE FROM questions WHERE quiz_id = ?', (id,))
+    _insert_questions_for_quiz(c, id, questions_list)
     conn.commit()
     conn.close()
     return jsonify({'message': 'Updated'})
@@ -360,6 +649,16 @@ def record_attempt(id):
         (id, request.user_id, data.get('score', 0), data.get('total', 0), data.get('percentage', 0),
          json.dumps(data.get('answers', {})), data.get('study_mode', False), data.get('timed', False),
          data.get('max_streak', 0), data.get('time_taken')))
+
+    # Update per-question performance tracking
+    try:
+        answers_data = data.get('answers', {})
+        question_times = data.get('question_times', {})
+        if isinstance(answers_data, dict):
+            _update_question_performance(c, request.user_id, id, answers_data, question_times or None)
+    except Exception as e:
+        print(f"Warning: question_performance update failed: {e}")
+
     conn.commit()
     conn.close()
     return jsonify({'message': 'Recorded'}), 201
@@ -566,8 +865,11 @@ def get_all_progress():
     
     try:
         c.execute('''
-            SELECT p.*, q.title as quiz_title, 
-                   json_array_length(q.questions) as total_questions
+            SELECT p.*, q.title as quiz_title,
+                   CASE WHEN q.is_migrated = 1
+                        THEN (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id AND is_active = 1)
+                        ELSE json_array_length(q.questions)
+                   END as total_questions
             FROM quiz_progress p
             JOIN quizzes q ON p.quiz_id = q.id
             WHERE p.user_id = ?
@@ -590,6 +892,407 @@ def get_all_progress():
         conn.close()
         print(f"Progress table not found: {e}")
         return jsonify({'progress': []})
+
+# === Migration & Certification Routes ===
+
+@app.route('/api/migrate', methods=['POST'])
+@token_required
+def migrate_quizzes():
+    """Migrate all non-migrated quizzes from JSON blob to normalized questions table."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT id, questions FROM quizzes WHERE user_id = ? AND is_migrated = 0', (request.user_id,))
+    rows = c.fetchall()
+    migrated = 0
+    for row in rows:
+        if _migrate_quiz(c, row['id'], row['questions']):
+            migrated += 1
+    conn.commit()
+    conn.close()
+    return jsonify({'message': f'Migrated {migrated} quizzes', 'migrated': migrated})
+
+@app.route('/api/certifications', methods=['GET'])
+def get_certifications():
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('SELECT * FROM certifications WHERE is_active = 1 ORDER BY vendor, name')
+        certs = [dict(r) for r in c.fetchall()]
+    except sqlite3.OperationalError:
+        certs = []
+    conn.close()
+    return jsonify({'certifications': certs})
+
+@app.route('/api/certifications/<int:id>', methods=['GET'])
+def get_certification(id):
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('SELECT * FROM certifications WHERE id = ?', (id,))
+        cert = c.fetchone()
+        if not cert:
+            conn.close()
+            return jsonify({'error': 'Not found'}), 404
+        cert = dict(cert)
+        c.execute('SELECT * FROM domains WHERE certification_id = ? ORDER BY sort_order, code', (id,))
+        cert['domains'] = [dict(r) for r in c.fetchall()]
+    except sqlite3.OperationalError:
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    conn.close()
+    return jsonify({'certification': cert})
+
+@app.route('/api/certifications', methods=['POST'])
+@token_required
+def create_certification():
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('''INSERT INTO certifications (code, name, vendor, description, passing_score, passing_scale, exam_duration_minutes, total_questions)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            (data['code'], data['name'], data['vendor'], data.get('description'),
+             data.get('passing_score'), data.get('passing_scale', 'percentage'),
+             data.get('exam_duration_minutes'), data.get('total_questions')))
+        cert_id = c.lastrowid
+
+        # Insert domains if provided
+        for i, domain in enumerate(data.get('domains', [])):
+            c.execute('''INSERT INTO domains (certification_id, name, code, weight, sort_order)
+                VALUES (?, ?, ?, ?, ?)''',
+                (cert_id, domain['name'], domain.get('code'), domain.get('weight'), i))
+
+        conn.commit()
+        return jsonify({'message': 'Created', 'certification_id': cert_id}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Certification code already exists'}), 409
+    finally:
+        conn.close()
+
+# === Phase 2: User Certifications, Domain Performance, Exam Simulation ===
+
+@app.route('/api/user-certifications', methods=['GET'])
+@token_required
+def get_user_certifications():
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('''SELECT uc.*, c.name, c.vendor, c.code, c.passing_score, c.passing_scale,
+                      c.exam_duration_minutes, c.total_questions
+                FROM user_certifications uc
+                JOIN certifications c ON uc.certification_id = c.id
+                WHERE uc.user_id = ?
+                ORDER BY uc.started_at DESC''', (request.user_id,))
+        rows = [dict(r) for r in c.fetchall()]
+    except sqlite3.OperationalError:
+        rows = []
+    conn.close()
+    return jsonify({'user_certifications': rows})
+
+@app.route('/api/user-certifications', methods=['POST'])
+@token_required
+def enroll_certification():
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('''INSERT INTO user_certifications (user_id, certification_id, target_date)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, certification_id) DO UPDATE SET
+            target_date = excluded.target_date, status = 'studying' ''',
+            (request.user_id, data['certification_id'], data.get('target_date')))
+        conn.commit()
+        return jsonify({'message': 'Enrolled'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    finally:
+        conn.close()
+
+@app.route('/api/user-certifications/<int:cert_id>', methods=['DELETE'])
+@token_required
+def unenroll_certification(cert_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM user_certifications WHERE user_id = ? AND certification_id = ?',
+              (request.user_id, cert_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Unenrolled'})
+
+@app.route('/api/quizzes/<int:quiz_id>/domains', methods=['PUT'])
+@token_required
+def assign_question_domains(quiz_id):
+    """Assign domain tags to questions in a quiz.
+    Body: {question_domains: {question_id: [domain_id, ...]}}
+    """
+    data = request.get_json()
+    question_domain_map = data.get('question_domains', {})
+    conn = get_db()
+    c = conn.cursor()
+
+    # Verify quiz ownership
+    c.execute('SELECT id FROM quizzes WHERE id = ? AND user_id = ?', (quiz_id, request.user_id))
+    if not c.fetchone():
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+
+    for q_id_str, domain_ids in question_domain_map.items():
+        q_id = int(q_id_str)
+        # Clear existing domains for this question
+        c.execute('DELETE FROM question_domains WHERE question_id = ?', (q_id,))
+        # Insert new domain associations
+        for d_id in domain_ids:
+            try:
+                c.execute('INSERT INTO question_domains (question_id, domain_id) VALUES (?, ?)', (q_id, d_id))
+            except sqlite3.IntegrityError:
+                pass
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Domains assigned'})
+
+@app.route('/api/certifications/<int:cert_id>/performance', methods=['GET'])
+@token_required
+def get_cert_performance(cert_id):
+    """Get domain-level performance breakdown for a certification."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Get domains for this cert
+    c.execute('SELECT * FROM domains WHERE certification_id = ? ORDER BY sort_order', (cert_id,))
+    domains = [dict(r) for r in c.fetchall()]
+
+    for domain in domains:
+        c.execute('''SELECT
+                COALESCE(SUM(qp.times_seen), 0) as total_seen,
+                COALESCE(SUM(qp.times_correct), 0) as total_correct,
+                COALESCE(SUM(qp.times_incorrect), 0) as total_incorrect,
+                MAX(qp.last_seen_at) as last_studied,
+                COUNT(DISTINCT qp.question_id) as unique_questions
+            FROM question_performance qp
+            JOIN question_domains qd ON qp.question_id = qd.question_id
+            WHERE qp.user_id = ? AND qd.domain_id = ?''',
+            (request.user_id, domain['id']))
+        stats = dict(c.fetchone())
+        domain['total_seen'] = stats['total_seen']
+        domain['total_correct'] = stats['total_correct']
+        domain['total_incorrect'] = stats['total_incorrect']
+        domain['accuracy'] = round(stats['total_correct'] / stats['total_seen'] * 100, 1) if stats['total_seen'] > 0 else 0
+        domain['last_studied'] = stats['last_studied']
+        domain['unique_questions'] = stats['unique_questions']
+
+    conn.close()
+    return jsonify({'domains': domains})
+
+@app.route('/api/certifications/<int:cert_id>/trends', methods=['GET'])
+@token_required
+def get_cert_trends(cert_id):
+    """Get score trends over time for exam simulations."""
+    conn = get_db()
+    c = conn.cursor()
+
+    c.execute('''SELECT id, score, total, percentage, passed, time_taken, domain_scores, created_at
+        FROM exam_simulations
+        WHERE user_id = ? AND certification_id = ?
+        ORDER BY created_at DESC
+        LIMIT 20''', (request.user_id, cert_id))
+    sims = []
+    for row in c.fetchall():
+        s = dict(row)
+        s['domain_scores'] = json.loads(s['domain_scores'])
+        sims.append(s)
+
+    conn.close()
+    return jsonify({'simulations': sims})
+
+@app.route('/api/questions/weak', methods=['GET'])
+@token_required
+def get_weak_questions():
+    """Get questions the user struggles with most."""
+    limit = request.args.get('limit', 20, type=int)
+    cert_id = request.args.get('certification_id', type=int)
+    conn = get_db()
+    c = conn.cursor()
+
+    query = '''SELECT qp.*, q.question_text, q.type, q.options, q.explanation, q.quiz_id,
+                      qz.title as quiz_title
+        FROM question_performance qp
+        JOIN questions q ON qp.question_id = q.id
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        WHERE qp.user_id = ? AND qp.times_seen >= 2 AND qp.times_incorrect > 0'''
+    params = [request.user_id]
+
+    if cert_id:
+        query += ''' AND EXISTS (
+            SELECT 1 FROM question_domains qd
+            JOIN domains d ON qd.domain_id = d.id
+            WHERE qd.question_id = qp.question_id AND d.certification_id = ?)'''
+        params.append(cert_id)
+
+    query += ' ORDER BY CAST(qp.times_incorrect AS REAL) / qp.times_seen DESC LIMIT ?'
+    params.append(limit)
+
+    c.execute(query, params)
+    questions = []
+    for row in c.fetchall():
+        q = dict(row)
+        if q.get('options'):
+            q['options'] = json.loads(q['options'])
+        questions.append(q)
+
+    conn.close()
+    return jsonify({'questions': questions})
+
+@app.route('/api/certifications/<int:cert_id>/simulate', methods=['POST'])
+@token_required
+def start_exam_simulation(cert_id):
+    """Generate an exam simulation with domain-weighted question selection."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Get cert info
+    c.execute('SELECT * FROM certifications WHERE id = ?', (cert_id,))
+    cert = c.fetchone()
+    if not cert:
+        conn.close()
+        return jsonify({'error': 'Certification not found'}), 404
+    cert = dict(cert)
+
+    # Get domains with weights
+    c.execute('SELECT * FROM domains WHERE certification_id = ? ORDER BY sort_order', (cert_id,))
+    domains = [dict(r) for r in c.fetchall()]
+
+    total_questions = cert.get('total_questions') or 60
+    data = request.get_json() or {}
+    requested_count = data.get('question_count', total_questions)
+
+    import random
+    selected_questions = []
+
+    for domain in domains:
+        weight = domain.get('weight') or (1.0 / len(domains))
+        domain_count = max(1, round(requested_count * weight))
+
+        # Get questions tagged with this domain
+        c.execute('''SELECT q.* FROM questions q
+            JOIN question_domains qd ON q.id = qd.question_id
+            WHERE qd.domain_id = ? AND q.is_active = 1''', (domain['id'],))
+        domain_questions = [dict(r) for r in c.fetchall()]
+
+        if domain_questions:
+            chosen = random.sample(domain_questions, min(domain_count, len(domain_questions)))
+            for q in chosen:
+                q['domain_id'] = domain['id']
+                q['domain_name'] = domain['name']
+                q['domain_code'] = domain['code']
+            selected_questions.extend(chosen)
+
+    # If not enough domain-tagged questions, try to fill from user's quizzes linked to this cert
+    if len(selected_questions) < requested_count // 2:
+        c.execute('''SELECT q.* FROM questions q
+            JOIN quizzes qz ON q.quiz_id = qz.id
+            WHERE qz.user_id = ? AND qz.certification_id = ? AND q.is_active = 1''',
+            (request.user_id, cert_id))
+        fallback = [dict(r) for r in c.fetchall()]
+        existing_ids = {q['id'] for q in selected_questions}
+        extras = [q for q in fallback if q['id'] not in existing_ids]
+        needed = requested_count - len(selected_questions)
+        if extras:
+            selected_questions.extend(random.sample(extras, min(needed, len(extras))))
+
+    random.shuffle(selected_questions)
+
+    # Convert to frontend format
+    sim_questions = []
+    for row in selected_questions:
+        q = {
+            'id': row['id'],
+            'question': row['question_text'],
+            'type': row['type'],
+        }
+        if row.get('options'):
+            q['options'] = json.loads(row['options'])
+        if row.get('correct'):
+            q['correct'] = json.loads(row['correct'])
+        if row.get('pairs'):
+            q['pairs'] = json.loads(row['pairs'])
+        if row.get('code'):
+            q['code'] = row['code']
+        if row.get('code_language'):
+            q['codeLanguage'] = row['code_language']
+        if row.get('explanation'):
+            q['explanation'] = row['explanation']
+        if row.get('domain_name'):
+            q['domainName'] = row['domain_name']
+            q['domainCode'] = row.get('domain_code')
+        sim_questions.append(q)
+
+    conn.close()
+
+    return jsonify({
+        'simulation': {
+            'certification': cert,
+            'questions': sim_questions,
+            'time_limit': (cert.get('exam_duration_minutes') or 90) * 60,
+            'passing_score': cert.get('passing_score'),
+            'passing_scale': cert.get('passing_scale'),
+            'total_questions': len(sim_questions),
+            'domains': domains
+        }
+    })
+
+@app.route('/api/exam-simulations', methods=['POST'])
+@token_required
+def record_exam_simulation():
+    """Record a completed exam simulation."""
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''INSERT INTO exam_simulations
+        (user_id, certification_id, score, total, percentage, passed, time_taken, time_limit, domain_scores, answers)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (request.user_id, data['certification_id'], data['score'], data['total'],
+         data['percentage'], data['passed'], data.get('time_taken'),
+         data.get('time_limit'), json.dumps(data.get('domain_scores', {})),
+         json.dumps(data.get('answers', []))))
+
+    # Also update question_performance for each answered question
+    try:
+        answers_data = data.get('answers_detail', {})
+        question_times = data.get('question_times', {})
+        if isinstance(answers_data, dict):
+            # For simulations, we need to map by question_id not index
+            for q_id_str, user_answer in answers_data.items():
+                q_id = int(q_id_str)
+                c.execute('SELECT correct, type, pairs FROM questions WHERE id = ?', (q_id,))
+                qrow = c.fetchone()
+                if not qrow:
+                    continue
+                correct_data = json.loads(qrow['correct']) if qrow['correct'] else []
+                is_correct = _check_answer_correct(user_answer, correct_data, qrow['type'], qrow)
+                time_ms = question_times.get(q_id_str)
+                now = datetime.now()
+                c.execute('''INSERT INTO question_performance
+                    (user_id, question_id, times_seen, times_correct, times_incorrect, last_seen_at, last_correct_at, average_time_ms)
+                    VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id, question_id) DO UPDATE SET
+                    times_seen = times_seen + 1,
+                    times_correct = times_correct + ?,
+                    times_incorrect = times_incorrect + ?,
+                    last_seen_at = ?,
+                    last_correct_at = CASE WHEN ? = 1 THEN ? ELSE last_correct_at END,
+                    updated_at = ?''',
+                    (request.user_id, q_id,
+                     1 if is_correct else 0, 0 if is_correct else 1,
+                     now, now if is_correct else None, time_ms,
+                     1 if is_correct else 0, 0 if is_correct else 1,
+                     now, 1 if is_correct else 0, now, now))
+    except Exception as e:
+        print(f"Warning: sim question_performance update failed: {e}")
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Simulation recorded'}), 201
 
 # === Study Guide Builder ===
 
@@ -1154,8 +1857,261 @@ def preview_study_guide():
 def health():
     return jsonify({'status': 'ok'})
 
+def seed_certifications():
+    """Seed the certifications and domains tables with initial IT certification data."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Check if already seeded
+    c.execute('SELECT COUNT(*) as cnt FROM certifications')
+    if c.fetchone()['cnt'] > 0:
+        conn.close()
+        return
+
+    certs = [
+        {
+            'code': 'comptia-a-core1-221-1101',
+            'name': 'CompTIA A+ Core 1 (220-1101)',
+            'vendor': 'CompTIA',
+            'description': 'Hardware, networking, mobile devices, virtualization, and troubleshooting',
+            'passing_score': 675, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 90, 'total_questions': 90,
+            'domains': [
+                {'name': 'Mobile Devices', 'code': '1.0', 'weight': 0.15},
+                {'name': 'Networking', 'code': '2.0', 'weight': 0.20},
+                {'name': 'Hardware', 'code': '3.0', 'weight': 0.25},
+                {'name': 'Virtualization and Cloud Computing', 'code': '4.0', 'weight': 0.11},
+                {'name': 'Hardware and Network Troubleshooting', 'code': '5.0', 'weight': 0.29},
+            ]
+        },
+        {
+            'code': 'comptia-a-core2-221-1102',
+            'name': 'CompTIA A+ Core 2 (220-1102)',
+            'vendor': 'CompTIA',
+            'description': 'Operating systems, security, software troubleshooting, and operational procedures',
+            'passing_score': 700, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 90, 'total_questions': 90,
+            'domains': [
+                {'name': 'Operating Systems', 'code': '1.0', 'weight': 0.31},
+                {'name': 'Security', 'code': '2.0', 'weight': 0.25},
+                {'name': 'Software Troubleshooting', 'code': '3.0', 'weight': 0.22},
+                {'name': 'Operational Procedures', 'code': '4.0', 'weight': 0.22},
+            ]
+        },
+        {
+            'code': 'comptia-net-n10-009',
+            'name': 'CompTIA Network+ (N10-009)',
+            'vendor': 'CompTIA',
+            'description': 'Networking concepts, infrastructure, security, and troubleshooting',
+            'passing_score': 720, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 90, 'total_questions': 90,
+            'domains': [
+                {'name': 'Networking Concepts', 'code': '1.0', 'weight': 0.23},
+                {'name': 'Network Implementation', 'code': '2.0', 'weight': 0.19},
+                {'name': 'Network Operations', 'code': '3.0', 'weight': 0.16},
+                {'name': 'Network Security', 'code': '4.0', 'weight': 0.19},
+                {'name': 'Network Troubleshooting', 'code': '5.0', 'weight': 0.23},
+            ]
+        },
+        {
+            'code': 'comptia-sec-sy0-701',
+            'name': 'CompTIA Security+ (SY0-701)',
+            'vendor': 'CompTIA',
+            'description': 'Security concepts, threats, architecture, operations, and program management',
+            'passing_score': 750, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 90, 'total_questions': 90,
+            'domains': [
+                {'name': 'General Security Concepts', 'code': '1.0', 'weight': 0.12},
+                {'name': 'Threats, Vulnerabilities, and Mitigations', 'code': '2.0', 'weight': 0.22},
+                {'name': 'Security Architecture', 'code': '3.0', 'weight': 0.18},
+                {'name': 'Security Operations', 'code': '4.0', 'weight': 0.28},
+                {'name': 'Security Program Management and Oversight', 'code': '5.0', 'weight': 0.20},
+            ]
+        },
+        {
+            'code': 'comptia-cysa-cs0-003',
+            'name': 'CompTIA CySA+ (CS0-003)',
+            'vendor': 'CompTIA',
+            'description': 'Security operations, vulnerability management, incident response, and reporting',
+            'passing_score': 750, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 165, 'total_questions': 85,
+            'domains': [
+                {'name': 'Security Operations', 'code': '1.0', 'weight': 0.33},
+                {'name': 'Vulnerability Management', 'code': '2.0', 'weight': 0.30},
+                {'name': 'Incident Response and Management', 'code': '3.0', 'weight': 0.20},
+                {'name': 'Reporting and Communication', 'code': '4.0', 'weight': 0.17},
+            ]
+        },
+        {
+            'code': 'comptia-pentest-pt0-003',
+            'name': 'CompTIA PenTest+ (PT0-003)',
+            'vendor': 'CompTIA',
+            'description': 'Penetration testing, vulnerability assessment, and management',
+            'passing_score': 750, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 165, 'total_questions': 85,
+            'domains': [
+                {'name': 'Planning and Scoping', 'code': '1.0', 'weight': 0.14},
+                {'name': 'Information Gathering and Vulnerability Scanning', 'code': '2.0', 'weight': 0.22},
+                {'name': 'Attacks and Exploits', 'code': '3.0', 'weight': 0.30},
+                {'name': 'Reporting and Communication', 'code': '4.0', 'weight': 0.18},
+                {'name': 'Tools and Code Analysis', 'code': '5.0', 'weight': 0.16},
+            ]
+        },
+        {
+            'code': 'comptia-casp-cas-004',
+            'name': 'CompTIA CASP+ (CAS-004)',
+            'vendor': 'CompTIA',
+            'description': 'Advanced security architecture, operations, engineering, and governance',
+            'passing_score': None, 'passing_scale': 'pass_fail',
+            'exam_duration_minutes': 165, 'total_questions': 90,
+            'domains': [
+                {'name': 'Security Architecture', 'code': '1.0', 'weight': 0.29},
+                {'name': 'Security Operations', 'code': '2.0', 'weight': 0.30},
+                {'name': 'Security Engineering and Cryptography', 'code': '3.0', 'weight': 0.26},
+                {'name': 'Governance, Risk, and Compliance', 'code': '4.0', 'weight': 0.15},
+            ]
+        },
+        {
+            'code': 'cisco-ccna-200-301',
+            'name': 'Cisco CCNA (200-301)',
+            'vendor': 'Cisco',
+            'description': 'Network fundamentals, access, IP connectivity, services, security, and automation',
+            'passing_score': 825, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 120, 'total_questions': 100,
+            'domains': [
+                {'name': 'Network Fundamentals', 'code': '1.0', 'weight': 0.20},
+                {'name': 'Network Access', 'code': '2.0', 'weight': 0.20},
+                {'name': 'IP Connectivity', 'code': '3.0', 'weight': 0.25},
+                {'name': 'IP Services', 'code': '4.0', 'weight': 0.10},
+                {'name': 'Security Fundamentals', 'code': '5.0', 'weight': 0.15},
+                {'name': 'Automation and Programmability', 'code': '6.0', 'weight': 0.10},
+            ]
+        },
+        {
+            'code': 'aws-saa-c03',
+            'name': 'AWS Solutions Architect Associate (SAA-C03)',
+            'vendor': 'AWS',
+            'description': 'Designing resilient, performant, secure, and cost-optimized architectures',
+            'passing_score': 720, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 130, 'total_questions': 65,
+            'domains': [
+                {'name': 'Design Secure Architectures', 'code': '1.0', 'weight': 0.30},
+                {'name': 'Design Resilient Architectures', 'code': '2.0', 'weight': 0.26},
+                {'name': 'Design High-Performing Architectures', 'code': '3.0', 'weight': 0.24},
+                {'name': 'Design Cost-Optimized Architectures', 'code': '4.0', 'weight': 0.20},
+            ]
+        },
+        {
+            'code': 'aws-dva-c02',
+            'name': 'AWS Developer Associate (DVA-C02)',
+            'vendor': 'AWS',
+            'description': 'Development, deployment, security, and troubleshooting of AWS applications',
+            'passing_score': 720, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 130, 'total_questions': 65,
+            'domains': [
+                {'name': 'Development with AWS Services', 'code': '1.0', 'weight': 0.32},
+                {'name': 'Security', 'code': '2.0', 'weight': 0.26},
+                {'name': 'Deployment', 'code': '3.0', 'weight': 0.24},
+                {'name': 'Troubleshooting and Optimization', 'code': '4.0', 'weight': 0.18},
+            ]
+        },
+        {
+            'code': 'aws-soa-c02',
+            'name': 'AWS SysOps Administrator Associate (SOA-C02)',
+            'vendor': 'AWS',
+            'description': 'Deployment, management, networking, security, and automation on AWS',
+            'passing_score': 720, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 130, 'total_questions': 65,
+            'domains': [
+                {'name': 'Monitoring, Logging, and Remediation', 'code': '1.0', 'weight': 0.20},
+                {'name': 'Reliability and Business Continuity', 'code': '2.0', 'weight': 0.16},
+                {'name': 'Deployment, Provisioning, and Automation', 'code': '3.0', 'weight': 0.18},
+                {'name': 'Security and Compliance', 'code': '4.0', 'weight': 0.16},
+                {'name': 'Networking and Content Delivery', 'code': '5.0', 'weight': 0.18},
+                {'name': 'Cost and Performance Optimization', 'code': '6.0', 'weight': 0.12},
+            ]
+        },
+        {
+            'code': 'aws-clf-c02',
+            'name': 'AWS Cloud Practitioner (CLF-C02)',
+            'vendor': 'AWS',
+            'description': 'Cloud concepts, security, technology, and billing',
+            'passing_score': 700, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 90, 'total_questions': 65,
+            'domains': [
+                {'name': 'Cloud Concepts', 'code': '1.0', 'weight': 0.24},
+                {'name': 'Security and Compliance', 'code': '2.0', 'weight': 0.30},
+                {'name': 'Cloud Technology and Services', 'code': '3.0', 'weight': 0.34},
+                {'name': 'Billing, Pricing, and Support', 'code': '4.0', 'weight': 0.12},
+            ]
+        },
+        {
+            'code': 'az-900',
+            'name': 'Microsoft Azure Fundamentals (AZ-900)',
+            'vendor': 'Microsoft',
+            'description': 'Cloud concepts, Azure architecture, management, and governance',
+            'passing_score': 700, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 65, 'total_questions': 50,
+            'domains': [
+                {'name': 'Cloud Concepts', 'code': '1.0', 'weight': 0.25},
+                {'name': 'Azure Architecture and Services', 'code': '2.0', 'weight': 0.35},
+                {'name': 'Azure Management and Governance', 'code': '3.0', 'weight': 0.30},
+            ]
+        },
+        {
+            'code': 'az-104',
+            'name': 'Microsoft Azure Administrator (AZ-104)',
+            'vendor': 'Microsoft',
+            'description': 'Managing Azure identities, governance, storage, compute, and networks',
+            'passing_score': 700, 'passing_scale': 'scaled',
+            'exam_duration_minutes': 100, 'total_questions': 55,
+            'domains': [
+                {'name': 'Manage Azure Identities and Governance', 'code': '1.0', 'weight': 0.20},
+                {'name': 'Implement and Manage Storage', 'code': '2.0', 'weight': 0.15},
+                {'name': 'Deploy and Manage Azure Compute Resources', 'code': '3.0', 'weight': 0.20},
+                {'name': 'Implement and Manage Virtual Networking', 'code': '4.0', 'weight': 0.15},
+                {'name': 'Monitor and Maintain Azure Resources', 'code': '5.0', 'weight': 0.10},
+            ]
+        },
+        {
+            'code': 'gcp-ace',
+            'name': 'Google Cloud Associate Cloud Engineer',
+            'vendor': 'Google Cloud',
+            'description': 'Deploying, monitoring, and managing solutions on Google Cloud',
+            'passing_score': 70, 'passing_scale': 'percentage',
+            'exam_duration_minutes': 120, 'total_questions': 50,
+            'domains': [
+                {'name': 'Setting Up a Cloud Solution Environment', 'code': '1.0', 'weight': 0.20},
+                {'name': 'Planning and Configuring a Cloud Solution', 'code': '2.0', 'weight': 0.20},
+                {'name': 'Deploying and Implementing a Cloud Solution', 'code': '3.0', 'weight': 0.25},
+                {'name': 'Ensuring Successful Operation of a Cloud Solution', 'code': '4.0', 'weight': 0.20},
+                {'name': 'Configuring Access and Security', 'code': '5.0', 'weight': 0.15},
+            ]
+        },
+    ]
+
+    for cert_data in certs:
+        domains = cert_data.pop('domains')
+        try:
+            c.execute('''INSERT INTO certifications (code, name, vendor, description, passing_score, passing_scale, exam_duration_minutes, total_questions)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (cert_data['code'], cert_data['name'], cert_data['vendor'], cert_data['description'],
+                 cert_data['passing_score'], cert_data['passing_scale'],
+                 cert_data['exam_duration_minutes'], cert_data['total_questions']))
+            cert_id = c.lastrowid
+            for i, d in enumerate(domains):
+                c.execute('''INSERT INTO domains (certification_id, name, code, weight, sort_order)
+                    VALUES (?, ?, ?, ?, ?)''',
+                    (cert_id, d['name'], d['code'], d['weight'], i))
+        except sqlite3.IntegrityError:
+            continue  # Already exists
+
+    conn.commit()
+    conn.close()
+
 # Initialize database tables on module load (for WSGI)
 init_db()
+seed_certifications()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
