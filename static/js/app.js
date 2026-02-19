@@ -1,5 +1,5 @@
 /* Quiz Master Pro - Main Entry Point - v2.0 with Landing Page & Wizard */
-import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings } from './state.js';
+import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings, loadInProgressQuizzes } from './state.js';
 import { loadQuizzes, logout, createQuiz } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
 import { showToast } from './utils/toast.js';
@@ -22,6 +22,13 @@ import {
 import {
     renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
 } from './components/studyGuide.js';
+
+// Flashcards
+import {
+    renderFlashcards, initFlashcards, flipCard, nextCard, prevCard, markCard,
+    setFlashcardMode, shuffleCards, resetFlashcards, exitFlashcards,
+    flashcardTouchStart, flashcardTouchMove, flashcardTouchEnd
+} from './components/flashcards.js';
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
@@ -301,6 +308,9 @@ function render() {
             content = renderStudyGuide();
             setTimeout(initStudyGuideDragDrop, 50);
             break;
+        case 'flashcards':
+            content = renderFlashcards();
+            break;
         default:
             // Default based on auth state
             if (state.isAuthenticated) {
@@ -481,6 +491,28 @@ window.app = {
     sgDownload,
     sgReset,
     
+    // Flashcards
+    startFlashcards: async (quizId) => {
+        const { getQuiz } = await import('./services/api.js');
+        const quiz = await getQuiz(quizId);
+        initFlashcards(quiz);
+    },
+    flipCard,
+    nextCard,
+    prevCard,
+    markCard,
+    setFlashcardMode,
+    shuffleCards,
+    resetFlashcards,
+    exitFlashcards,
+    flashcardTouchStart,
+    flashcardTouchMove,
+    flashcardTouchEnd,
+    toggleFlashcardSettings: () => {
+        // TODO: Add settings modal
+        showToast('Settings coming soon!', 'info');
+    },
+    
     // Rewards
     showPendingRewards,
 };
@@ -498,6 +530,9 @@ async function init() {
         try {
             const quizzes = await loadQuizzes();
             setState({ quizzes });
+            
+            // Bug #1 fix: Load and cache in-progress quizzes
+            await loadInProgressQuizzes();
         } catch (e) {
             console.error('Failed to load quizzes:', e);
         }

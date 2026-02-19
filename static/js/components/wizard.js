@@ -194,8 +194,12 @@ function renderStep1() {
                 <div class="number-selector">
                     <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.max(5, ${s.questionCount} - 5))">−</button>
                     <span class="number-display">${s.questionCount}</span>
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(50, ${s.questionCount} + 5))">+</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(2000, ${s.questionCount} + 5))">+</button>
                 </div>
+                <p class="helper-text">Use +/- or type a number (5-2000)</p>
+                <input type="range" min="5" max="200" step="5" value="${s.questionCount}" 
+                    class="question-slider" 
+                    oninput="window.app.wizardSetCount(parseInt(this.value))">
             </div>
         </div>
         

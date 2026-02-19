@@ -1,0 +1,600 @@
+/* Flashcards CSS - Stunning 3D flip cards */
+
+/* ==================== Container ==================== */
+.flashcards-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ==================== Header ==================== */
+.flashcards-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    margin-bottom: 0.5rem;
+}
+
+.flashcards-title {
+    text-align: center;
+}
+
+.flashcards-title h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
+}
+
+.flashcards-counter {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+/* ==================== Progress Bar ==================== */
+.flashcards-progress {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.flashcards-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #8b5cf6, #ec4899);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* ==================== Stats Bar ==================== */
+.flashcards-stats {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.stat-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.stat-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.stat-chip.active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: #8b5cf6;
+    color: #c4b5fd;
+}
+
+.stat-chip.known.active {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: #22c55e;
+    color: #86efac;
+}
+
+.stat-chip.unknown.active {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+/* ==================== Card Area ==================== */
+.flashcards-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1500px;
+    position: relative;
+    min-height: 350px;
+    padding: 1rem;
+}
+
+/* ==================== 3D Card ==================== */
+.flashcard-wrapper {
+    width: 100%;
+    max-width: 500px;
+    height: 320px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.flashcard-wrapper.flipped {
+    transform: rotateY(180deg);
+}
+
+.flashcard {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 24px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.flashcard-front {
+    background: linear-gradient(145deg, #1e1e3f 0%, #2d2d5a 100%);
+}
+
+.flashcard-back {
+    background: linear-gradient(145deg, #1a3a2a 0%, #0d4a2a 100%);
+    transform: rotateY(180deg);
+}
+
+/* Card Badge */
+.flashcard-badge {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    padding: 0.25rem 0.75rem;
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: #c4b5fd;
+    font-weight: 500;
+}
+
+.answer-badge {
+    background: rgba(34, 197, 94, 0.3);
+    color: #86efac;
+}
+
+/* Card Content */
+.flashcard-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 1rem 0;
+    overflow-y: auto;
+}
+
+.flashcard-question,
+.flashcard-answer {
+    font-size: 1.25rem;
+    line-height: 1.6;
+    color: #fff;
+    max-width: 100%;
+}
+
+.flashcard-answer {
+    color: #86efac;
+}
+
+.flashcard-explanation {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: left;
+    width: 100%;
+}
+
+.flashcard-explanation strong {
+    color: #fbbf24;
+    font-size: 0.875rem;
+}
+
+.flashcard-explanation p {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    line-height: 1.5;
+}
+
+/* Card List (for matching/ordering) */
+.card-list {
+    text-align: left;
+    width: 100%;
+}
+
+.card-list-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 1rem;
+}
+
+.card-list-item:last-child {
+    border-bottom: none;
+}
+
+/* Card Hint */
+.flashcard-hint {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    opacity: 0.6;
+}
+
+/* ==================== Swipe Indicators ==================== */
+.swipe-indicator {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 1rem;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.swipe-indicator.visible {
+    opacity: 1;
+}
+
+.swipe-indicator span:first-child {
+    font-size: 2rem;
+}
+
+.swipe-indicator span:last-child {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.swipe-left {
+    left: 1rem;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+}
+
+.swipe-right {
+    right: 1rem;
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+}
+
+/* ==================== Card Status ==================== */
+.card-status {
+    text-align: center;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 8px;
+    margin: 0.5rem auto;
+    max-width: 200px;
+}
+
+.card-status.known {
+    background: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+}
+
+.card-status.unknown {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+/* ==================== Controls ==================== */
+.flashcards-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    gap: 1rem;
+}
+
+.fc-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.75rem 1.25rem;
+    border: 2px solid transparent;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 80px;
+}
+
+.fc-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.fc-btn-icon {
+    font-size: 1.5rem;
+}
+
+.fc-btn-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.fc-btn-unknown:hover,
+.fc-btn-unknown.active {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+.fc-btn-known:hover,
+.fc-btn-known.active {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: #22c55e;
+    color: #86efac;
+}
+
+/* Navigation Controls */
+.fc-nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.fc-nav-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fc-nav-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.fc-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.fc-flip-btn {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    border: none;
+    border-radius: 999px;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fc-flip-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+/* ==================== Keyboard Hints ==================== */
+.keyboard-hints {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0.5;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+    .keyboard-hints {
+        display: none;
+    }
+}
+
+/* ==================== Empty State ==================== */
+.flashcards-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.flashcards-empty p {
+    font-size: 1.125rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+.final-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.final-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-radius: 16px;
+}
+
+.final-stat.known {
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.final-stat.unknown {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.final-stat.known .stat-number {
+    color: #22c55e;
+}
+
+.final-stat.unknown .stat-number {
+    color: #ef4444;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* ==================== Question Slider (Wizard) ==================== */
+.question-slider {
+    width: 100%;
+    margin-top: 0.75rem;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    outline: none;
+}
+
+.question-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+    transition: transform 0.2s ease;
+}
+
+.question-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.question-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+/* ==================== Animations ==================== */
+@keyframes cardEnter {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.flashcard-wrapper {
+    animation: cardEnter 0.3s ease;
+}
+
+/* ==================== Responsive ==================== */
+@media (max-width: 480px) {
+    .flashcards-area {
+        min-height: 280px;
+        padding: 0.5rem;
+    }
+    
+    .flashcard-wrapper {
+        height: 260px;
+    }
+    
+    .flashcard {
+        padding: 1rem;
+        border-radius: 16px;
+    }
+    
+    .flashcard-question,
+    .flashcard-answer {
+        font-size: 1rem;
+    }
+    
+    .flashcards-controls {
+        padding: 0.75rem 0;
+    }
+    
+    .fc-btn {
+        padding: 0.5rem 0.75rem;
+        min-width: 60px;
+    }
+    
+    .fc-btn-icon {
+        font-size: 1.25rem;
+    }
+    
+    .fc-btn-label {
+        font-size: 0.65rem;
+    }
+    
+    .fc-flip-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* ==================== Library Card Flashcard Button ==================== */
+.quiz-card-main-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.flashcard-btn {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2)) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+}
+
+.flashcard-btn:hover {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3)) !important;
+    transform: scale(1.05);
+}
+
+/* ==================== Dark Mode Enhancements ==================== */
+@media (prefers-color-scheme: dark) {
+    .flashcard-front {
+        background: linear-gradient(145deg, #1e1e3f 0%, #2d2d5a 100%);
+    }
+    
+    .flashcard-back {
+        background: linear-gradient(145deg, #1a3a2a 0%, #0d4a2a 100%);
+    }
+}
