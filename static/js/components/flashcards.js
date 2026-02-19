@@ -143,7 +143,7 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
-                 onclick="window.app.fcFlip()">
+                 >
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -517,6 +517,7 @@ export function fcTouchStart(e) {
     touch.startY = e.touches[0].clientY;
     touch.currentX = touch.startX;
     touch.isDragging = false;
+    touch.moved = false;
 }
 
 export function fcTouchMove(e) {
@@ -527,6 +528,9 @@ export function fcTouchMove(e) {
     const deltaY = Math.abs(e.touches[0].clientY - touch.startY);
     
     // Only handle horizontal swipes
+    if (Math.abs(deltaX) > 10 || deltaY > 10) {
+        touch.moved = true;
+    }
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
         touch.isDragging = true;
         e.preventDefault();
@@ -571,18 +575,20 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    // Handle swipe
+    // Handle swipe - only act if it was a real swipe, not an aborted drag
     if (touch.isDragging && Math.abs(deltaX) > 100) {
         if (fc.isFlipped) {
-            // Rate based on swipe direction - instant transition
             fcRate(deltaX > 0 ? 'good' : 'again');
         } else {
-            // If not flipped, flip first
             fcFlip();
         }
+    } else if (!touch.moved) {
+        // Pure tap with no movement - allow flip
+        fcFlip();
     }
+    // If touch.moved but didn't complete swipe - do nothing (cancelled swipe)
     
-    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
+    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, moved: false };
 }
 
 // ==================== Keyboard ====================
