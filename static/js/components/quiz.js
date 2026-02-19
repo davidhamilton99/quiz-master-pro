@@ -216,7 +216,7 @@ export function renderQuiz() {
                     ${getTypeBadge(q.type)}
                     ${state.flaggedQuestions.has(state.currentQuestionIndex) ? '<span class="badge badge-warning">Flagged</span>' : ''}
                 </div>
-                <h2 class="question-text">${escapeHtml(q.question)}</h2>
+                <h2 class="question-text">${escapeHtml(q.question.replace(/^\[multi\]\s*/i, ""))}</h2>
             </div>
             ${q.code ? renderCodeBlock(q.code) : ''}
             ${renderQuestionType(q, state.currentQuestionIndex)}

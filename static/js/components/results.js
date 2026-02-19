@@ -131,7 +131,7 @@ export function renderReview() {
                             <div class="review-item card ${isCorrect ? 'correct' : 'incorrect'}">
                                 <div class="review-header">
                                     <span class="review-status">${isCorrect ? '✓' : '✗'}</span>
-                                    <span class="review-question">Q${i + 1}: ${escapeHtml(q.question)}</span>
+                                    <span class="review-question">Q${i + 1}: ${escapeHtml(q.question.replace(/^\[multi\]\s*/i, ""))}</span>
                                 </div>
                                 ${q.code ? `<pre class="code-block"><code>${escapeHtml(q.code)}</code></pre>` : ''}
                                 ${renderReviewAnswer(q, userAnswer, isCorrect)}
