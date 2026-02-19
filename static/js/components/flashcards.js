@@ -81,7 +81,10 @@ export function renderFlashcards() {
     }
 
     return `
-    <div class="fc2-container">
+    <div class="fc2-container" 
+         ontouchstart="window.app.fcTouchStart(event)"
+         ontouchmove="window.app.fcTouchMove(event)" 
+         ontouchend="window.app.fcTouchEnd(event)">
         
         <!-- Top Bar -->
         <div class="fc2-topbar">
@@ -140,10 +143,7 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
-                 onclick="window.app.fcFlip()"
-                 ontouchstart="window.app.fcTouchStart(event)"
-                 ontouchmove="window.app.fcTouchMove(event)"
-                 ontouchend="window.app.fcTouchEnd(event)">
+                 onclick="window.app.fcFlip()">
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -215,7 +215,7 @@ export function renderFlashcards() {
         
         <!-- Bottom Navigation -->
         <div class="fc2-bottom-nav">
-            <button class="fc2-nav-btn" onclick="window.app.fcPrev()" ontouchend="event.stopPropagation(); window.app.fcPrev()" ${fc.currentIndex === 0 ? 'disabled' : ''}>
+            <button class="fc2-nav-btn" onclick="window.app.fcPrev()" ${fc.currentIndex === 0 ? 'disabled' : ''}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 18l-6-6 6-6"/>
                 </svg>
@@ -225,7 +225,7 @@ export function renderFlashcards() {
                 ${fc.isFlipped ? 'Tap card or press Space' : 'Flip Card'}
             </button>
             
-            <button class="fc2-nav-btn" onclick="window.app.fcNext()" ontouchend="event.stopPropagation(); window.app.fcNext()" ${fc.currentIndex >= total - 1 ? 'disabled' : ''}>
+            <button class="fc2-nav-btn" onclick="window.app.fcNext()" ${fc.currentIndex >= total - 1 ? 'disabled' : ''}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 18l6-6-6-6"/>
                 </svg>
@@ -496,8 +496,6 @@ export function fcTouchMove(e) {
     // Only handle horizontal swipes
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
         touch.isDragging = true;
-    }
-    if (touch.isDragging) {
         e.preventDefault();
         
         const card = document.getElementById('fc2-card');
@@ -540,19 +538,17 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
+    // Handle swipe
     if (touch.isDragging && Math.abs(deltaX) > 100) {
-        // Completed swipe
         if (fc.isFlipped) {
+            // Rate based on swipe direction - instant transition
             fcRate(deltaX > 0 ? 'good' : 'again');
         } else {
+            // If not flipped, flip first
             fcFlip();
         }
-    } else if (!touch.isDragging) {
-        // Tap - flip
-        fcFlip();
     }
-    // Aborted swipe - do nothing
-
+    
     touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 }
 
