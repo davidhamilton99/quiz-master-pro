@@ -143,7 +143,7 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
-                 onclick="window.app.fcFlip()">
+>
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -557,7 +557,11 @@ export function fcTouchMove(e) {
 
 export function fcTouchEnd(e) {
     const deltaX = touch.currentX - touch.startX;
-    const totalMovement = Math.abs(deltaX) + Math.abs(touch.currentY - touch.startY);
+    const deltaY = Math.abs(touch.currentY - touch.startY);
+    const totalMovement = Math.abs(deltaX) + deltaY;
+
+    // Always prevent the synthetic click the browser fires after touchend
+    e.preventDefault();
     
     // Reset card position
     const card = document.getElementById('fc2-card');
@@ -571,19 +575,18 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
     if (touch.isDragging && Math.abs(deltaX) > 100) {
-        // Completed swipe - always prevent synthetic click
-        e.preventDefault();
+        // Completed swipe
         if (fc.isFlipped) {
             fcRate(deltaX > 0 ? 'good' : 'again');
         } else {
             fcFlip();
         }
-    } else if (touch.isDragging || totalMovement > 10) {
-        // Aborted swipe - suppress the synthetic click so card doesn't flip
-        e.preventDefault();
+    } else if (totalMovement < 10) {
+        // Pure tap - flip the card
+        fcFlip();
     }
-    // Pure tap (no movement): don't preventDefault, let onclick fire naturally
-    
+    // Anything else = aborted swipe, do nothing
+
     touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false };
 }
 
