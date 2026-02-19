@@ -130,13 +130,13 @@
 .fc2-card-area {
     flex: 1;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
     padding: 1rem;
     perspective: 2000px;
     position: relative;
     min-height: 0;
-    overflow-y: auto;
+    overflow: visible;
 }
 
 /* Card Stack Effect */
@@ -196,19 +196,39 @@
 }
 
 .fc2-card.exit-left {
-    animation: exitLeft 0.15s ease-out forwards;
+    animation: exitLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .fc2-card.exit-right {
-    animation: exitRight 0.15s ease-out forwards;
+    animation: exitRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.fc2-card.enter-left {
+    animation: enterLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.fc2-card.enter-right {
+    animation: enterRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes exitLeft {
-    to { transform: translateX(-100%); opacity: 0; }
+    from { transform: translateX(0) scale(1); opacity: 1; }
+    to   { transform: translateX(-60%) scale(0.9); opacity: 0; }
 }
 
 @keyframes exitRight {
-    to { transform: translateX(100%); opacity: 0; }
+    from { transform: translateX(0) scale(1); opacity: 1; }
+    to   { transform: translateX(60%) scale(0.9); opacity: 0; }
+}
+
+@keyframes enterLeft {
+    from { transform: translateX(60%) scale(0.9); opacity: 0; }
+    to   { transform: translateX(0) scale(1); opacity: 1; }
+}
+
+@keyframes enterRight {
+    from { transform: translateX(-60%) scale(0.9); opacity: 0; }
+    to   { transform: translateX(0) scale(1); opacity: 1; }
 }
 
 .fc2-card.rated {
@@ -829,9 +849,9 @@
         bottom: 140px;
         padding: 0.5rem;
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: center;
-        overflow-y: auto;
+        overflow: visible;
     }
     
     /* Card fills available space but stays proportional */

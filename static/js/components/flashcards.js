@@ -353,6 +353,31 @@ function getTypeName(type) {
 
 // ==================== Actions ====================
 
+
+// Animate card transition: exit current, update state, enter new
+function animateCardTransition(direction, callback) {
+    const card = document.getElementById('fc2-card');
+    const exitClass = direction === 'next' ? 'exit-left' : 'exit-right';
+    const enterClass = direction === 'next' ? 'enter-left' : 'enter-right';
+
+    if (card) {
+        card.classList.add(exitClass);
+        setTimeout(() => {
+            callback();
+            // After setState re-renders, apply enter animation
+            requestAnimationFrame(() => {
+                const newCard = document.getElementById('fc2-card');
+                if (newCard) {
+                    newCard.classList.add(enterClass);
+                    setTimeout(() => newCard.classList.remove(enterClass), 310);
+                }
+            });
+        }, 280);
+    } else {
+        callback();
+    }
+}
+
 export function fcFlip() {
     fc.isFlipped = !fc.isFlipped;
     
@@ -368,21 +393,26 @@ export function fcFlip() {
 
 export function fcNext() {
     if (fc.currentIndex < fc.cards.length - 1) {
-        fc.currentIndex++;
-        fc.isFlipped = false;
-        setState({ view: 'flashcards' });
+        animateCardTransition('next', () => {
+            fc.currentIndex++;
+            fc.isFlipped = false;
+            setState({ view: 'flashcards' });
+        });
     } else if (fc.currentIndex === fc.cards.length - 1) {
-        // Go to completion
-        fc.currentIndex++;
-        setState({ view: 'flashcards' });
+        animateCardTransition('next', () => {
+            fc.currentIndex++;
+            setState({ view: 'flashcards' });
+        });
     }
 }
 
 export function fcPrev() {
     if (fc.currentIndex > 0) {
-        fc.currentIndex--;
-        fc.isFlipped = false;
-        setState({ view: 'flashcards' });
+        animateCardTransition('prev', () => {
+            fc.currentIndex--;
+            fc.isFlipped = false;
+            setState({ view: 'flashcards' });
+        });
     }
 }
 
@@ -402,16 +432,19 @@ export function fcRate(rating) {
     fc.sessionStats[rating]++;
     fc.sessionStats.seen++;
     
-    // Instant advance - no delay
+    // Animated advance
     if (fc.autoAdvance) {
         if (fc.currentIndex < fc.cards.length - 1) {
-            fc.currentIndex++;
-            fc.isFlipped = false;
-            setState({ view: 'flashcards' });
+            animateCardTransition('next', () => {
+                fc.currentIndex++;
+                fc.isFlipped = false;
+                setState({ view: 'flashcards' });
+            });
         } else {
-            // Go to completion
-            fc.currentIndex++;
-            setState({ view: 'flashcards' });
+            animateCardTransition('next', () => {
+                fc.currentIndex++;
+                setState({ view: 'flashcards' });
+            });
         }
     }
 }
