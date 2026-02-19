@@ -6,7 +6,8 @@ import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { 
-    renderLibrary, setSearch, setSort, setCategory, clearFilters, toggleMenu, 
+    renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
+    setSort, setCategory, clearFilters, toggleMenu, 
     confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu 
 } from './components/library-v3.js';
 import {
@@ -280,7 +281,7 @@ function render() {
             content = renderAuth();
             break;
         case 'library':
-            showHUD = true;
+            showHUD = false; // v3 library has its own header
             content = renderLibrary();
             break;
         case 'wizard':
@@ -317,7 +318,7 @@ function render() {
         default:
             // Default based on auth state
             if (state.isAuthenticated) {
-                showHUD = true;
+                showHUD = false; // v3 library has its own header
                 content = renderLibrary();
             } else {
                 content = renderLanding();
@@ -396,6 +397,9 @@ window.app = {
     
     // Library
     setSearch,
+    setSearchImmediate,
+    handleSearchInput,
+    clearSearch,
     setSort,
     setCategory,
     clearFilters,

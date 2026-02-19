@@ -9,9 +9,9 @@ let showStudyModal = null; // quiz ID when modal is open
 
 export function renderLibrary() {
     const state = getState();
-    const quizzes = getFilteredQuizzes();
-    const categories = [...new Set(state.quizzes.filter(q => q.description).map(q => q.description))].sort();
-    const total = state.quizzes.reduce((s, q) => s + (q.questions?.length || 0), 0);
+    const quizzes = getFilteredQuizzes(state);
+    const categories = [...new Set((state.quizzes || []).filter(q => q.description).map(q => q.description))].sort();
+    const total = (state.quizzes || []).reduce((s, q) => s + (q.questions?.length || 0), 0);
     const progressList = getInProgressQuizzesCached();
     const profile = getProfile();
     const levelInfo = getLevelInfo();
@@ -19,7 +19,7 @@ export function renderLibrary() {
     // Get in-progress quizzes for "Continue Studying" section
     const inProgressQuizzes = progressList
         .map(p => {
-            const quiz = state.quizzes.find(q => q.id === p.quizId);
+            const quiz = (state.quizzes || []).find(q => q.id === p.quizId);
             return quiz ? { ...quiz, progress: p } : null;
         })
         .filter(Boolean)
@@ -27,9 +27,12 @@ export function renderLibrary() {
     
     // Get recent quizzes (excluding in-progress)
     const inProgressIds = new Set(progressList.map(p => p.quizId));
-    const recentQuizzes = state.quizzes
+    const recentQuizzes = (state.quizzes || [])
         .filter(q => !inProgressIds.has(q.id))
         .slice(0, 6);
+
+    // Debug - can remove later
+    console.log('Library render - quizzes:', state.quizzes?.length, 'filtered:', quizzes.length);
 
     return `
     <!-- Redesigned Header -->
@@ -155,24 +158,26 @@ export function renderLibrary() {
                             <input 
                                 type="text" 
                                 class="search-input" 
+                                id="library-search"
                                 placeholder="Search your quizzes..."
-                                value="${state.searchQuery || ''}"
-                                oninput="window.app.setSearch(this.value)"
+                                value="${escapeHtml(state.searchQuery || '')}"
+                                oninput="window.app.handleSearchInput(this.value)"
+                                onkeydown="if(event.key==='Enter') window.app.setSearchImmediate(this.value)"
                             >
                             ${state.searchQuery ? `
-                                <button class="search-clear" onclick="window.app.setSearch('')">×</button>
+                                <button class="search-clear" onclick="window.app.clearSearch()">×</button>
                             ` : ''}
                         </div>
                         
                         <div class="filter-group">
                             <select class="filter-select" onchange="window.app.setSort(this.value)">
-                                <option value="recent" ${state.sortBy === 'recent' ? 'selected' : ''}>Recent</option>
+                                <option value="recent" ${(state.sortBy || 'recent') === 'recent' ? 'selected' : ''}>Recent</option>
                                 <option value="name" ${state.sortBy === 'name' ? 'selected' : ''}>Name A-Z</option>
                                 <option value="questions" ${state.sortBy === 'questions' ? 'selected' : ''}>Most Questions</option>
                             </select>
                             
                             <select class="filter-select" onchange="window.app.setCategory(this.value)">
-                                <option value="">All Categories</option>
+                                <option value="" ${!state.categoryFilter ? 'selected' : ''}>All Categories</option>
                                 ${categories.map(cat => `
                                     <option value="${escapeHtml(cat)}" ${state.categoryFilter === cat ? 'selected' : ''}>
                                         ${escapeHtml(cat)}
@@ -425,40 +430,114 @@ function getRandomGradient() {
     return gradients[Math.floor(Math.random() * gradients.length)];
 }
 
-function getFilteredQuizzes() {
-    const state = getState();
-    let q = [...state.quizzes];
-    
-    if (state.searchQuery) {
-        const s = state.searchQuery.toLowerCase();
-        q = q.filter(x => 
-            x.title.toLowerCase().includes(s) || 
-            (x.description && x.description.toLowerCase().includes(s))
-        );
+function getFilteredQuizzes(state) {
+    // If state not passed, get it
+    if (!state) {
+        state = getState();
     }
     
-    if (state.categoryFilter) {
-        q = q.filter(x => x.description === state.categoryFilter);
+    const quizzes = state.quizzes;
+    
+    // Make sure quizzes is an array
+    if (!quizzes || !Array.isArray(quizzes)) {
+        console.warn('state.quizzes is not an array:', quizzes);
+        return [];
     }
     
-    switch (state.sortBy) {
+    let q = quizzes.slice(); // Copy array
+    
+    console.log('getFilteredQuizzes - input count:', q.length);
+    
+    // Only filter if there's an actual search query
+    const searchQuery = (state.searchQuery || '').trim().toLowerCase();
+    if (searchQuery) {
+        q = q.filter(x => {
+            const title = (x.title || '').toLowerCase();
+            const desc = (x.description || '').toLowerCase();
+            return title.includes(searchQuery) || desc.includes(searchQuery);
+        });
+        console.log('After search filter:', q.length);
+    }
+    
+    // Only filter by category if one is selected (non-empty string)
+    const categoryFilter = (state.categoryFilter || '').trim();
+    if (categoryFilter) {
+        q = q.filter(x => (x.description || '') === categoryFilter);
+        console.log('After category filter:', q.length);
+    }
+    
+    // Sort
+    const sortBy = state.sortBy || 'recent';
+    switch (sortBy) {
         case 'name':
-            q.sort((a, b) => a.title.localeCompare(b.title));
+            q.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
             break;
         case 'questions':
             q.sort((a, b) => (b.questions?.length || 0) - (a.questions?.length || 0));
             break;
         case 'recent':
         default:
-            q.sort((a, b) => new Date(b.last_modified || b.created_at) - new Date(a.last_modified || a.created_at));
+            q.sort((a, b) => {
+                const dateA = new Date(a.last_modified || a.created_at || 0);
+                const dateB = new Date(b.last_modified || b.created_at || 0);
+                return dateB - dateA;
+            });
     }
     
+    console.log('getFilteredQuizzes - output count:', q.length);
     return q;
 }
 
+// Local search state (to avoid re-renders while typing)
+let localSearchQuery = '';
+let searchDebounceTimer = null;
+
 // Actions
 export function setSearch(query) {
+    localSearchQuery = query;
+    
+    // Debounce the actual state update
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        setState({ searchQuery: query });
+    }, 300);
+}
+
+export function setSearchImmediate(query) {
+    localSearchQuery = query;
+    clearTimeout(searchDebounceTimer);
     setState({ searchQuery: query });
+}
+
+export function handleSearchInput(query) {
+    localSearchQuery = query;
+    
+    // Debounce: wait for user to stop typing
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        // Save cursor position
+        const input = document.getElementById('library-search');
+        const cursorPos = input?.selectionStart;
+        
+        setState({ searchQuery: query });
+        
+        // Restore focus and cursor after re-render
+        setTimeout(() => {
+            const newInput = document.getElementById('library-search');
+            if (newInput) {
+                newInput.focus();
+                if (cursorPos !== undefined) {
+                    newInput.setSelectionRange(cursorPos, cursorPos);
+                }
+            }
+        }, 0);
+    }, 400);
+}
+
+export function clearSearch() {
+    localSearchQuery = '';
+    clearTimeout(searchDebounceTimer);
+    setState({ searchQuery: '' });
 }
 
 export function setSort(sortBy) {
