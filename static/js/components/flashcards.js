@@ -364,12 +364,10 @@ export function fcFlip() {
 
 export function fcNext() {
     if (fc.currentIndex < fc.cards.length - 1) {
-        animateCardExit('left', () => {
-            fc.currentIndex++;
-            fc.isFlipped = false;
-            setState({ view: 'flashcards' });
-        });
-    } else {
+        fc.currentIndex++;
+        fc.isFlipped = false;
+        setState({ view: 'flashcards' });
+    } else if (fc.currentIndex === fc.cards.length - 1) {
         // Go to completion
         fc.currentIndex++;
         setState({ view: 'flashcards' });
@@ -378,11 +376,9 @@ export function fcNext() {
 
 export function fcPrev() {
     if (fc.currentIndex > 0) {
-        animateCardExit('right', () => {
-            fc.currentIndex--;
-            fc.isFlipped = false;
-            setState({ view: 'flashcards' });
-        });
+        fc.currentIndex--;
+        fc.isFlipped = false;
+        setState({ view: 'flashcards' });
     }
 }
 
@@ -402,15 +398,17 @@ export function fcRate(rating) {
     fc.sessionStats[rating]++;
     fc.sessionStats.seen++;
     
-    // Visual feedback
-    const cardEl = document.getElementById('fc2-card');
-    if (cardEl) {
-        cardEl.classList.add('rated', 'rated-' + rating);
-    }
-    
-    // Auto advance after short delay
+    // Instant advance - no delay
     if (fc.autoAdvance) {
-        setTimeout(() => fcNext(), 400);
+        if (fc.currentIndex < fc.cards.length - 1) {
+            fc.currentIndex++;
+            fc.isFlipped = false;
+            setState({ view: 'flashcards' });
+        } else {
+            // Go to completion
+            fc.currentIndex++;
+            setState({ view: 'flashcards' });
+        }
     }
 }
 
@@ -474,18 +472,6 @@ export function exitFlashcards() {
     setState({ view: 'library' });
 }
 
-// ==================== Animations ====================
-
-function animateCardExit(direction, callback) {
-    const card = document.getElementById('fc2-card');
-    if (card) {
-        card.classList.add('exit-' + direction);
-        setTimeout(callback, 200);
-    } else {
-        callback();
-    }
-}
-
 // ==================== Touch Handling ====================
 
 export function fcTouchStart(e) {
@@ -537,7 +523,7 @@ export function fcTouchMove(e) {
 export function fcTouchEnd(e) {
     const deltaX = touch.currentX - touch.startX;
     
-    // Reset card
+    // Reset card position
     const card = document.getElementById('fc2-card');
     if (card) {
         card.style.transform = '';
@@ -549,17 +535,14 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
     // Handle swipe
-    if (touch.isDragging && Math.abs(deltaX) > 120) {
+    if (touch.isDragging && Math.abs(deltaX) > 100) {
         if (fc.isFlipped) {
-            // Rate based on swipe direction
+            // Rate based on swipe direction - instant transition
             fcRate(deltaX > 0 ? 'good' : 'again');
         } else {
             // If not flipped, flip first
             fcFlip();
         }
-    } else if (!touch.isDragging && Math.abs(deltaX) < 10) {
-        // Tap to flip
-        // Handled by onclick
     }
     
     touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
