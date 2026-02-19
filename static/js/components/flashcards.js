@@ -581,11 +581,11 @@ export function fcTouchEnd(e) {
         } else {
             fcFlip();
         }
-    } else if (totalMovement < 10) {
-        // Pure tap - flip the card
+    } else if (!touch.isDragging) {
+        // Never entered drag mode = tap, flip the card
         fcFlip();
     }
-    // Anything else = aborted swipe, do nothing
+    // isDragging but didn't reach threshold = aborted swipe, do nothing
 
     touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false };
 }
