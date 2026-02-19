@@ -496,6 +496,8 @@ export function fcTouchMove(e) {
     // Only handle horizontal swipes
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
         touch.isDragging = true;
+    }
+    if (touch.isDragging) {
         e.preventDefault();
         
         const card = document.getElementById('fc2-card');
