@@ -192,14 +192,14 @@ function renderStep1() {
             <div class="form-group">
                 <label class="label">Number of Questions</label>
                 <div class="number-input-group">
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.max(5, ${s.questionCount} - 10))">−10</button>
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.max(5, ${s.questionCount} - 1))">−</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-10)">−10</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-1)">−</button>
                     <input type="number" class="question-count-input" value="${s.questionCount}" 
-                           min="5" max="2000" 
+                           min="5" max="2000" id="question-count-input"
                            onchange="window.app.wizardSetCount(Math.min(2000, Math.max(5, parseInt(this.value) || 15)))"
                            onclick="this.select()">
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(2000, ${s.questionCount} + 1))">+</button>
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(2000, ${s.questionCount} + 10))">+10</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(1)">+</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(10)">+10</button>
                 </div>
                 <p class="helper-text">Type a number or use buttons (5-2000)</p>
             </div>
@@ -558,8 +558,15 @@ export function wizardToggleCode() {
 export function wizardSetCount(count) {
     wizardState.questionCount = count;
     // Update just the input, not full re-render
-    const input = document.querySelector('.question-count-input');
+    const input = document.getElementById('question-count-input');
     if (input) input.value = count;
+}
+
+export function wizardAdjustCount(delta) {
+    const newCount = Math.min(2000, Math.max(5, wizardState.questionCount + delta));
+    wizardState.questionCount = newCount;
+    const input = document.getElementById('question-count-input');
+    if (input) input.value = newCount;
 }
 
 export function wizardNext() {

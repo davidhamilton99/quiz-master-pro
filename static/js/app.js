@@ -5,7 +5,10 @@ import { ExportService, ImportService, showExportModal, showImportModal } from '
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
-import { renderLibrary, setSearch, setSort, setCategory, toggleMenu, confirmDelete } from './components/library.js';
+import { 
+    renderLibrary, setSearch, setSort, setCategory, clearFilters, toggleMenu, 
+    confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu 
+} from './components/library-v3.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
@@ -34,7 +37,7 @@ import {
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
 import { 
     renderWizard, resetWizard, wizardSetTitle, wizardSetCategory, wizardToggleType,
-    wizardToggleCode, wizardSetCount, wizardNext, wizardBack, wizardCopyPrompt, 
+    wizardToggleCode, wizardSetCount, wizardAdjustCount, wizardNext, wizardBack, wizardCopyPrompt, 
     wizardSetContent, wizardPreviewContent, wizardFinish, exitWizard
 } from './components/wizard.js';
 
@@ -395,8 +398,13 @@ window.app = {
     setSearch,
     setSort,
     setCategory,
+    clearFilters,
     toggleMenu,
     confirmDelete,
+    setViewMode,
+    openStudyModal,
+    closeStudyModal,
+    toggleCardMenu,
     
     // Create options
     showCreateOptions,
@@ -409,6 +417,7 @@ window.app = {
     wizardToggleType,
     wizardToggleCode,
     wizardSetCount,
+    wizardAdjustCount,
     wizardNext,
     wizardBack,
     wizardCopyPrompt,

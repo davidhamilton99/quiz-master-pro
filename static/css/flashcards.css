@@ -103,15 +103,15 @@
     justify-content: center;
     perspective: 1500px;
     position: relative;
-    min-height: 350px;
+    min-height: 400px;
     padding: 1rem;
 }
 
 /* ==================== 3D Card ==================== */
 .flashcard-wrapper {
     width: 100%;
-    max-width: 500px;
-    height: 320px;
+    max-width: 550px;
+    height: 380px;
     position: relative;
     transform-style: preserve-3d;
     transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -135,6 +135,7 @@
         0 25px 50px -12px rgba(0, 0, 0, 0.5),
         0 0 0 1px rgba(255, 255, 255, 0.1),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    overflow: hidden;
 }
 
 .flashcard-front {
@@ -148,15 +149,16 @@
 
 /* Card Badge */
 .flashcard-badge {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
+    display: inline-block;
     padding: 0.25rem 0.75rem;
     background: rgba(139, 92, 246, 0.3);
     border-radius: 999px;
     font-size: 0.75rem;
     color: #c4b5fd;
     font-weight: 500;
+    margin-bottom: 0.5rem;
+    align-self: flex-start;
+    flex-shrink: 0;
 }
 
 .answer-badge {
@@ -172,8 +174,8 @@
     justify-content: center;
     align-items: center;
     text-align: center;
-    padding: 1rem 0;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .flashcard-question,
