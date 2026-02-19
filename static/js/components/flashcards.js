@@ -81,10 +81,7 @@ export function renderFlashcards() {
     }
 
     return `
-    <div class="fc2-container" 
-         ontouchstart="window.app.fcTouchStart(event)"
-         ontouchmove="window.app.fcTouchMove(event)" 
-         ontouchend="window.app.fcTouchEnd(event)">
+    <div class="fc2-container">
         
         <!-- Top Bar -->
         <div class="fc2-topbar">
@@ -143,7 +140,10 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
-                 onclick="window.app.fcFlip()">
+                 onclick="window.app.fcFlip()"
+                 ontouchstart="window.app.fcTouchStart(event)"
+                 ontouchmove="window.app.fcTouchMove(event)"
+                 ontouchend="window.app.fcTouchEnd(event)">
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -484,7 +484,6 @@ export function fcTouchStart(e) {
     touch.startY = e.touches[0].clientY;
     touch.currentX = touch.startX;
     touch.isDragging = false;
-    touch.onCard = !!e.target.closest('.fc2-card-area');
 }
 
 export function fcTouchMove(e) {
@@ -539,23 +538,20 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    // Only act on interactions that started on the card
-    if (touch.onCard) {
-        if (touch.isDragging && Math.abs(deltaX) > 100) {
-            // Completed swipe
-            if (fc.isFlipped) {
-                fcRate(deltaX > 0 ? 'good' : 'again');
-            } else {
-                fcFlip();
-            }
-        } else if (!touch.isDragging) {
-            // Pure tap = flip
+    if (touch.isDragging && Math.abs(deltaX) > 100) {
+        // Completed swipe
+        if (fc.isFlipped) {
+            fcRate(deltaX > 0 ? 'good' : 'again');
+        } else {
             fcFlip();
         }
-        // isDragging but under threshold = aborted swipe, do nothing
+    } else if (!touch.isDragging) {
+        // Tap - flip
+        fcFlip();
     }
-    
-    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, onCard: false };
+    // Aborted swipe - do nothing
+
+    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 }
 
 // ==================== Keyboard ====================
