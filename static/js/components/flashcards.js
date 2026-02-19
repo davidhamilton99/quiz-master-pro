@@ -22,7 +22,7 @@ let touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 export function initFlashcards(quiz) {
     const cards = quiz.questions.map((q, i) => ({
         id: i,
-        front: q.question.replace(/^\[multi\]\s*/i, ""),
+        front: q.question.replace(/^\[multi\]\s*/i, ''),
         back: getAnswerText(q),
         explanation: q.explanation || null,
         type: q.type,
@@ -143,7 +143,7 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
-                 >
+                 onclick="window.app.fcFlip()">
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -354,17 +354,14 @@ function getTypeName(type) {
 // ==================== Actions ====================
 
 
-// Animate card transition: exit current, update state, enter new
 function animateCardTransition(direction, callback) {
     const card = document.getElementById('fc2-card');
     const exitClass = direction === 'next' ? 'exit-left' : 'exit-right';
     const enterClass = direction === 'next' ? 'enter-left' : 'enter-right';
-
     if (card) {
         card.classList.add(exitClass);
         setTimeout(() => {
             callback();
-            // After setState re-renders, apply enter animation
             requestAnimationFrame(() => {
                 const newCard = document.getElementById('fc2-card');
                 if (newCard) {
@@ -432,7 +429,6 @@ export function fcRate(rating) {
     fc.sessionStats[rating]++;
     fc.sessionStats.seen++;
     
-    // Animated advance
     if (fc.autoAdvance) {
         if (fc.currentIndex < fc.cards.length - 1) {
             animateCardTransition('next', () => {
@@ -516,22 +512,19 @@ export function fcTouchStart(e) {
     touch.startX = e.touches[0].clientX;
     touch.startY = e.touches[0].clientY;
     touch.currentX = touch.startX;
+    touch.currentY = touch.startY;
     touch.isDragging = false;
-    touch.moved = false;
-    touch.onCard = !!e.target.closest('#fc2-card');
 }
 
 export function fcTouchMove(e) {
     if (!touch.startX) return;
     
     touch.currentX = e.touches[0].clientX;
+    touch.currentY = e.touches[0].clientY;
     const deltaX = touch.currentX - touch.startX;
-    const deltaY = Math.abs(e.touches[0].clientY - touch.startY);
+    const deltaY = Math.abs(touch.currentY - touch.startY);
     
-    // Mark as moved if finger travels more than 8px in any direction
-    if (Math.abs(deltaX) > 8 || deltaY > 8) {
-        touch.moved = true;
-    }
+    // Only handle horizontal swipes
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
         touch.isDragging = true;
         e.preventDefault();
@@ -564,6 +557,7 @@ export function fcTouchMove(e) {
 
 export function fcTouchEnd(e) {
     const deltaX = touch.currentX - touch.startX;
+    const totalMovement = Math.abs(deltaX) + Math.abs(touch.currentY - touch.startY);
     
     // Reset card position
     const card = document.getElementById('fc2-card');
@@ -576,20 +570,21 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    // Handle swipe - only act if it was a real swipe, not an aborted drag
     if (touch.isDragging && Math.abs(deltaX) > 100) {
+        // Completed swipe - always prevent synthetic click
+        e.preventDefault();
         if (fc.isFlipped) {
             fcRate(deltaX > 0 ? 'good' : 'again');
         } else {
             fcFlip();
         }
-    } else if (!touch.moved && touch.onCard) {
-        // Pure tap with no movement on the card - flip
-        fcFlip();
+    } else if (touch.isDragging || totalMovement > 10) {
+        // Aborted swipe - suppress the synthetic click so card doesn't flip
+        e.preventDefault();
     }
-    // If touch.moved but didn't complete swipe - do nothing (cancelled swipe)
+    // Pure tap (no movement): don't preventDefault, let onclick fire naturally
     
-    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, moved: false, onCard: false };
+    touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false };
 }
 
 // ==================== Keyboard ====================
