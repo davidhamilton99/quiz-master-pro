@@ -332,3 +332,126 @@ export async function checkConnection() {
         return false;
     }
 }
+
+// ==================== Certification & Migration API ====================
+
+/**
+ * Migrate all non-migrated quizzes to normalized schema
+ */
+export async function migrateQuizzes() {
+    return await apiCall('/migrate', { method: 'POST' });
+}
+
+/**
+ * Get all available certifications
+ */
+export async function getCertifications() {
+    const data = await apiCall('/certifications');
+    return data.certifications || [];
+}
+
+/**
+ * Get a single certification with domains
+ */
+export async function getCertification(id) {
+    const data = await apiCall(`/certifications/${id}`);
+    return data.certification;
+}
+
+/**
+ * Create a new certification with domains
+ */
+export async function createCertification(payload) {
+    return await apiCall('/certifications', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+}
+
+// ==================== User Certifications ====================
+
+/**
+ * Get user's enrolled certifications
+ */
+export async function getUserCertifications() {
+    const data = await apiCall('/user-certifications');
+    return data.user_certifications || [];
+}
+
+/**
+ * Enroll in a certification track
+ */
+export async function enrollCertification(certificationId, targetDate = null) {
+    return await apiCall('/user-certifications', {
+        method: 'POST',
+        body: JSON.stringify({ certification_id: certificationId, target_date: targetDate })
+    });
+}
+
+/**
+ * Unenroll from a certification track
+ */
+export async function unenrollCertification(certId) {
+    return await apiCall(`/user-certifications/${certId}`, { method: 'DELETE' });
+}
+
+// ==================== Domain & Performance ====================
+
+/**
+ * Assign domains to questions in a quiz
+ */
+export async function assignQuestionDomains(quizId, questionDomainMap) {
+    return await apiCall(`/quizzes/${quizId}/domains`, {
+        method: 'PUT',
+        body: JSON.stringify({ question_domains: questionDomainMap })
+    });
+}
+
+/**
+ * Get domain-level performance for a certification
+ */
+export async function getCertPerformance(certId) {
+    const data = await apiCall(`/certifications/${certId}/performance`);
+    return data.domains || [];
+}
+
+/**
+ * Get score trends for exam simulations
+ */
+export async function getCertTrends(certId) {
+    const data = await apiCall(`/certifications/${certId}/trends`);
+    return data.simulations || [];
+}
+
+/**
+ * Get questions the user struggles with most
+ */
+export async function getWeakQuestions(certId = null, limit = 20) {
+    let url = `/questions/weak?limit=${limit}`;
+    if (certId) url += `&certification_id=${certId}`;
+    const data = await apiCall(url);
+    return data.questions || [];
+}
+
+// ==================== Exam Simulation ====================
+
+/**
+ * Start an exam simulation
+ */
+export async function startSimulation(certId, questionCount = null) {
+    const data = await apiCall(`/certifications/${certId}/simulate`, {
+        method: 'POST',
+        body: JSON.stringify({ question_count: questionCount })
+    });
+    return data.simulation;
+}
+
+/**
+ * Record a completed exam simulation
+ */
+export async function recordSimulation(payload) {
+    return await apiCall('/exam-simulations', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+}
