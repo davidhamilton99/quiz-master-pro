@@ -3,39 +3,6 @@ import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 
-// Auto-resize card to fit active face content
-function updateCardHeight() {
-    const card = document.getElementById('fc2-card');
-    if (!card) return;
-    const isFlipped = card.classList.contains('flipped');
-    const activeFace = card.querySelector(isFlipped ? '.fc2-card-back' : '.fc2-card-front');
-    if (!activeFace) return;
-    // Temporarily remove fixed height so we can measure scrollHeight
-    card.style.height = 'auto';
-    activeFace.style.height = 'auto';
-    activeFace.style.position = 'relative';
-    const naturalHeight = activeFace.scrollHeight;
-    const minHeight = 280;
-    const finalHeight = Math.max(naturalHeight, minHeight);
-    card.style.height = finalHeight + 'px';
-    // Restore absolute positioning on both faces
-    card.querySelectorAll('.fc2-card-face').forEach(face => {
-        face.style.position = 'absolute';
-        face.style.height = '100%';
-    });
-}
-
-// Observe DOM for card insertion and auto-size
-if (typeof window !== 'undefined') {
-    const observer = new MutationObserver(() => {
-        const card = document.getElementById('fc2-card');
-        if (card) updateCardHeight();
-    });
-    document.addEventListener('DOMContentLoaded', () => {
-        observer.observe(document.body, { childList: true, subtree: true });
-    });
-}
-
 // Flashcard state
 let fc = {
     quiz: null,
@@ -79,8 +46,12 @@ export function initFlashcards(quiz) {
 
 function getAnswerText(q) {
     switch (q.type) {
-        case 'truefalse':
-            return q.correct ? 'True ✓' : 'False ✗';
+        case 'truefalse': {
+            // Handle all formats: boolean true/false, string 'true'/'false', or index 0/1
+            const c = q.correct;
+            const isTrue = c === true || c === 'true' || c === 0;
+            return isTrue ? 'True ✓' : 'False ✗';
+        }
         case 'matching':
             return (q.options || []).map(opt => `${opt.left} → ${opt.right}`).join('\n');
         case 'ordering':
@@ -390,8 +361,6 @@ export function fcFlip() {
         card.classList.toggle('flipped', fc.isFlipped);
         // Update rating area visibility
         document.querySelector('.fc2-rating-area')?.classList.toggle('visible', fc.isFlipped);
-        // Resize card to fit the newly visible face
-        setTimeout(() => updateCardHeight(), 10);
     } else {
         setState({ view: 'flashcards' });
     }
