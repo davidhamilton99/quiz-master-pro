@@ -33,7 +33,7 @@ import {
     fcShuffle, fcRestart, fcStudyMissed, fcGoToCard,
     fcToggleMenu, fcToggleShortcuts, exitFlashcards,
     fcTouchStart, fcTouchMove, fcTouchEnd
-} from './components/flashcards-v2.js';
+} from './components/flashcards.js';
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
