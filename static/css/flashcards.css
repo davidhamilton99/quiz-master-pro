@@ -511,6 +511,46 @@
     border: none;
 }
 
+/* Number Input Group */
+.number-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.question-count-input {
+    width: 80px;
+    padding: 0.5rem;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #fff;
+    -moz-appearance: textfield;
+}
+
+.question-count-input::-webkit-outer-spin-button,
+.question-count-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.question-count-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.wizard-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    text-align: right;
+}
+
 /* ==================== Animations ==================== */
 @keyframes cardEnter {
     from {

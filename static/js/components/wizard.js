@@ -191,15 +191,17 @@ function renderStep1() {
             
             <div class="form-group">
                 <label class="label">Number of Questions</label>
-                <div class="number-selector">
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.max(5, ${s.questionCount} - 5))">−</button>
-                    <span class="number-display">${s.questionCount}</span>
-                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(2000, ${s.questionCount} + 5))">+</button>
+                <div class="number-input-group">
+                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.max(5, ${s.questionCount} - 10))">−10</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.max(5, ${s.questionCount} - 1))">−</button>
+                    <input type="number" class="question-count-input" value="${s.questionCount}" 
+                           min="5" max="2000" 
+                           onchange="window.app.wizardSetCount(Math.min(2000, Math.max(5, parseInt(this.value) || 15)))"
+                           onclick="this.select()">
+                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(2000, ${s.questionCount} + 1))">+</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardSetCount(Math.min(2000, ${s.questionCount} + 10))">+10</button>
                 </div>
-                <p class="helper-text">Use +/- or type a number (5-2000)</p>
-                <input type="range" min="5" max="200" step="5" value="${s.questionCount}" 
-                    class="question-slider" 
-                    oninput="window.app.wizardSetCount(parseInt(this.value))">
+                <p class="helper-text">Type a number or use buttons (5-2000)</p>
             </div>
         </div>
         
@@ -208,10 +210,11 @@ function renderStep1() {
             <button 
                 class="btn btn-primary btn-lg" 
                 onclick="window.app.wizardNext()"
-                ${!s.title.trim() ? 'disabled' : ''}
+                ${!s.title.trim() || s.questionTypes.length === 0 ? 'disabled' : ''}
             >
                 Next: Get Your AI Prompt →
             </button>
+            ${!s.title.trim() ? '<p class="wizard-hint">Enter a quiz title to continue</p>' : ''}
         </div>
     </div>
     `;

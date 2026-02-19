@@ -126,7 +126,10 @@ function renderCard(quiz, progressList) {
             <div class="quiz-card-meta"><span>📝 ${count}</span><span>📅 ${formatDate(quiz.last_modified || quiz.created_at)}</span></div>
             ${progress ? `<div class="in-progress-badge mt-2">⏸ Q${progress.questionIndex + 1}/${progress.total}</div>` : ''}
             <div class="quiz-card-footer">
-                <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();window.app.showQuizOptions(${quiz.id})">${progress ? 'Resume' : 'Start'}</button>
+                <div class="quiz-card-main-actions">
+                    <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();window.app.showQuizOptions(${quiz.id})">${progress ? 'Resume' : 'Start'}</button>
+                    <button class="btn btn-sm btn-ghost flashcard-btn" onclick="event.stopPropagation();window.app.startFlashcards(${quiz.id})" title="Flashcards">🃏</button>
+                </div>
                 <div class="quiz-card-actions">
                     <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();window.app.showExportModal(${quiz.id})" title="Export">📤</button>
                     <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();window.app.editQuiz(${quiz.id})" title="Edit">✏️</button>

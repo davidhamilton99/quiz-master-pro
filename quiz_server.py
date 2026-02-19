@@ -376,18 +376,33 @@ def get_profile():
     c.execute('SELECT id, username, email, created_at FROM users WHERE id = ?', (request.user_id,))
     user = dict(c.fetchone())
     
-    # Get or create profile
-    c.execute('SELECT * FROM user_profiles WHERE user_id = ?', (request.user_id,))
-    profile_row = c.fetchone()
+    # Get quiz count
+    c.execute('SELECT COUNT(*) as count FROM quizzes WHERE user_id = ?', (request.user_id,))
+    user['quiz_count'] = c.fetchone()['count']
     
-    if profile_row:
-        profile = dict(profile_row)
-        profile['achievements'] = json.loads(profile['achievements'] or '[]')
-        profile['settings'] = json.loads(profile['settings'] or '{}')
-    else:
-        # Create default profile
-        c.execute('''INSERT INTO user_profiles (user_id) VALUES (?)''', (request.user_id,))
-        conn.commit()
+    # Try to get or create profile (handle missing table gracefully)
+    try:
+        c.execute('SELECT * FROM user_profiles WHERE user_id = ?', (request.user_id,))
+        profile_row = c.fetchone()
+        
+        if profile_row:
+            profile = dict(profile_row)
+            profile['achievements'] = json.loads(profile['achievements'] or '[]')
+            profile['settings'] = json.loads(profile['settings'] or '{}')
+        else:
+            # Create default profile
+            c.execute('''INSERT INTO user_profiles (user_id) VALUES (?)''', (request.user_id,))
+            conn.commit()
+            profile = {
+                'xp': 0, 'level': 1, 'gems': 0, 'daily_streak': 0,
+                'last_active_date': None, 'achievements': [],
+                'total_answered': 0, 'total_correct': 0,
+                'quizzes_completed': 0, 'perfect_scores': 0,
+                'settings': {'soundEnabled': True, 'animationsEnabled': True}
+            }
+    except sqlite3.OperationalError as e:
+        # Table doesn't exist - return defaults
+        print(f"Profile table not found, returning defaults: {e}")
         profile = {
             'xp': 0, 'level': 1, 'gems': 0, 'daily_streak': 0,
             'last_active_date': None, 'achievements': [],
@@ -395,10 +410,6 @@ def get_profile():
             'quizzes_completed': 0, 'perfect_scores': 0,
             'settings': {'soundEnabled': True, 'animationsEnabled': True}
         }
-    
-    # Get quiz count
-    c.execute('SELECT COUNT(*) as count FROM quizzes WHERE user_id = ?', (request.user_id,))
-    user['quiz_count'] = c.fetchone()['count']
     
     conn.close()
     
@@ -553,26 +564,32 @@ def get_all_progress():
     conn = get_db()
     c = conn.cursor()
     
-    c.execute('''
-        SELECT p.*, q.title as quiz_title, 
-               json_array_length(q.questions) as total_questions
-        FROM quiz_progress p
-        JOIN quizzes q ON p.quiz_id = q.id
-        WHERE p.user_id = ?
-        ORDER BY p.updated_at DESC
-    ''', (request.user_id,))
-    
-    rows = c.fetchall()
-    conn.close()
-    
-    progress_list = []
-    for row in rows:
-        p = dict(row)
-        p['answers'] = json.loads(p['answers'] or '[]')
-        p['flagged'] = json.loads(p['flagged'] or '[]')
-        progress_list.append(p)
-    
-    return jsonify({'progress': progress_list})
+    try:
+        c.execute('''
+            SELECT p.*, q.title as quiz_title, 
+                   json_array_length(q.questions) as total_questions
+            FROM quiz_progress p
+            JOIN quizzes q ON p.quiz_id = q.id
+            WHERE p.user_id = ?
+            ORDER BY p.updated_at DESC
+        ''', (request.user_id,))
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        progress_list = []
+        for row in rows:
+            p = dict(row)
+            p['answers'] = json.loads(p['answers'] or '[]')
+            p['flagged'] = json.loads(p['flagged'] or '[]')
+            progress_list.append(p)
+        
+        return jsonify({'progress': progress_list})
+    except sqlite3.OperationalError as e:
+        # Table doesn't exist yet
+        conn.close()
+        print(f"Progress table not found: {e}")
+        return jsonify({'progress': []})
 
 # === Study Guide Builder ===
 
@@ -1137,6 +1154,8 @@ def preview_study_guide():
 def health():
     return jsonify({'status': 'ok'})
 
+# Initialize database tables on module load (for WSGI)
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
