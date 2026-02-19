@@ -518,6 +518,7 @@ export function fcTouchStart(e) {
     touch.currentX = touch.startX;
     touch.isDragging = false;
     touch.moved = false;
+    touch.onCard = !!e.target.closest('#fc2-card');
 }
 
 export function fcTouchMove(e) {
@@ -527,8 +528,8 @@ export function fcTouchMove(e) {
     const deltaX = touch.currentX - touch.startX;
     const deltaY = Math.abs(e.touches[0].clientY - touch.startY);
     
-    // Only handle horizontal swipes
-    if (Math.abs(deltaX) > 10 || deltaY > 10) {
+    // Mark as moved if finger travels more than 8px in any direction
+    if (Math.abs(deltaX) > 8 || deltaY > 8) {
         touch.moved = true;
     }
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
@@ -582,13 +583,13 @@ export function fcTouchEnd(e) {
         } else {
             fcFlip();
         }
-    } else if (!touch.moved) {
-        // Pure tap with no movement - allow flip
+    } else if (!touch.moved && touch.onCard) {
+        // Pure tap with no movement on the card - flip
         fcFlip();
     }
     // If touch.moved but didn't complete swipe - do nothing (cancelled swipe)
     
-    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, moved: false };
+    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, moved: false, onCard: false };
 }
 
 // ==================== Keyboard ====================
