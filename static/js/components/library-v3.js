@@ -1,761 +1,590 @@
-/* State Management - v2.0 with Database Sync */
+/* Library Component - v3.0 Quizlet-Inspired Redesign */
+import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
+import { logout, deleteQuiz } from '../services/api.js';
+import { escapeHtml, formatDate } from '../utils/dom.js';
 
-// Import API functions from the single source of truth (Bug #8 fix)
-import { 
-    apiCall, 
-    loadProfile as apiLoadProfile,
-    saveProfileToServer,
-    getQuizProgress,
-    saveQuizProgressToServer,
-    clearQuizProgressOnServer,
-    getAllProgress,
-    registerStateCallbacks
-} from './services/api.js';
+// View mode
+let viewMode = 'grid'; // 'grid' or 'list'
+let showStudyModal = null; // quiz ID when modal is open
 
-let state = {
-    // Auth
-    isAuthenticated: false,
-    user: null,
-    authMode: 'login',
-    authError: null,
+export function renderLibrary() {
+    const state = getState();
+    const quizzes = getFilteredQuizzes(state);
+    const categories = [...new Set((state.quizzes || []).filter(q => q.description).map(q => q.description))].sort();
+    const total = (state.quizzes || []).reduce((s, q) => s + (q.questions?.length || 0), 0);
+    const progressList = getInProgressQuizzesCached();
+    const profile = getProfile();
+    const levelInfo = getLevelInfo();
     
-    // Views
-    view: 'landing',
+    // Get in-progress quizzes for "Continue Studying" section
+    const inProgressQuizzes = progressList
+        .map(p => {
+            const quiz = (state.quizzes || []).find(q => q.id === p.quizId);
+            return quiz ? { ...quiz, progress: p } : null;
+        })
+        .filter(Boolean)
+        .slice(0, 3);
     
-    // Library
-    quizzes: [],
-    searchQuery: '',
-    sortBy: 'recent',
-    categoryFilter: '',
-    openMenuId: null,
-    
-    // Quiz taking
-    currentQuiz: null,
-    currentQuestionIndex: 0,
-    answers: [],
-    flaggedQuestions: new Set(),
-    studyMode: true,
-    randomizeOptions: false,
-    optionShuffles: {},
-    showAnswer: false,
-    quizStreak: 0,
-    maxQuizStreak: 0,
-    matchingShuffled: {},
-    matchingSelectedLeft: null,
-    timerEnabled: false,
-    timerMinutes: 15,
-    timeRemaining: 900,
-    quizStartTime: null,
-    
-    // Results
-    quizResults: null,
-    reviewFilter: 'all',
-    
-    // Create/Edit
-    quizTitle: '',
-    quizData: '',
-    quizCategory: '',
-    editingQuizId: null,
-    visualEditorMode: false,
-    parsedQuestions: null,
-    currentEditQuestion: 0,
-    showFormatHelp: false,
-    
-    // Gamification / Profile (synced to server)
-    xp: 0,
-    level: 1,
-    gems: 0,
-    dailyStreak: 0,
-    lastActiveDate: null,
-    achievements: [],
-    pendingLevelUp: null,
-    pendingAchievements: [],
-    totalAnswered: 0,
-    totalCorrect: 0,
-    quizzesCompleted: 0,
-    perfectScores: 0,
-    
-    // Settings
-    soundEnabled: true,
-    animationsEnabled: true,
-    
-    // Sync status
-    profileLoaded: false,
-    syncPending: false,
-    
-    // Cached in-progress quizzes (Bug #1 fix - for synchronous access)
-    inProgressQuizzes: [],
-};
+    // Get recent quizzes (excluding in-progress)
+    const inProgressIds = new Set(progressList.map(p => p.quizId));
+    const recentQuizzes = (state.quizzes || [])
+        .filter(q => !inProgressIds.has(q.id))
+        .slice(0, 6);
 
-const listeners = [];
-
-// Debounce timer for profile sync
-let syncTimeout = null;
-
-/**
- * Get current state with computed properties
- */
-export function getState() {
-    return {
-        ...state,
-        playerProfile: {
-            xp: state.xp,
-            level: state.level,
-            gems: state.gems,
-            dailyStreak: state.dailyStreak,
-            achievements: state.achievements,
-            totalAnswered: state.totalAnswered,
-            totalCorrect: state.totalCorrect,
-            quizzesCompleted: state.quizzesCompleted,
-            perfectScores: state.perfectScores,
-        }
-    };
+    return `
+    <!-- Redesigned Header -->
+    <header class="library-header-v3">
+        <div class="container">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-logo">🎓</div>
+                    <span class="brand-name">Quiz Master Pro</span>
+                </div>
+                
+                <div class="header-actions">
+                    <button class="btn btn-ghost btn-icon" onclick="window.app.navigate('studyGuide')" title="Study Guide Builder">
+                        📚
+                    </button>
+                    <button class="btn btn-primary" onclick="window.app.showCreateOptions()">
+                        <span class="btn-icon-left">+</span>
+                        Create
+                    </button>
+                    <div class="user-menu">
+                        <button class="user-avatar" onclick="window.app.toggleMenu()">
+                            ${state.user?.username?.charAt(0).toUpperCase() || 'U'}
+                        </button>
+                        <div id="user-menu" class="dropdown-menu hidden">
+                            <div class="dropdown-header">
+                                <div class="dropdown-user-name">${escapeHtml(state.user?.username || 'User')}</div>
+                                <div class="dropdown-user-level">Level ${levelInfo.level || 1}</div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item" onclick="window.app.showImportModal()">
+                                📥 Import Quiz
+                            </button>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item text-danger" onclick="window.app.logout()">
+                                🚪 Sign Out
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Stats Banner -->
+    <div class="stats-banner">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-content">
+                        <div class="stat-value">${profile.dailyStreak || 0}</div>
+                        <div class="stat-label">Day Streak</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon">📚</div>
+                    <div class="stat-content">
+                        <div class="stat-value">${state.quizzes.length}</div>
+                        <div class="stat-label">Quiz Sets</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon">❓</div>
+                    <div class="stat-content">
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                        <div class="stat-label">Questions</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon">⭐</div>
+                    <div class="stat-content">
+                        <div class="stat-value">${levelInfo.level || 1}</div>
+                        <div class="stat-label">Level</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <main class="library-main">
+        <div class="container">
+            ${state.quizzes.length === 0 ? renderEmptyState() : `
+                
+                <!-- Continue Studying Section -->
+                ${inProgressQuizzes.length > 0 ? `
+                <section class="library-section">
+                    <div class="section-header">
+                        <h2>📖 Continue Studying</h2>
+                        <span class="section-badge">${inProgressQuizzes.length} in progress</span>
+                    </div>
+                    <div class="continue-cards">
+                        ${inProgressQuizzes.map(quiz => renderContinueCard(quiz)).join('')}
+                    </div>
+                </section>
+                ` : ''}
+                
+                <!-- Search and Filters -->
+                <section class="library-section">
+                    <div class="section-header">
+                        <h2>📁 My Library</h2>
+                        <div class="view-toggles">
+                            <button class="view-toggle ${viewMode === 'grid' ? 'active' : ''}" onclick="window.app.setViewMode('grid')" title="Grid view">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <rect x="1" y="1" width="6" height="6" rx="1"/>
+                                    <rect x="9" y="1" width="6" height="6" rx="1"/>
+                                    <rect x="1" y="9" width="6" height="6" rx="1"/>
+                                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                                </svg>
+                            </button>
+                            <button class="view-toggle ${viewMode === 'list' ? 'active' : ''}" onclick="window.app.setViewMode('list')" title="List view">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <rect x="1" y="2" width="14" height="3" rx="1"/>
+                                    <rect x="1" y="7" width="14" height="3" rx="1"/>
+                                    <rect x="1" y="12" width="14" height="3" rx="1"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="filters-bar">
+                        <div class="search-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input 
+                                type="text" 
+                                class="search-input" 
+                                id="library-search"
+                                placeholder="Search your quizzes..."
+                                value="${escapeHtml(state.searchQuery || '')}"
+                                oninput="window.app.handleSearchInput(this.value)"
+                                onkeydown="if(event.key==='Enter') window.app.setSearchImmediate(this.value)"
+                            >
+                            ${state.searchQuery ? `
+                                <button class="search-clear" onclick="window.app.clearSearch()">×</button>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="filter-group">
+                            <select class="filter-select" onchange="window.app.setSort(this.value)">
+                                <option value="recent" ${(state.sortBy || 'recent') === 'recent' ? 'selected' : ''}>Recent</option>
+                                <option value="name" ${state.sortBy === 'name' ? 'selected' : ''}>Name A-Z</option>
+                                <option value="questions" ${state.sortBy === 'questions' ? 'selected' : ''}>Most Questions</option>
+                            </select>
+                            
+                            <select class="filter-select" onchange="window.app.setCategory(this.value)">
+                                <option value="" ${!state.categoryFilter ? 'selected' : ''}>All Categories</option>
+                                ${categories.map(cat => `
+                                    <option value="${escapeHtml(cat)}" ${state.categoryFilter === cat ? 'selected' : ''}>
+                                        ${escapeHtml(cat)}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    ${quizzes.length === 0 ? `
+                        <div class="no-results">
+                            <div class="no-results-icon">🔍</div>
+                            <p>No quizzes match your search</p>
+                            <button class="btn btn-ghost" onclick="window.app.clearFilters()">Clear filters</button>
+                        </div>
+                    ` : `
+                        <div class="quiz-${viewMode}">
+                            ${quizzes.map(quiz => viewMode === 'grid' ? renderQuizCard(quiz, progressList) : renderQuizRow(quiz, progressList)).join('')}
+                        </div>
+                    `}
+                </section>
+            `}
+        </div>
+    </main>
+    
+    <!-- Study Mode Modal -->
+    ${showStudyModal ? renderStudyModal(state.quizzes.find(q => q.id === showStudyModal)) : ''}
+    `;
 }
 
-/**
- * Update state
- */
-export function setState(newState, skipRender = false) {
-    state = { ...state, ...newState };
-    
-    if (!skipRender) {
-        listeners.forEach(fn => fn(getState()));
-    }
-}
-
-export function subscribe(fn) {
-    listeners.push(fn);
-    return () => {
-        const idx = listeners.indexOf(fn);
-        if (idx > -1) listeners.splice(idx, 1);
-    };
-}
-
-// ==================== AUTH ====================
-
-export function loadAuth() {
-    try {
-        const token = localStorage.getItem('token');
-        const userStr = localStorage.getItem('user');
+function renderEmptyState() {
+    return `
+    <div class="empty-state">
+        <div class="empty-illustration">
+            <div class="empty-icon">📚</div>
+            <div class="empty-sparkles">✨</div>
+        </div>
+        <h2>Create your first quiz</h2>
+        <p>Turn your notes into interactive quizzes with AI assistance</p>
         
-        // Check for valid data (not null, not "undefined" string, not empty)
-        if (token && userStr && userStr !== 'undefined' && userStr !== 'null') {
-            const user = JSON.parse(userStr);
-            if (user && typeof user === 'object') {
-                setState({ isAuthenticated: true, user, token, view: 'library' }, true);
-                return true;
-            }
-        }
-    } catch (e) {
-        console.error('Failed to load auth from localStorage:', e);
+        <div class="empty-steps">
+            <div class="empty-step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <strong>Enter your topic</strong>
+                    <span>Tell us what you're studying</span>
+                </div>
+            </div>
+            <div class="empty-step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <strong>Get AI-generated questions</strong>
+                    <span>We'll create the perfect prompt for ChatGPT</span>
+                </div>
+            </div>
+            <div class="empty-step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <strong>Study smarter</strong>
+                    <span>Flashcards, quizzes, and more</span>
+                </div>
+            </div>
+        </div>
+        
+        <button class="btn btn-primary btn-lg" onclick="window.app.showCreateOptions()">
+            <span class="btn-icon-left">✨</span>
+            Create Your First Quiz
+        </button>
+        
+        <p class="empty-alt">
+            Or <button class="btn-link" onclick="window.app.showImportModal()">import an existing quiz</button>
+        </p>
+    </div>
+    `;
+}
+
+function renderContinueCard(quiz) {
+    const progress = quiz.progress;
+    const total = quiz.questions?.length || 0;
+    const answered = progress.answeredCount || 0;
+    const percent = total > 0 ? Math.round((progress.questionIndex / total) * 100) : 0;
+    
+    return `
+    <div class="continue-card" onclick="window.app.startQuiz(${quiz.id})">
+        <div class="continue-progress-ring">
+            <svg viewBox="0 0 36 36">
+                <path class="progress-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                <path class="progress-fill" stroke-dasharray="${percent}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+            </svg>
+            <div class="progress-text">${percent}%</div>
+        </div>
+        <div class="continue-info">
+            <div class="continue-title">${escapeHtml(quiz.title)}</div>
+            <div class="continue-meta">
+                Question ${progress.questionIndex + 1} of ${total}
+            </div>
+        </div>
+        <button class="btn btn-primary btn-sm continue-btn">
+            Continue →
+        </button>
+    </div>
+    `;
+}
+
+function renderQuizCard(quiz, progressList) {
+    const progress = progressList.find(p => p.quizId === quiz.id);
+    const count = quiz.questions?.length || 0;
+    const mastery = quiz.mastery || 0; // TODO: Calculate from attempts
+    
+    return `
+    <div class="quiz-card-v3" onclick="window.app.openStudyModal(${quiz.id})">
+        <div class="quiz-card-accent" style="background: ${quiz.color || getRandomGradient()}"></div>
+        
+        <div class="quiz-card-body">
+            <div class="quiz-card-header">
+                <h3 class="quiz-card-title">${escapeHtml(quiz.title)}</h3>
+                <button class="quiz-card-menu" onclick="event.stopPropagation(); window.app.toggleCardMenu(${quiz.id})">
+                    ⋮
+                </button>
+                <div id="card-menu-${quiz.id}" class="card-menu hidden">
+                    <button onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">✏️ Edit</button>
+                    <button onclick="event.stopPropagation(); window.app.showExportModal(${quiz.id})">📤 Export</button>
+                    <button class="text-danger" onclick="event.stopPropagation(); window.app.confirmDelete(${quiz.id})">🗑️ Delete</button>
+                </div>
+            </div>
+            
+            ${quiz.description ? `<span class="quiz-card-category">${escapeHtml(quiz.description)}</span>` : ''}
+            
+            <div class="quiz-card-stats">
+                <span class="quiz-stat">
+                    <span class="stat-icon">📝</span>
+                    ${count} terms
+                </span>
+                ${progress ? `
+                    <span class="quiz-stat in-progress">
+                        <span class="stat-icon">⏸</span>
+                        ${Math.round((progress.questionIndex / count) * 100)}% done
+                    </span>
+                ` : ''}
+            </div>
+        </div>
+        
+        <div class="quiz-card-footer">
+            <div class="study-modes">
+                <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startFlashcards(${quiz.id})" title="Flashcards">
+                    🃏
+                </button>
+                <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startQuiz(${quiz.id}, {studyMode: true})" title="Learn">
+                    📖
+                </button>
+                <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startQuiz(${quiz.id}, {studyMode: false})" title="Test">
+                    ✍️
+                </button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.app.openStudyModal(${quiz.id})">
+                Study
+            </button>
+        </div>
+    </div>
+    `;
+}
+
+function renderQuizRow(quiz, progressList) {
+    const progress = progressList.find(p => p.quizId === quiz.id);
+    const count = quiz.questions?.length || 0;
+    
+    return `
+    <div class="quiz-row" onclick="window.app.openStudyModal(${quiz.id})">
+        <div class="quiz-row-color" style="background: ${quiz.color || '#6366f1'}"></div>
+        <div class="quiz-row-info">
+            <div class="quiz-row-title">${escapeHtml(quiz.title)}</div>
+            <div class="quiz-row-meta">
+                ${quiz.description ? `<span class="badge">${escapeHtml(quiz.description)}</span>` : ''}
+                <span>${count} terms</span>
+                <span>•</span>
+                <span>${formatDate(quiz.last_modified || quiz.created_at)}</span>
+            </div>
+        </div>
+        <div class="quiz-row-actions">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.app.startFlashcards(${quiz.id})">🃏</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">✏️</button>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.app.openStudyModal(${quiz.id})">Study</button>
+        </div>
+    </div>
+    `;
+}
+
+function renderStudyModal(quiz) {
+    if (!quiz) return '';
+    const count = quiz.questions?.length || 0;
+    
+    return `
+    <div class="modal-overlay" onclick="window.app.closeStudyModal()">
+        <div class="study-modal" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="window.app.closeStudyModal()">×</button>
+            
+            <div class="study-modal-header">
+                <h2>${escapeHtml(quiz.title)}</h2>
+                <p>${count} terms ${quiz.description ? `• ${escapeHtml(quiz.description)}` : ''}</p>
+            </div>
+            
+            <div class="study-modes-grid">
+                <button class="study-mode-card" onclick="window.app.startFlashcards(${quiz.id})">
+                    <div class="mode-icon">🃏</div>
+                    <div class="mode-name">Flashcards</div>
+                    <div class="mode-desc">Review terms one by one</div>
+                </button>
+                
+                <button class="study-mode-card" onclick="window.app.startQuiz(${quiz.id}, {studyMode: true})">
+                    <div class="mode-icon">📖</div>
+                    <div class="mode-name">Learn</div>
+                    <div class="mode-desc">Study with instant feedback</div>
+                </button>
+                
+                <button class="study-mode-card" onclick="window.app.startQuiz(${quiz.id}, {studyMode: false})">
+                    <div class="mode-icon">✍️</div>
+                    <div class="mode-name">Test</div>
+                    <div class="mode-desc">Challenge yourself</div>
+                </button>
+                
+                <button class="study-mode-card" onclick="window.app.startQuiz(${quiz.id}, {studyMode: false, timed: true, minutes: 10})">
+                    <div class="mode-icon">⏱️</div>
+                    <div class="mode-name">Timed Test</div>
+                    <div class="mode-desc">Race against the clock</div>
+                </button>
+            </div>
+            
+            <div class="study-modal-footer">
+                <button class="btn btn-ghost" onclick="window.app.editQuiz(${quiz.id})">
+                    ✏️ Edit Quiz
+                </button>
+                <button class="btn btn-ghost" onclick="window.app.showExportModal(${quiz.id})">
+                    📤 Export
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+function getRandomGradient() {
+    const gradients = [
+        'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+        'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+        'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+        'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+        'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    ];
+    return gradients[Math.floor(Math.random() * gradients.length)];
+}
+
+function getFilteredQuizzes(state) {
+    // If state not passed, get it
+    if (!state) {
+        state = getState();
     }
     
-    // Clear any corrupted data
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    return false;
-}
-
-// saveAuth is no longer needed - api.js handles saving directly
-// Keeping for backward compatibility but it's a no-op now
-export function saveAuth(token, user) {
-    // Auth is now saved directly in api.js login/register functions
-    if (token && user) {
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
-        setState({ isAuthenticated: true, user, token });
-    }
-}
-
-export function clearAuth() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setState({ isAuthenticated: false, user: null, token: null, view: 'landing', profileLoaded: false });
-}
-
-export function logout() {
-    clearAuth();
-}
-
-// Register callbacks with api.js to avoid circular imports
-registerStateCallbacks(setState, clearAuth);
-
-// ==================== PROFILE/GAMIFICATION (SERVER SYNC) ====================
-
-/**
- * Load profile from server
- */
-export async function loadProfile() {
-    try {
-        const data = await apiLoadProfile();
-        
-        if (data.profile) {
-            const p = data.profile;
-            setState({
-                xp: p.xp || 0,
-                level: p.level || 1,
-                gems: p.gems || 0,
-                dailyStreak: p.daily_streak || 0,
-                lastActiveDate: p.last_active_date || null,
-                achievements: p.achievements || [],
-                totalAnswered: p.total_answered || 0,
-                totalCorrect: p.total_correct || 0,
-                quizzesCompleted: p.quizzes_completed || 0,
-                perfectScores: p.perfect_scores || 0,
-                soundEnabled: p.settings?.soundEnabled ?? true,
-                animationsEnabled: p.settings?.animationsEnabled ?? true,
-                profileLoaded: true,
-            }, true);
-        }
-        
-        if (data.user) {
-            setState({ user: data.user }, true);
-        }
-    } catch (e) {
-        console.error('Failed to load profile from server:', e);
-        // Fall back to local storage if server fails
-        loadProfileFromLocalStorage();
-    }
-}
-
-/**
- * Save profile to server (debounced)
- */
-export function saveProfile() {
-    // Clear previous timeout
-    clearTimeout(syncTimeout);
+    const quizzes = state.quizzes;
     
-    // Debounce - save after 1 second of no changes
-    syncTimeout = setTimeout(async () => {
-        try {
-            const s = getState();
-            await saveProfileToServer({
-                xp: s.xp,
-                level: s.level,
-                gems: s.gems,
-                daily_streak: s.dailyStreak,
-                last_active_date: s.lastActiveDate,
-                achievements: s.achievements,
-                total_answered: s.totalAnswered,
-                total_correct: s.totalCorrect,
-                quizzes_completed: s.quizzesCompleted,
-                perfect_scores: s.perfectScores,
-                settings: {
-                    soundEnabled: s.soundEnabled,
-                    animationsEnabled: s.animationsEnabled,
-                },
+    // Make sure quizzes is an array
+    if (!quizzes || !Array.isArray(quizzes)) {
+        return [];
+    }
+    
+    let q = quizzes.slice(); // Copy array
+    
+    // Only filter if there's an actual search query
+    const searchQuery = (state.searchQuery || '').trim().toLowerCase();
+    if (searchQuery && searchQuery.length > 0) {
+        q = q.filter(x => {
+            const title = (x.title || '').toLowerCase();
+            const desc = (x.description || '').toLowerCase();
+            return title.includes(searchQuery) || desc.includes(searchQuery);
+        });
+    }
+    
+    // Only filter by category if one is EXPLICITLY selected (non-empty string)
+    const categoryFilter = state.categoryFilter;
+    if (categoryFilter && typeof categoryFilter === 'string' && categoryFilter.trim() !== '') {
+        q = q.filter(x => (x.description || '') === categoryFilter.trim());
+    }
+    
+    // Sort
+    const sortBy = state.sortBy || 'recent';
+    switch (sortBy) {
+        case 'name':
+            q.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+            break;
+        case 'questions':
+            q.sort((a, b) => (b.questions?.length || 0) - (a.questions?.length || 0));
+            break;
+        case 'recent':
+        default:
+            q.sort((a, b) => {
+                const dateA = new Date(a.last_modified || a.created_at || 0);
+                const dateB = new Date(b.last_modified || b.created_at || 0);
+                return dateB - dateA;
             });
-            console.log('Profile synced to server');
-        } catch (e) {
-            console.error('Failed to sync profile to server:', e);
-            // Save to localStorage as backup
-            saveProfileToLocalStorage();
-        }
-    }, 1000);
-    
-    // Also save to localStorage immediately as backup
-    saveProfileToLocalStorage();
-}
-
-// Fallback localStorage functions
-const PROFILE_KEY = 'quizmaster_profile';
-
-function loadProfileFromLocalStorage() {
-    try {
-        const saved = localStorage.getItem(PROFILE_KEY);
-        if (saved) {
-            const profile = JSON.parse(saved);
-            setState({
-                xp: profile.xp || 0,
-                level: profile.level || 1,
-                gems: profile.gems || 0,
-                dailyStreak: profile.dailyStreak || 0,
-                lastActiveDate: profile.lastActiveDate || null,
-                achievements: profile.achievements || [],
-                totalAnswered: profile.totalAnswered || 0,
-                totalCorrect: profile.totalCorrect || 0,
-                quizzesCompleted: profile.quizzesCompleted || 0,
-                perfectScores: profile.perfectScores || 0,
-                profileLoaded: true,
-            }, true);
-        }
-    } catch (e) {
-        console.error('Failed to load profile from localStorage:', e);
-    }
-}
-
-function saveProfileToLocalStorage() {
-    const s = getState();
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({
-        xp: s.xp,
-        level: s.level,
-        gems: s.gems,
-        dailyStreak: s.dailyStreak,
-        lastActiveDate: s.lastActiveDate,
-        achievements: s.achievements,
-        totalAnswered: s.totalAnswered,
-        totalCorrect: s.totalCorrect,
-        quizzesCompleted: s.quizzesCompleted,
-        perfectScores: s.perfectScores,
-    }));
-}
-
-export function getProfile() {
-    const s = getState();
-    return {
-        xp: s.xp,
-        level: s.level,
-        gems: s.gems,
-        dailyStreak: s.dailyStreak,
-        achievements: s.achievements,
-        totalAnswered: s.totalAnswered,
-        totalCorrect: s.totalCorrect,
-        quizzesCompleted: s.quizzesCompleted,
-        perfectScores: s.perfectScores,
-    };
-}
-
-export function getPlayerHudData() {
-    const s = getState();
-    return {
-        profile: getProfile(),
-        levelInfo: getLevelInfo(),
-    };
-}
-
-// Settings
-const SETTINGS_KEY = 'quizmaster_settings';
-
-export function loadSettings() {
-    // Settings are loaded as part of profile now
-    // This function exists for backward compatibility
-    try {
-        const saved = localStorage.getItem(SETTINGS_KEY);
-        if (saved) {
-            const settings = JSON.parse(saved);
-            setState({
-                soundEnabled: settings.soundEnabled ?? true,
-                animationsEnabled: settings.animationsEnabled ?? true,
-            }, true);
-        }
-    } catch (e) {
-        console.error('Failed to load settings:', e);
-    }
-}
-
-export function saveSettings() {
-    const s = getState();
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-        soundEnabled: s.soundEnabled,
-        animationsEnabled: s.animationsEnabled,
-    }));
-    // Also sync to server with profile
-    saveProfile();
-}
-
-// ==================== LEVEL SYSTEM ====================
-
-const XP_PER_LEVEL = 100;
-const LEVEL_MULTIPLIER = 1.5;
-
-const TIER_THRESHOLDS = [1, 5, 10, 15, 20, 30, 40, 50];
-const TIER_NAMES = ['Novice', 'Learner', 'Apprentice', 'Scholar', 'Expert', 'Master', 'Grandmaster', 'Legend'];
-const TIER_COLORS = ['#9ca3af', '#60a5fa', '#34d399', '#a78bfa', '#f472b6', '#fbbf24', '#f97316', '#ef4444'];
-
-export function getTierFromLevel(level) {
-    for (let i = TIER_THRESHOLDS.length - 1; i >= 0; i--) {
-        if (level >= TIER_THRESHOLDS[i]) return i;
-    }
-    return 0;
-}
-
-export function getTierName(levelOrTier) {
-    if (levelOrTier >= 0 && levelOrTier <= 7) {
-        return TIER_NAMES[levelOrTier] || 'Novice';
-    }
-    const tier = getTierFromLevel(levelOrTier);
-    return TIER_NAMES[tier] || 'Novice';
-}
-
-export function getTierColor(levelOrTier) {
-    if (levelOrTier >= 0 && levelOrTier <= 7) {
-        return TIER_COLORS[levelOrTier] || TIER_COLORS[0];
-    }
-    const tier = getTierFromLevel(levelOrTier);
-    return TIER_COLORS[tier] || TIER_COLORS[0];
-}
-
-export function getXpForLevel(level) {
-    if (level <= 1) return 0;
-    let total = 0;
-    for (let i = 1; i < level; i++) {
-        total += Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, i - 1));
-    }
-    return total;
-}
-
-export function getXpToNextLevel(level) {
-    return Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
-}
-
-export function calculateLevelFromXP(xp) {
-    let level = 1;
-    let xpNeeded = XP_PER_LEVEL;
-    let totalXpNeeded = 0;
-    
-    while (totalXpNeeded + xpNeeded <= xp) {
-        totalXpNeeded += xpNeeded;
-        level++;
-        xpNeeded = Math.floor(XP_PER_LEVEL * Math.pow(LEVEL_MULTIPLIER, level - 1));
     }
     
-    return level;
+    return q;
 }
 
-export function getLevelInfo() {
-    const s = getState();
-    const level = s.level || 1;
-    const xp = s.xp || 0;
+// Local search state (to avoid re-renders while typing)
+let localSearchQuery = '';
+let searchDebounceTimer = null;
+
+// Actions
+export function setSearch(query) {
+    localSearchQuery = query;
     
-    const xpForCurrentLevel = getXpForLevel(level);
-    const xpToNext = getXpToNextLevel(level);
-    const xpInLevel = xp - xpForCurrentLevel;
-    const progress = Math.min(100, Math.floor((xpInLevel / xpToNext) * 100));
-    
-    return {
-        level,
-        xp,
-        xpInLevel,
-        xpToNext,
-        progress,
-        tier: getTierFromLevel(level),
-        tierName: getTierName(level),
-        tierColor: getTierColor(level),
-    };
+    // Debounce the actual state update
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        setState({ searchQuery: query });
+    }, 300);
 }
 
-export function getLevelTitle(level) {
-    return getTierName(level);
+export function setSearchImmediate(query) {
+    localSearchQuery = query;
+    clearTimeout(searchDebounceTimer);
+    setState({ searchQuery: query });
 }
 
-function addXP(amount) {
-    if (typeof amount !== 'number' || !isFinite(amount) || amount <= 0) {
-        return { xpGained: 0, leveledUp: false, newLevel: getState().level };
-    }
+export function handleSearchInput(query) {
+    localSearchQuery = query;
     
-    const s = getState();
-    const currentXP = (typeof s.xp === 'number' && isFinite(s.xp)) ? s.xp : 0;
-    const currentLevel = (typeof s.level === 'number' && isFinite(s.level)) ? s.level : 1;
-    
-    const newXP = Math.min(currentXP + amount, 1000000000);
-    const newLevel = calculateLevelFromXP(newXP);
-    const leveledUp = newLevel > currentLevel;
-    
-    setState({
-        xp: newXP,
-        level: newLevel,
-        pendingLevelUp: leveledUp ? { oldLevel: currentLevel, newLevel, title: getLevelTitle(newLevel) } : null,
-    }, true);
-    
-    saveProfile();
-    return { xpGained: amount, leveledUp, newLevel };
-}
-
-// ==================== ACHIEVEMENTS ====================
-
-const ACHIEVEMENTS = {
-    first_quiz: { id: 'first_quiz', name: 'First Steps', description: 'Complete your first quiz', icon: '🎯', xp: 50, gems: 5 },
-    perfect_score: { id: 'perfect_score', name: 'Perfectionist', description: 'Get 100% on a quiz', icon: '💯', xp: 100, gems: 10 },
-    streak_5: { id: 'streak_5', name: 'On Fire', description: 'Get 5 correct answers in a row', icon: '🔥', xp: 75, gems: 5 },
-    streak_10: { id: 'streak_10', name: 'Unstoppable', description: 'Get 10 correct answers in a row', icon: '⚡', xp: 150, gems: 10 },
-    daily_streak_7: { id: 'daily_streak_7', name: 'Dedicated', description: 'Maintain a 7-day streak', icon: '📅', xp: 200, gems: 20 },
-    quizzes_10: { id: 'quizzes_10', name: 'Quiz Enthusiast', description: 'Complete 10 quizzes', icon: '📚', xp: 100, gems: 10 },
-    quizzes_50: { id: 'quizzes_50', name: 'Quiz Master', description: 'Complete 50 quizzes', icon: '🏆', xp: 500, gems: 50 },
-    level_10: { id: 'level_10', name: 'Rising Star', description: 'Reach level 10', icon: '⭐', xp: 0, gems: 25 },
-    level_25: { id: 'level_25', name: 'Expert', description: 'Reach level 25', icon: '🌟', xp: 0, gems: 50 },
-};
-
-export function getUnlockedAchievements() {
-    const s = getState();
-    return s.achievements || [];
-}
-
-export function unlockAchievement(achievementId) {
-    const s = getState();
-    if (s.achievements.includes(achievementId)) return false;
-    
-    const achievement = ACHIEVEMENTS[achievementId];
-    if (!achievement) return false;
-    
-    const newAchievements = [...s.achievements, achievementId];
-    
-    const currentXP = (typeof s.xp === 'number' && isFinite(s.xp)) ? s.xp : 0;
-    const currentGems = (typeof s.gems === 'number' && isFinite(s.gems)) ? s.gems : 0;
-    const newXP = achievement.xp ? Math.min(currentXP + achievement.xp, 1000000000) : currentXP;
-    const newGems = achievement.gems ? currentGems + achievement.gems : currentGems;
-    const newLevel = calculateLevelFromXP(newXP);
-    
-    const pending = [...(s.pendingAchievements || []), {
-        ...achievement,
-        xp: achievement.xp || 0,
-        gems: achievement.gems || 0,
-    }];
-    
-    setState({ 
-        achievements: newAchievements,
-        pendingAchievements: pending,
-        xp: newXP,
-        gems: newGems,
-        level: newLevel,
-    }, true);
-    
-    saveProfile();
-    return true;
-}
-
-export function checkAchievements() {
-    const s = getState();
-    
-    if (s.quizzesCompleted >= 1) unlockAchievement('first_quiz');
-    if (s.quizzesCompleted >= 10) unlockAchievement('quizzes_10');
-    if (s.quizzesCompleted >= 50) unlockAchievement('quizzes_50');
-    if (s.maxQuizStreak >= 5) unlockAchievement('streak_5');
-    if (s.maxQuizStreak >= 10) unlockAchievement('streak_10');
-    if (s.dailyStreak >= 7) unlockAchievement('daily_streak_7');
-    if (s.level >= 10) unlockAchievement('level_10');
-    if (s.level >= 25) unlockAchievement('level_25');
-    if (s.perfectScores >= 1) unlockAchievement('perfect_score');
-}
-
-// ==================== QUIZ PROGRESS (SERVER SYNC) ====================
-
-/**
- * Save quiz progress to server
- */
-export async function saveQuizProgress() {
-    const s = getState();
-    if (!s.currentQuiz) return;
-    
-    const progressData = {
-        question_index: s.currentQuestionIndex,
-        answers: s.answers,
-        flagged: Array.from(s.flaggedQuestions),
-        study_mode: s.studyMode,
-        randomize_options: s.randomizeOptions,
-        option_shuffles: s.optionShuffles,
-        quiz_streak: s.quizStreak,
-        max_quiz_streak: s.maxQuizStreak,
-        timer_enabled: s.timerEnabled,
-        time_remaining: s.timeRemaining,
-    };
-    
-    try {
-        await saveQuizProgressToServer(s.currentQuiz.id, progressData);
-    } catch (e) {
-        console.error('Failed to save progress to server:', e);
-        // Fallback to localStorage
-        localStorage.setItem(`quizmaster_progress_${s.currentQuiz.id}`, JSON.stringify({
-            ...progressData,
-            savedAt: Date.now(),
-        }));
-    }
-}
-
-/**
- * Load quiz progress from server
- */
-export async function loadQuizProgress(quizId) {
-    try {
-        const data = await getQuizProgress(quizId);
-        if (data.progress) {
-            const p = data.progress;
-            return {
-                questionIndex: p.question_index,
-                answers: p.answers || [],
-                flagged: p.flagged || [],
-                studyMode: p.study_mode,
-                randomizeOptions: p.randomize_options,
-                optionShuffles: p.option_shuffles || {},
-                quizStreak: p.quiz_streak || 0,
-                maxQuizStreak: p.max_quiz_streak || 0,
-                timerEnabled: p.timer_enabled,
-                timeRemaining: p.time_remaining,
-            };
-        }
-    } catch (e) {
-        console.error('Failed to load progress from server:', e);
-        // Fallback to localStorage
-        try {
-            const saved = localStorage.getItem(`quizmaster_progress_${quizId}`);
-            if (saved) {
-                const progress = JSON.parse(saved);
-                if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
-                    return progress;
+    // Debounce: wait for user to stop typing
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        // Save cursor position
+        const input = document.getElementById('library-search');
+        const cursorPos = input?.selectionStart;
+        
+        setState({ searchQuery: query });
+        
+        // Restore focus and cursor after re-render
+        setTimeout(() => {
+            const newInput = document.getElementById('library-search');
+            if (newInput) {
+                newInput.focus();
+                if (cursorPos !== undefined) {
+                    newInput.setSelectionRange(cursorPos, cursorPos);
                 }
             }
-        } catch (e2) {
-            console.error('Failed to load progress from localStorage:', e2);
-        }
+        }, 0);
+    }, 400);
+}
+
+export function clearSearch() {
+    localSearchQuery = '';
+    clearTimeout(searchDebounceTimer);
+    setState({ searchQuery: '' });
+}
+
+export function setSort(sortBy) {
+    setState({ sortBy });
+}
+
+export function setCategory(category) {
+    setState({ categoryFilter: category });
+}
+
+export function clearFilters() {
+    setState({ searchQuery: '', categoryFilter: '', sortBy: 'recent' });
+}
+
+export function toggleMenu() {
+    const menu = document.getElementById('user-menu');
+    if (menu) menu.classList.toggle('hidden');
+}
+
+export function setViewMode(mode) {
+    viewMode = mode;
+    setState({ view: 'library' });
+}
+
+export function openStudyModal(quizId) {
+    showStudyModal = quizId;
+    setState({ view: 'library' });
+}
+
+export function closeStudyModal() {
+    showStudyModal = null;
+    setState({ view: 'library' });
+}
+
+export function toggleCardMenu(quizId) {
+    // Close all other menus first
+    document.querySelectorAll('.card-menu').forEach(m => m.classList.add('hidden'));
+    const menu = document.getElementById(`card-menu-${quizId}`);
+    if (menu) menu.classList.toggle('hidden');
+}
+
+export async function confirmDelete(quizId) {
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === quizId);
+    if (quiz && confirm(`Delete "${quiz.title}"? This cannot be undone.`)) {
+        await deleteQuiz(quizId);
     }
-    return null;
 }
 
-/**
- * Clear quiz progress on server
- */
-export async function clearQuizProgress(quizId) {
-    try {
-        await clearQuizProgressOnServer(quizId);
-    } catch (e) {
-        console.error('Failed to clear progress on server:', e);
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.user-menu')) {
+        const menu = document.getElementById('user-menu');
+        if (menu) menu.classList.add('hidden');
     }
-    localStorage.removeItem(`quizmaster_progress_${quizId}`);
-}
-
-/**
- * Get all in-progress quizzes
- */
-export async function getAllInProgressQuizzes() {
-    try {
-        const data = await getAllProgress();
-        if (data.progress) {
-            return data.progress.map(p => ({
-                quizId: p.quiz_id,
-                quizTitle: p.quiz_title,
-                questionIndex: p.question_index,
-                total: p.total_questions,
-                answeredCount: (p.answers || []).filter(a => a !== undefined && a !== null).length,
-            }));
-        }
-    } catch (e) {
-        console.error('Failed to load all progress from server:', e);
+    if (!e.target.closest('.quiz-card-menu') && !e.target.closest('.card-menu')) {
+        document.querySelectorAll('.card-menu').forEach(m => m.classList.add('hidden'));
     }
-    
-    // Fallback: check localStorage
-    const s = getState();
-    const inProgress = [];
-    
-    if (!s.quizzes || !Array.isArray(s.quizzes)) return inProgress;
-    
-    for (const quiz of s.quizzes) {
-        try {
-            const saved = localStorage.getItem(`quizmaster_progress_${quiz.id}`);
-            if (saved) {
-                const progress = JSON.parse(saved);
-                if (Date.now() - progress.savedAt < 24 * 60 * 60 * 1000) {
-                    inProgress.push({
-                        quizId: quiz.id,
-                        quizTitle: quiz.title,
-                        questionIndex: progress.question_index || progress.questionIndex || 0,
-                        total: quiz.questions?.length || 0,
-                        answeredCount: (progress.answers || []).filter(a => a !== undefined).length,
-                    });
-                }
-            }
-        } catch (e) {
-            // Skip corrupted progress data
-        }
-    }
-    
-    return inProgress;
-}
-
-/**
- * Load in-progress quizzes and cache them in state (Bug #1 fix)
- * Call this after loadQuizzes() in app init
- */
-export async function loadInProgressQuizzes() {
-    const progress = await getAllInProgressQuizzes();
-    setState({ inProgressQuizzes: progress }, true);
-    return progress;
-}
-
-/**
- * Get cached in-progress quizzes synchronously (Bug #1 fix)
- * Use this in renderLibrary() instead of getAllInProgressQuizzes()
- */
-export function getInProgressQuizzesCached() {
-    return getState().inProgressQuizzes || [];
-}
-
-// ==================== DAILY STREAK ====================
-
-export function updateDailyStreak() {
-    const s = getState();
-    const today = new Date().toDateString();
-    
-    if (s.lastActiveDate === today) return;
-    
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toDateString();
-    
-    let newStreak = 1;
-    if (s.lastActiveDate === yesterdayStr) {
-        newStreak = s.dailyStreak + 1;
-    }
-    
-    setState({
-        dailyStreak: newStreak,
-        lastActiveDate: today,
-    }, true);
-    
-    saveProfile();
-    checkAchievements();
-}
-
-// ==================== ANSWER RECORDING ====================
-
-export function recordCorrectAnswer() {
-    const s = getState();
-    const newStreak = s.quizStreak + 1;
-    const maxStreak = Math.max(s.maxQuizStreak, newStreak);
-    
-    let xpGain = 10;
-    if (newStreak >= 10) xpGain += 15;
-    else if (newStreak >= 5) xpGain += 10;
-    else if (newStreak >= 3) xpGain += 5;
-    
-    setState({
-        quizStreak: newStreak,
-        maxQuizStreak: maxStreak,
-        totalAnswered: s.totalAnswered + 1,
-        totalCorrect: s.totalCorrect + 1,
-    }, true);
-    
-    addXP(xpGain);
-    checkAchievements();
-}
-
-export function recordWrongAnswer() {
-    const s = getState();
-    setState({ 
-        quizStreak: 0,
-        totalAnswered: s.totalAnswered + 1,
-    }, true);
-}
-
-export function recordQuizComplete(correct, total) {
-    const s = getState();
-    const percentage = Math.round((correct / total) * 100);
-    const isPerfect = correct === total;
-    
-    let xpGain = correct * 5;
-    if (isPerfect) xpGain += 50;
-    else if (percentage >= 90) xpGain += 25;
-    else if (percentage >= 75) xpGain += 10;
-    
-    let gemsGain = 0;
-    if (isPerfect) gemsGain = 10;
-    else if (percentage >= 90) gemsGain = 5;
-    else if (percentage >= 75) gemsGain = 2;
-    
-    setState({
-        gems: s.gems + gemsGain,
-        quizzesCompleted: s.quizzesCompleted + 1,
-        perfectScores: isPerfect ? s.perfectScores + 1 : s.perfectScores,
-    }, true);
-    
-    addXP(xpGain);
-    checkAchievements();
-}
+});
