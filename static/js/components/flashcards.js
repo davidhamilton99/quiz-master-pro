@@ -484,7 +484,7 @@ export function fcTouchStart(e) {
     touch.startY = e.touches[0].clientY;
     touch.currentX = touch.startX;
     touch.isDragging = false;
-    touch.onCard = !!e.target.closest('#fc2-card');
+    touch.onCard = !!e.target.closest('#fc2-card') || !!e.target.closest('.fc2-card-face');
 }
 
 export function fcTouchMove(e) {
