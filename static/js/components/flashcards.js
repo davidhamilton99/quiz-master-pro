@@ -22,7 +22,7 @@ let touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 export function initFlashcards(quiz) {
     const cards = quiz.questions.map((q, i) => ({
         id: i,
-        front: q.question,
+        front: q.question.replace(/^\[multi\]\s*/i, ''),
         back: getAnswerText(q),
         explanation: q.explanation || null,
         type: q.type,
