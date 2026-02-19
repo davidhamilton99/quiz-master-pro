@@ -26,7 +26,7 @@ let state = {
     quizzes: [],
     searchQuery: '',
     sortBy: 'recent',
-    categoryFilter: 'all',
+    categoryFilter: '',
     openMenuId: null,
     
     // Quiz taking
@@ -138,16 +138,21 @@ export function loadAuth() {
         const token = localStorage.getItem('token');
         const userStr = localStorage.getItem('user');
         
-        if (token && userStr) {
+        // Check for valid data (not null, not "undefined" string, not empty)
+        if (token && userStr && userStr !== 'undefined' && userStr !== 'null') {
             const user = JSON.parse(userStr);
-            setState({ isAuthenticated: true, user, token, view: 'library' }, true);
-            return true;
+            if (user && typeof user === 'object') {
+                setState({ isAuthenticated: true, user, token, view: 'library' }, true);
+                return true;
+            }
         }
     } catch (e) {
         console.error('Failed to load auth from localStorage:', e);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
     }
+    
+    // Clear any corrupted data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     return false;
 }
 
