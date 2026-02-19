@@ -155,7 +155,6 @@ def hash_password(password, salt=None):
     Hash password securely.
     - Uses bcrypt if available (recommended)
     - Falls back to PBKDF2 with SHA256 (still secure)
-    - Legacy SHA256+salt support for existing passwords
     """
     if BCRYPT_AVAILABLE:
         # bcrypt handles salt internally
@@ -163,7 +162,6 @@ def hash_password(password, salt=None):
         return hashed.decode(), 'bcrypt'
     else:
         # PBKDF2 fallback - much better than plain SHA256
-        import hashlib
         if salt is None:
             salt = secrets.token_hex(32)
         # 100,000 iterations of PBKDF2
@@ -173,26 +171,31 @@ def hash_password(password, salt=None):
 def verify_password(password, stored_hash, salt):
     """
     Verify password against stored hash.
-    Supports:
-    - bcrypt hashes (salt == 'bcrypt')
-    - PBKDF2 hashes (salt is hex string, hash is 64 chars)
-    - Legacy SHA256 hashes (for backward compatibility)
+    Supports bcrypt, PBKDF2, and legacy SHA256 (for existing users).
     """
+    # Check for bcrypt first
     if salt == 'bcrypt' and BCRYPT_AVAILABLE:
-        # bcrypt verification
         try:
             return bcrypt.checkpw(password.encode(), stored_hash.encode())
         except:
             return False
-    elif len(stored_hash) == 64 and len(salt) == 64:
-        # PBKDF2 hash (64 hex chars = 32 bytes)
-        import hashlib
-        computed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
-        return secrets.compare_digest(computed, stored_hash)
-    else:
-        # Legacy SHA256 fallback for old passwords
-        computed = hashlib.sha256((password + salt).encode()).hexdigest()
-        return secrets.compare_digest(computed, stored_hash)
+    
+    # Try legacy SHA256 first (for existing users)
+    # This was the original method: sha256(password + salt)
+    legacy_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    if secrets.compare_digest(legacy_hash, stored_hash):
+        return True
+    
+    # Try PBKDF2 (for users created after the upgrade)
+    if len(stored_hash) == 64 and len(salt) == 64:
+        try:
+            pbkdf2_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+            if secrets.compare_digest(pbkdf2_hash, stored_hash):
+                return True
+        except:
+            pass
+    
+    return False
 
 def token_required(f):
     @wraps(f)
