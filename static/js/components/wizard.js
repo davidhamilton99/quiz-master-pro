@@ -13,6 +13,7 @@ let wizardState = {
     questionTypes: ['choice', 'truefalse'],
     questionCount: 15,
     difficulty: 'medium',
+    includeCode: false,
     pastedContent: '',
     parsedQuestions: [],
     parseError: null
@@ -26,6 +27,7 @@ export function resetWizard() {
         questionTypes: ['choice', 'truefalse'],
         questionCount: 15,
         difficulty: 'medium',
+        includeCode: false,
         pastedContent: '',
         parsedQuestions: [],
         parseError: null
@@ -73,10 +75,10 @@ function renderStep1() {
     const s = wizardState;
     
     return `
-    <div class="wizard-card">
+    <div class="wizard-card wizard-card-wide">
         <div class="wizard-card-header">
             <h1>Let's Create Your Quiz</h1>
-            <p>First, tell us a bit about what you're studying.</p>
+            <p>First, tell us about what you're studying.</p>
         </div>
         
         <div class="wizard-card-body">
@@ -106,6 +108,7 @@ function renderStep1() {
             
             <div class="form-group">
                 <label class="label">Question Types</label>
+                <p class="helper-text mb-2">Select all types you want the AI to generate</p>
                 <div class="checkbox-group">
                     <label class="checkbox-label">
                         <input 
@@ -115,8 +118,21 @@ function renderStep1() {
                         >
                         <span class="checkbox-text">
                             <span class="checkbox-icon">✓</span>
-                            Multiple Choice
+                            <span>Multiple Choice</span>
                         </span>
+                        <span class="checkbox-desc">One correct answer from 4 options</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            ${s.questionTypes.includes('multiselect') ? 'checked' : ''}
+                            onchange="window.app.wizardToggleType('multiselect')"
+                        >
+                        <span class="checkbox-text">
+                            <span class="checkbox-icon">☑️</span>
+                            <span>Multi-Select</span>
+                        </span>
+                        <span class="checkbox-desc">Multiple correct answers possible</span>
                     </label>
                     <label class="checkbox-label">
                         <input 
@@ -126,8 +142,9 @@ function renderStep1() {
                         >
                         <span class="checkbox-text">
                             <span class="checkbox-icon">⚡</span>
-                            True/False
+                            <span>True/False</span>
                         </span>
+                        <span class="checkbox-desc">Simple binary questions</span>
                     </label>
                     <label class="checkbox-label">
                         <input 
@@ -137,10 +154,39 @@ function renderStep1() {
                         >
                         <span class="checkbox-text">
                             <span class="checkbox-icon">🔗</span>
-                            Matching
+                            <span>Matching</span>
                         </span>
+                        <span class="checkbox-desc">Connect terms with definitions</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input 
+                            type="checkbox" 
+                            ${s.questionTypes.includes('ordering') ? 'checked' : ''}
+                            onchange="window.app.wizardToggleType('ordering')"
+                        >
+                        <span class="checkbox-text">
+                            <span class="checkbox-icon">↕️</span>
+                            <span>Ordering</span>
+                        </span>
+                        <span class="checkbox-desc">Arrange items in correct sequence</span>
                     </label>
                 </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="label">Include Code Questions?</label>
+                <label class="checkbox-label">
+                    <input 
+                        type="checkbox" 
+                        ${s.includeCode ? 'checked' : ''}
+                        onchange="window.app.wizardToggleCode()"
+                    >
+                    <span class="checkbox-text">
+                        <span class="checkbox-icon">💻</span>
+                        <span>Yes, include code snippets</span>
+                    </span>
+                    <span class="checkbox-desc">Great for programming, scripting, or technical subjects</span>
+                </label>
             </div>
             
             <div class="form-group">
@@ -324,45 +370,97 @@ function generatePrompt() {
     const s = wizardState;
     
     const typeInstructions = [];
+    
     if (s.questionTypes.includes('choice')) {
-        typeInstructions.push(`Multiple Choice - Format:
+        typeInstructions.push(`MULTIPLE CHOICE - Format:
 1. Question text here?
 A. Wrong answer
 B. Correct answer *
 C. Wrong answer
-D. Wrong answer`);
+D. Wrong answer
+[explanation: Explain why B is correct and why other options are wrong]`);
     }
+    
+    if (s.questionTypes.includes('multiselect')) {
+        typeInstructions.push(`MULTI-SELECT (multiple correct answers) - Format:
+2. [multi] Which of the following are true? (Select all that apply)
+A. Correct answer *
+B. Wrong answer
+C. Correct answer *
+D. Wrong answer
+[explanation: Explain why A and C are correct]`);
+    }
+    
     if (s.questionTypes.includes('truefalse')) {
-        typeInstructions.push(`True/False - Format:
-2. [tf] Statement that is true or false?
+        typeInstructions.push(`TRUE/FALSE - Format:
+3. [tf] Statement that is true or false.
 True
+[explanation: Explain why this is true]
 
-or
-
-3. [tf] Another statement?
-False`);
+4. [tf] Another statement.
+False
+[explanation: Explain why this is false and what the correct fact is]`);
     }
+    
     if (s.questionTypes.includes('matching')) {
-        typeInstructions.push(`Matching - Format:
-4. [match] Match the terms with their definitions:
+        typeInstructions.push(`MATCHING - Format:
+5. [match] Match the terms with their definitions:
 A. Term 1 => Definition 1
 B. Term 2 => Definition 2
-C. Term 3 => Definition 3`);
+C. Term 3 => Definition 3
+D. Term 4 => Definition 4
+[explanation: Brief explanation of these relationships]`);
     }
+    
+    if (s.questionTypes.includes('ordering')) {
+        typeInstructions.push(`ORDERING (put in correct sequence) - Format:
+6. [order] Arrange these steps in the correct order:
+1) First step (this is the correct position)
+2) Second step
+3) Third step
+4) Fourth step
+[explanation: Explain why this order is correct]`);
+    }
+    
+    // Code question example if relevant
+    const codeExample = s.includeCode ? `
+CODE-BASED QUESTION EXAMPLE:
+7. What does this code output?
+[code:python]
+x = [1, 2, 3]
+print(x[1])
+[/code]
+A. 1
+B. 2 *
+C. 3
+D. Error
+[explanation: Python lists are zero-indexed, so x[1] returns the second element, which is 2]` : '';
     
     return `Create ${s.questionCount} quiz questions from the study material I'll provide below.
 
-IMPORTANT: Use EXACTLY this format for each question type:
+CRITICAL FORMAT RULES:
+- Number each question (1, 2, 3, etc.)
+- Mark correct answers with * at the end of the line
+- ALWAYS include [explanation: ...] after each question explaining the answer
+- For multi-select questions with multiple correct answers, mark ALL correct options with *
+
+QUESTION TYPE FORMATS:
 
 ${typeInstructions.join('\n\n')}
+${codeExample}
 
-Rules:
-- Number each question (1, 2, 3, etc.)
-- For multiple choice, mark the correct answer with * at the end
-- For true/false, start with [tf] and put True or False on the next line
-- For matching, start with [match] and use => to connect pairs
-- Make questions clear and educational
-- Cover the key concepts from the material
+OPTIONAL ENHANCEMENTS (use when relevant):
+- Add images: [image: https://url.com/diagram.png | Description]
+- Add code blocks: [code:language]code here[/code]
+  Supported languages: python, javascript, powershell, bash, sql, java, csharp, html, css, json, yaml
+
+QUALITY GUIDELINES:
+- Write clear, unambiguous questions
+- Make wrong answers plausible (avoid obvious distractors)
+- Explanations should teach, not just state the answer
+- Cover different difficulty levels
+- Test understanding, not just memorization
+- For code questions, include realistic snippets
 
 Here is my study material:
 ---
@@ -409,10 +507,18 @@ export function wizardSetCategory(category) {
 export function wizardToggleType(type) {
     const types = wizardState.questionTypes;
     if (types.includes(type)) {
-        wizardState.questionTypes = types.filter(t => t !== type);
+        // Don't allow removing all types
+        if (types.length > 1) {
+            wizardState.questionTypes = types.filter(t => t !== type);
+        }
     } else {
         wizardState.questionTypes = [...types, type];
     }
+    setState({ view: 'wizard' }); // Re-render
+}
+
+export function wizardToggleCode() {
+    wizardState.includeCode = !wizardState.includeCode;
     setState({ view: 'wizard' }); // Re-render
 }
 

@@ -133,13 +133,9 @@ export async function handleAuth() {
         hideLoading();
         
         if (result.success) {
-            setState({ 
-                view: 'library',
-                isAuthenticated: true,
-                user: result.user,
-                authError: null
-            });
-            showToast(isLogin ? 'Welcome back!' : 'Account created! Welcome to Quiz Master Pro.', 'success');
+            // api.js already handles state, auth storage, and navigation
+            // Just clear any auth errors
+            setState({ authError: null });
         } else {
             setState({ authError: result.error || 'Authentication failed' });
         }

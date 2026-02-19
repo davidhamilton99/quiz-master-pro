@@ -142,15 +142,57 @@ def init_db():
 
 # === Auth Helpers ===
 
-def hash_password(password, salt=None):
-    if salt is None:
-        salt = secrets.token_hex(32)
-    h = hashlib.sha256((password + salt).encode()).hexdigest()
-    return h, salt
+# Try to use bcrypt for secure password hashing
+try:
+    import bcrypt
+    BCRYPT_AVAILABLE = True
+except ImportError:
+    BCRYPT_AVAILABLE = False
+    print("Warning: bcrypt not installed. Using PBKDF2 fallback. Install with: pip install bcrypt")
 
-def verify_password(password, hash, salt):
-    computed, _ = hash_password(password, salt)
-    return computed == hash
+def hash_password(password, salt=None):
+    """
+    Hash password securely.
+    - Uses bcrypt if available (recommended)
+    - Falls back to PBKDF2 with SHA256 (still secure)
+    - Legacy SHA256+salt support for existing passwords
+    """
+    if BCRYPT_AVAILABLE:
+        # bcrypt handles salt internally
+        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12))
+        return hashed.decode(), 'bcrypt'
+    else:
+        # PBKDF2 fallback - much better than plain SHA256
+        import hashlib
+        if salt is None:
+            salt = secrets.token_hex(32)
+        # 100,000 iterations of PBKDF2
+        h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+        return h, salt
+
+def verify_password(password, stored_hash, salt):
+    """
+    Verify password against stored hash.
+    Supports:
+    - bcrypt hashes (salt == 'bcrypt')
+    - PBKDF2 hashes (salt is hex string, hash is 64 chars)
+    - Legacy SHA256 hashes (for backward compatibility)
+    """
+    if salt == 'bcrypt' and BCRYPT_AVAILABLE:
+        # bcrypt verification
+        try:
+            return bcrypt.checkpw(password.encode(), stored_hash.encode())
+        except:
+            return False
+    elif len(stored_hash) == 64 and len(salt) == 64:
+        # PBKDF2 hash (64 hex chars = 32 bytes)
+        import hashlib
+        computed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+        return secrets.compare_digest(computed, stored_hash)
+    else:
+        # Legacy SHA256 fallback for old passwords
+        computed = hashlib.sha256((password + salt).encode()).hexdigest()
+        return secrets.compare_digest(computed, stored_hash)
 
 def token_required(f):
     @wraps(f)
@@ -1031,6 +1073,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/api/study-guide/upload', methods=['POST'])
+@token_required
 def upload_study_guide():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
@@ -1060,6 +1103,7 @@ def upload_study_guide():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/study-guide/preview', methods=['POST'])
+@token_required
 def preview_study_guide():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400

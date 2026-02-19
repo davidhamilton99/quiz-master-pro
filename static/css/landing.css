@@ -633,8 +633,27 @@
     position: relative;
 }
 
+.checkbox-text span {
+    color: var(--text-primary);
+}
+
 .checkbox-icon {
     font-size: 1rem;
+}
+
+.checkbox-desc {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    text-align: right;
+    max-width: 200px;
+}
+
+@media (max-width: 500px) {
+    .checkbox-desc {
+        display: none;
+    }
 }
 
 .number-selector {
@@ -1131,6 +1150,12 @@
 
 /* ==================== AUTH PAGE ==================== */
 
+/* Utility classes */
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+
 .auth-page {
     min-height: 100vh;
     display: flex;
@@ -1249,4 +1274,3 @@
     font-weight: 400;
     color: var(--text-muted);
 }
-

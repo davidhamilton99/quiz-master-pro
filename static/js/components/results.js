@@ -182,22 +182,24 @@ function renderReviewAnswer(q, userAnswer, isCorrect) {
             `;
             
         case 'ordering':
+            // Get items - parser stores as q.options, but may also be q.items
+            const orderItems = q.items || q.options || [];
             return `
                 <div class="review-ordering">
                     <div class="order-comparison">
                         <div class="order-col">
                             <div class="order-header">Your Order</div>
-                            ${(userAnswer || q.items.map((t, i) => ({ text: t, origIndex: i }))).map((item, i) => `
+                            ${(userAnswer || orderItems.map((t, i) => ({ text: typeof t === 'string' ? t : t.text, origIndex: i }))).map((item, i) => `
                                 <div class="order-item ${item.origIndex === i ? 'correct' : 'incorrect'}">
-                                    ${i + 1}. ${escapeHtml(item.text)}
+                                    ${i + 1}. ${escapeHtml(typeof item.text === 'string' ? item.text : item.text || item)}
                                 </div>
                             `).join('')}
                         </div>
                         <div class="order-col">
                             <div class="order-header">Correct Order</div>
-                            ${q.items.map((item, i) => `
+                            ${orderItems.map((item, i) => `
                                 <div class="order-item correct">
-                                    ${i + 1}. ${escapeHtml(item)}
+                                    ${i + 1}. ${escapeHtml(typeof item === 'string' ? item : item.text || item)}
                                 </div>
                             `).join('')}
                         </div>

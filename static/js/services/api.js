@@ -1,19 +1,36 @@
-/* API Service - IMPROVED with Retry Logic and Better Error Handling */
+/* API Service - FIXED: Proper return values for auth functions */
+/* Note: This file must NOT import from state.js to avoid circular dependency */
 
-import { getState, setState, saveAuth, clearAuth } from '../state.js';
 import { showToast } from '../utils/toast.js';
 import { API } from '../utils/constants.js';
 
 const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
 
+// State update callback - set by state.js to avoid circular import
+let stateUpdater = null;
+let authClearer = null;
+
+/**
+ * Register callbacks from state.js to avoid circular imports
+ */
+export function registerStateCallbacks(updateFn, clearAuthFn) {
+    stateUpdater = updateFn;
+    authClearer = clearAuthFn;
+}
+
+/**
+ * Core API call function with retry logic and error handling
+ * Exported so state.js can use the same client (fixes Bug #8)
+ */
 export async function apiCall(endpoint, options = {}, retryCount = 0) {
-    const state = getState();
+    const token = localStorage.getItem('token');
+    
     const headers = { 'Content-Type': 'application/json', ...options.headers };
-    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), API.REQUEST_TIMEOUT_MS);
+        const timeoutId = setTimeout(() => controller.abort(), API.REQUEST_TIMEOUT_MS || 15000);
         
         const res = await fetch(`${API_URL}${endpoint}`, { 
             ...options, 
@@ -28,24 +45,24 @@ export async function apiCall(endpoint, options = {}, retryCount = 0) {
             
             // Handle specific HTTP errors
             if (res.status === 401) {
-                clearAuth();
+                // Clear auth from localStorage directly to avoid circular import
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                if (authClearer) authClearer();
                 showToast('Session expired - please log in again', 'error');
                 throw new Error('Unauthorized');
             } else if (res.status === 404) {
-                showToast('Resource not found', 'error');
-                throw new Error('Not found');
+                throw new Error(data.error || 'Not found');
             } else if (res.status === 403) {
-                showToast('Access denied', 'error');
-                throw new Error('Forbidden');
+                throw new Error(data.error || 'Access denied');
+            } else if (res.status === 409) {
+                throw new Error(data.error || 'Already exists');
             } else if (res.status === 500) {
-                showToast('Server error - please try again later', 'error');
-                throw new Error('Server error');
+                throw new Error(data.error || 'Server error');
             } else if (res.status === 503) {
-                showToast('Service temporarily unavailable', 'error');
-                throw new Error('Service unavailable');
+                throw new Error(data.error || 'Service unavailable');
             } else {
-                showToast(data.error || `Request failed (${res.status})`, 'error');
-                throw new Error(data.error || 'Request failed');
+                throw new Error(data.error || `Request failed (${res.status})`);
             }
         }
         
@@ -54,113 +71,159 @@ export async function apiCall(endpoint, options = {}, retryCount = 0) {
     } catch (err) {
         // Handle network errors and timeouts
         if (err.name === 'AbortError') {
-            showToast('Request timed out', 'error');
-            throw new Error('Request timeout');
+            throw new Error('Request timed out');
         } else if (err.message === 'Failed to fetch') {
             // Network error - retry if applicable
-            if (retryCount < API.MAX_RETRIES) {
-                console.log(`Network error, retrying (attempt ${retryCount + 1}/${API.MAX_RETRIES})...`);
-                await new Promise(resolve => setTimeout(resolve, API.RETRY_DELAY_MS));
+            if (retryCount < (API.MAX_RETRIES || 2)) {
+                console.log(`Network error, retrying (attempt ${retryCount + 1})...`);
+                await new Promise(resolve => setTimeout(resolve, API.RETRY_DELAY_MS || 1000));
                 return apiCall(endpoint, options, retryCount + 1);
             }
-            showToast('Network error - check your connection', 'error');
-            throw new Error('Network error');
+            throw new Error('Network error - check your connection');
         }
         
-        // Re-throw other errors (already showed toast)
+        // Re-throw other errors
         throw err;
     }
 }
 
+/**
+ * Login user
+ * @returns {Promise<{success: boolean, user?: object, error?: string}>}
+ */
 export async function login(username, password) {
-    setState({ loading: true });
     try {
         const data = await apiCall('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ username, password })
         });
-        setState({ 
-            token: data.token, 
-            user: data.user, 
-            isAuthenticated: true, 
-            view: 'library', 
-            loading: false 
-        });
-        saveAuth();
+        
+        // Save to localStorage (Bug #4 fix)
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Update state via callback
+        if (stateUpdater) {
+            stateUpdater({ 
+                token: data.token, 
+                user: data.user, 
+                isAuthenticated: true, 
+                view: 'library'
+            });
+        }
+        
+        // Load quizzes
         await loadQuizzes();
+        
         showToast(`Welcome back, ${data.user.username}!`, 'success');
-        return true;
+        
+        // Return proper object (Bug #3 fix)
+        return { success: true, user: data.user };
+        
     } catch (err) {
-        setState({ loading: false });
-        // Error toast already shown by apiCall
-        return false;
+        showToast(err.message || 'Login failed', 'error');
+        return { success: false, error: err.message || 'Login failed' };
     }
 }
 
-export async function register(username, password) {
-    setState({ loading: true });
+/**
+ * Register new user
+ * @returns {Promise<{success: boolean, user?: object, error?: string}>}
+ */
+export async function register(username, password, email = null) {
     try {
         const data = await apiCall('/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ username, password, email: `${username}@quiz.local` })
+            body: JSON.stringify({ 
+                username, 
+                password, 
+                email: email || `${username}@quiz.local` 
+            })
         });
-        setState({ 
-            token: data.token, 
-            user: data.user, 
-            isAuthenticated: true, 
-            view: 'library', 
-            loading: false 
-        });
-        saveAuth();
+        
+        // Save to localStorage (Bug #4 fix)
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Update state via callback
+        if (stateUpdater) {
+            stateUpdater({ 
+                token: data.token, 
+                user: data.user, 
+                isAuthenticated: true, 
+                view: 'library'
+            });
+        }
+        
+        // Load quizzes
         await loadQuizzes();
+        
         showToast('Account created successfully!', 'success');
-        return true;
+        
+        // Return proper object (Bug #3 fix)
+        return { success: true, user: data.user };
+        
     } catch (err) {
-        setState({ loading: false });
-        return false;
+        showToast(err.message || 'Registration failed', 'error');
+        return { success: false, error: err.message || 'Registration failed' };
     }
 }
 
+/**
+ * Logout user
+ */
 export function logout() {
-    clearAuth();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    if (authClearer) authClearer();
     showToast('Logged out successfully', 'info');
 }
 
+/**
+ * Load all user's quizzes
+ */
 export async function loadQuizzes() {
     try {
         const data = await apiCall('/quizzes');
-        setState({ quizzes: data.quizzes || data });
-        return true;
+        const quizzes = data.quizzes || data || [];
+        if (stateUpdater) stateUpdater({ quizzes });
+        return quizzes;
     } catch (err) {
         console.error('Failed to load quizzes:', err);
-        setState({ quizzes: [] });
-        return false;
+        if (stateUpdater) stateUpdater({ quizzes: [] });
+        return [];
     }
 }
 
+/**
+ * Get single quiz by ID
+ */
 export async function getQuiz(id) {
-    try {
-        const data = await apiCall(`/quizzes/${id}`);
-        return data.quiz || data;
-    } catch (err) {
-        throw new Error(`Failed to load quiz: ${err.message}`);
-    }
+    const data = await apiCall(`/quizzes/${id}`);
+    return data.quiz || data;
 }
 
+/**
+ * Create new quiz
+ */
 export async function createQuiz(payload) {
     try {
-        await apiCall('/quizzes', { 
+        const data = await apiCall('/quizzes', { 
             method: 'POST', 
             body: JSON.stringify(payload) 
         });
         await loadQuizzes();
         showToast('Quiz created successfully!', 'success');
-        return true;
+        return { success: true, quizId: data.quiz_id };
     } catch (err) {
-        return false;
+        showToast(err.message || 'Failed to create quiz', 'error');
+        return { success: false, error: err.message };
     }
 }
 
+/**
+ * Update existing quiz
+ */
 export async function updateQuiz(id, payload) {
     try {
         await apiCall(`/quizzes/${id}`, { 
@@ -169,23 +232,31 @@ export async function updateQuiz(id, payload) {
         });
         await loadQuizzes();
         showToast('Quiz updated successfully!', 'success');
-        return true;
+        return { success: true };
     } catch (err) {
-        return false;
+        showToast(err.message || 'Failed to update quiz', 'error');
+        return { success: false, error: err.message };
     }
 }
 
+/**
+ * Delete quiz
+ */
 export async function deleteQuiz(id) {
     try {
         await apiCall(`/quizzes/${id}`, { method: 'DELETE' });
         await loadQuizzes();
         showToast('Quiz deleted', 'success');
-        return true;
+        return { success: true };
     } catch (err) {
-        return false;
+        showToast(err.message || 'Failed to delete quiz', 'error');
+        return { success: false, error: err.message };
     }
 }
 
+/**
+ * Save quiz attempt
+ */
 export async function saveAttempt(quizId, data) {
     try {
         await apiCall(`/quizzes/${quizId}/attempts`, { 
@@ -200,7 +271,59 @@ export async function saveAttempt(quizId, data) {
     }
 }
 
-// Health check for connection status
+// ==================== Profile & Progress API (for state.js) ====================
+
+/**
+ * Load user profile from server
+ */
+export async function loadProfile() {
+    return await apiCall('/profile');
+}
+
+/**
+ * Save user profile to server
+ */
+export async function saveProfileToServer(profileData) {
+    return await apiCall('/profile', {
+        method: 'PUT',
+        body: JSON.stringify(profileData)
+    });
+}
+
+/**
+ * Get quiz progress from server
+ */
+export async function getQuizProgress(quizId) {
+    return await apiCall(`/progress/${quizId}`);
+}
+
+/**
+ * Save quiz progress to server
+ */
+export async function saveQuizProgressToServer(quizId, progressData) {
+    return await apiCall(`/progress/${quizId}`, {
+        method: 'PUT',
+        body: JSON.stringify(progressData)
+    });
+}
+
+/**
+ * Clear quiz progress on server
+ */
+export async function clearQuizProgressOnServer(quizId) {
+    return await apiCall(`/progress/${quizId}`, { method: 'DELETE' });
+}
+
+/**
+ * Get all in-progress quizzes
+ */
+export async function getAllProgress() {
+    return await apiCall('/progress');
+}
+
+/**
+ * Health check for connection status
+ */
 export async function checkConnection() {
     try {
         await apiCall('/health', { method: 'GET' });

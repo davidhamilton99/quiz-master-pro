@@ -1,6 +1,16 @@
 /* State Management - v2.0 with Database Sync */
 
-const API_BASE = '/api';
+// Import API functions from the single source of truth (Bug #8 fix)
+import { 
+    apiCall, 
+    loadProfile as apiLoadProfile,
+    saveProfileToServer,
+    getQuizProgress,
+    saveQuizProgressToServer,
+    clearQuizProgressOnServer,
+    getAllProgress,
+    registerStateCallbacks
+} from './services/api.js';
 
 let state = {
     // Auth
@@ -72,6 +82,9 @@ let state = {
     // Sync status
     profileLoaded: false,
     syncPending: false,
+    
+    // Cached in-progress quizzes (Bug #1 fix - for synchronous access)
+    inProgressQuizzes: [],
 };
 
 const listeners = [];
@@ -118,33 +131,6 @@ export function subscribe(fn) {
     };
 }
 
-// ==================== API HELPERS ====================
-
-function getAuthToken() {
-    return localStorage.getItem('token');
-}
-
-async function apiCall(endpoint, options = {}) {
-    const token = getAuthToken();
-    const headers = {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
-    };
-    
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers,
-    });
-    
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || 'Request failed');
-    }
-    
-    return response.json();
-}
-
 // ==================== AUTH ====================
 
 export function loadAuth() {
@@ -154,7 +140,7 @@ export function loadAuth() {
         
         if (token && userStr) {
             const user = JSON.parse(userStr);
-            setState({ isAuthenticated: true, user, view: 'library' }, true);
+            setState({ isAuthenticated: true, user, token, view: 'library' }, true);
             return true;
         }
     } catch (e) {
@@ -165,21 +151,29 @@ export function loadAuth() {
     return false;
 }
 
+// saveAuth is no longer needed - api.js handles saving directly
+// Keeping for backward compatibility but it's a no-op now
 export function saveAuth(token, user) {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-    setState({ isAuthenticated: true, user });
+    // Auth is now saved directly in api.js login/register functions
+    if (token && user) {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        setState({ isAuthenticated: true, user, token });
+    }
 }
 
 export function clearAuth() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setState({ isAuthenticated: false, user: null, view: 'landing', profileLoaded: false });
+    setState({ isAuthenticated: false, user: null, token: null, view: 'landing', profileLoaded: false });
 }
 
 export function logout() {
     clearAuth();
 }
+
+// Register callbacks with api.js to avoid circular imports
+registerStateCallbacks(setState, clearAuth);
 
 // ==================== PROFILE/GAMIFICATION (SERVER SYNC) ====================
 
@@ -188,7 +182,7 @@ export function logout() {
  */
 export async function loadProfile() {
     try {
-        const data = await apiCall('/profile');
+        const data = await apiLoadProfile();
         
         if (data.profile) {
             const p = data.profile;
@@ -230,24 +224,21 @@ export function saveProfile() {
     syncTimeout = setTimeout(async () => {
         try {
             const s = getState();
-            await apiCall('/profile', {
-                method: 'PUT',
-                body: JSON.stringify({
-                    xp: s.xp,
-                    level: s.level,
-                    gems: s.gems,
-                    daily_streak: s.dailyStreak,
-                    last_active_date: s.lastActiveDate,
-                    achievements: s.achievements,
-                    total_answered: s.totalAnswered,
-                    total_correct: s.totalCorrect,
-                    quizzes_completed: s.quizzesCompleted,
-                    perfect_scores: s.perfectScores,
-                    settings: {
-                        soundEnabled: s.soundEnabled,
-                        animationsEnabled: s.animationsEnabled,
-                    },
-                }),
+            await saveProfileToServer({
+                xp: s.xp,
+                level: s.level,
+                gems: s.gems,
+                daily_streak: s.dailyStreak,
+                last_active_date: s.lastActiveDate,
+                achievements: s.achievements,
+                total_answered: s.totalAnswered,
+                total_correct: s.totalCorrect,
+                quizzes_completed: s.quizzesCompleted,
+                perfect_scores: s.perfectScores,
+                settings: {
+                    soundEnabled: s.soundEnabled,
+                    animationsEnabled: s.animationsEnabled,
+                },
             });
             console.log('Profile synced to server');
         } catch (e) {
@@ -554,10 +545,7 @@ export async function saveQuizProgress() {
     };
     
     try {
-        await apiCall(`/progress/${s.currentQuiz.id}`, {
-            method: 'PUT',
-            body: JSON.stringify(progressData),
-        });
+        await saveQuizProgressToServer(s.currentQuiz.id, progressData);
     } catch (e) {
         console.error('Failed to save progress to server:', e);
         // Fallback to localStorage
@@ -573,7 +561,7 @@ export async function saveQuizProgress() {
  */
 export async function loadQuizProgress(quizId) {
     try {
-        const data = await apiCall(`/progress/${quizId}`);
+        const data = await getQuizProgress(quizId);
         if (data.progress) {
             const p = data.progress;
             return {
@@ -612,7 +600,7 @@ export async function loadQuizProgress(quizId) {
  */
 export async function clearQuizProgress(quizId) {
     try {
-        await apiCall(`/progress/${quizId}`, { method: 'DELETE' });
+        await clearQuizProgressOnServer(quizId);
     } catch (e) {
         console.error('Failed to clear progress on server:', e);
     }
@@ -624,7 +612,7 @@ export async function clearQuizProgress(quizId) {
  */
 export async function getAllInProgressQuizzes() {
     try {
-        const data = await apiCall('/progress');
+        const data = await getAllProgress();
         if (data.progress) {
             return data.progress.map(p => ({
                 quizId: p.quiz_id,
@@ -665,6 +653,24 @@ export async function getAllInProgressQuizzes() {
     }
     
     return inProgress;
+}
+
+/**
+ * Load in-progress quizzes and cache them in state (Bug #1 fix)
+ * Call this after loadQuizzes() in app init
+ */
+export async function loadInProgressQuizzes() {
+    const progress = await getAllInProgressQuizzes();
+    setState({ inProgressQuizzes: progress }, true);
+    return progress;
+}
+
+/**
+ * Get cached in-progress quizzes synchronously (Bug #1 fix)
+ * Use this in renderLibrary() instead of getAllInProgressQuizzes()
+ */
+export function getInProgressQuizzesCached() {
+    return getState().inProgressQuizzes || [];
 }
 
 // ==================== DAILY STREAK ====================

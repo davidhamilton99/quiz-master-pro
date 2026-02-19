@@ -27,8 +27,8 @@ import {
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
 import { 
     renderWizard, resetWizard, wizardSetTitle, wizardSetCategory, wizardToggleType,
-    wizardSetCount, wizardNext, wizardBack, wizardCopyPrompt, wizardSetContent,
-    wizardPreviewContent, wizardFinish, exitWizard
+    wizardToggleCode, wizardSetCount, wizardNext, wizardBack, wizardCopyPrompt, 
+    wizardSetContent, wizardPreviewContent, wizardFinish, exitWizard
 } from './components/wizard.js';
 
 // Import sounds, animations, and playerHUD
@@ -397,6 +397,7 @@ window.app = {
     wizardSetTitle,
     wizardSetCategory,
     wizardToggleType,
+    wizardToggleCode,
     wizardSetCount,
     wizardNext,
     wizardBack,
