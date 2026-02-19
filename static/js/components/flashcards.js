@@ -22,7 +22,7 @@ let touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 export function initFlashcards(quiz) {
     const cards = quiz.questions.map((q, i) => ({
         id: i,
-        front: q.question.replace(/^\[multi\]\s*/i, ''),
+        front: q.question,
         back: getAnswerText(q),
         explanation: q.explanation || null,
         type: q.type,
@@ -143,7 +143,7 @@ export function renderFlashcards() {
             <!-- Main Card -->
             <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
                  id="fc2-card"
->
+                 onclick="window.app.fcFlip()">
                 
                 <!-- Front -->
                 <div class="fc2-card-face fc2-card-front">
@@ -215,7 +215,7 @@ export function renderFlashcards() {
         
         <!-- Bottom Navigation -->
         <div class="fc2-bottom-nav">
-            <button class="fc2-nav-btn" onclick="window.app.fcPrev()" ${fc.currentIndex === 0 ? 'disabled' : ''}>
+            <button class="fc2-nav-btn" onclick="window.app.fcPrev()" ontouchend="event.stopPropagation(); window.app.fcPrev()" ${fc.currentIndex === 0 ? 'disabled' : ''}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15 18l-6-6 6-6"/>
                 </svg>
@@ -225,7 +225,7 @@ export function renderFlashcards() {
                 ${fc.isFlipped ? 'Tap card or press Space' : 'Flip Card'}
             </button>
             
-            <button class="fc2-nav-btn" onclick="window.app.fcNext()" ${fc.currentIndex >= total - 1 ? 'disabled' : ''}>
+            <button class="fc2-nav-btn" onclick="window.app.fcNext()" ontouchend="event.stopPropagation(); window.app.fcNext()" ${fc.currentIndex >= total - 1 ? 'disabled' : ''}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 18l6-6-6-6"/>
                 </svg>
@@ -353,28 +353,6 @@ function getTypeName(type) {
 
 // ==================== Actions ====================
 
-
-function animateCardTransition(direction, callback) {
-    const card = document.getElementById('fc2-card');
-    const exitClass = direction === 'next' ? 'exit-left' : 'exit-right';
-    const enterClass = direction === 'next' ? 'enter-left' : 'enter-right';
-    if (card) {
-        card.classList.add(exitClass);
-        setTimeout(() => {
-            callback();
-            requestAnimationFrame(() => {
-                const newCard = document.getElementById('fc2-card');
-                if (newCard) {
-                    newCard.classList.add(enterClass);
-                    setTimeout(() => newCard.classList.remove(enterClass), 310);
-                }
-            });
-        }, 280);
-    } else {
-        callback();
-    }
-}
-
 export function fcFlip() {
     fc.isFlipped = !fc.isFlipped;
     
@@ -390,26 +368,21 @@ export function fcFlip() {
 
 export function fcNext() {
     if (fc.currentIndex < fc.cards.length - 1) {
-        animateCardTransition('next', () => {
-            fc.currentIndex++;
-            fc.isFlipped = false;
-            setState({ view: 'flashcards' });
-        });
+        fc.currentIndex++;
+        fc.isFlipped = false;
+        setState({ view: 'flashcards' });
     } else if (fc.currentIndex === fc.cards.length - 1) {
-        animateCardTransition('next', () => {
-            fc.currentIndex++;
-            setState({ view: 'flashcards' });
-        });
+        // Go to completion
+        fc.currentIndex++;
+        setState({ view: 'flashcards' });
     }
 }
 
 export function fcPrev() {
     if (fc.currentIndex > 0) {
-        animateCardTransition('prev', () => {
-            fc.currentIndex--;
-            fc.isFlipped = false;
-            setState({ view: 'flashcards' });
-        });
+        fc.currentIndex--;
+        fc.isFlipped = false;
+        setState({ view: 'flashcards' });
     }
 }
 
@@ -429,18 +402,16 @@ export function fcRate(rating) {
     fc.sessionStats[rating]++;
     fc.sessionStats.seen++;
     
+    // Instant advance - no delay
     if (fc.autoAdvance) {
         if (fc.currentIndex < fc.cards.length - 1) {
-            animateCardTransition('next', () => {
-                fc.currentIndex++;
-                fc.isFlipped = false;
-                setState({ view: 'flashcards' });
-            });
+            fc.currentIndex++;
+            fc.isFlipped = false;
+            setState({ view: 'flashcards' });
         } else {
-            animateCardTransition('next', () => {
-                fc.currentIndex++;
-                setState({ view: 'flashcards' });
-            });
+            // Go to completion
+            fc.currentIndex++;
+            setState({ view: 'flashcards' });
         }
     }
 }
@@ -512,17 +483,16 @@ export function fcTouchStart(e) {
     touch.startX = e.touches[0].clientX;
     touch.startY = e.touches[0].clientY;
     touch.currentX = touch.startX;
-    touch.currentY = touch.startY;
     touch.isDragging = false;
+    touch.onCard = !!e.target.closest('#fc2-card');
 }
 
 export function fcTouchMove(e) {
     if (!touch.startX) return;
     
     touch.currentX = e.touches[0].clientX;
-    touch.currentY = e.touches[0].clientY;
     const deltaX = touch.currentX - touch.startX;
-    const deltaY = Math.abs(touch.currentY - touch.startY);
+    const deltaY = Math.abs(e.touches[0].clientY - touch.startY);
     
     // Only handle horizontal swipes
     if (Math.abs(deltaX) > 30 && deltaY < 100) {
@@ -557,11 +527,6 @@ export function fcTouchMove(e) {
 
 export function fcTouchEnd(e) {
     const deltaX = touch.currentX - touch.startX;
-    const deltaY = Math.abs(touch.currentY - touch.startY);
-    const totalMovement = Math.abs(deltaX) + deltaY;
-
-    // Always prevent the synthetic click the browser fires after touchend
-    e.preventDefault();
     
     // Reset card position
     const card = document.getElementById('fc2-card');
@@ -574,20 +539,18 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    if (touch.isDragging && Math.abs(deltaX) > 100) {
-        // Completed swipe
-        if (fc.isFlipped) {
-            fcRate(deltaX > 0 ? 'good' : 'again');
-        } else {
-            fcFlip();
+    // Handle swipe or tap - only when interaction started on the card
+    if (touch.onCard) {
+        if (touch.isDragging && Math.abs(deltaX) > 100) {
+            if (fc.isFlipped) {
+                fcRate(deltaX > 0 ? 'good' : 'again');
+            } else {
+                fcFlip();
+            }
         }
-    } else if (!touch.isDragging) {
-        // Never entered drag mode = tap, flip the card
-        fcFlip();
     }
-    // isDragging but didn't reach threshold = aborted swipe, do nothing
-
-    touch = { startX: 0, startY: 0, currentX: 0, currentY: 0, isDragging: false };
+    
+    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, onCard: false };
 }
 
 // ==================== Keyboard ====================
