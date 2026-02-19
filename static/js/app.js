@@ -29,10 +29,11 @@ import {
 
 // Flashcards
 import {
-    renderFlashcards, initFlashcards, flipCard, nextCard, prevCard, markCard,
-    setFlashcardMode, shuffleCards, resetFlashcards, exitFlashcards,
-    flashcardTouchStart, flashcardTouchMove, flashcardTouchEnd
-} from './components/flashcards.js';
+    renderFlashcards, initFlashcards, fcFlip, fcNext, fcPrev, fcRate,
+    fcShuffle, fcRestart, fcStudyMissed, fcGoToCard,
+    fcToggleMenu, fcToggleShortcuts, exitFlashcards,
+    fcTouchStart, fcTouchMove, fcTouchEnd
+} from './components/flashcards-v2.js';
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
@@ -504,27 +505,26 @@ window.app = {
     sgDownload,
     sgReset,
     
-    // Flashcards
+    // Flashcards v2
     startFlashcards: async (quizId) => {
         const { getQuiz } = await import('./services/api.js');
         const quiz = await getQuiz(quizId);
         initFlashcards(quiz);
     },
-    flipCard,
-    nextCard,
-    prevCard,
-    markCard,
-    setFlashcardMode,
-    shuffleCards,
-    resetFlashcards,
+    fcFlip,
+    fcNext,
+    fcPrev,
+    fcRate,
+    fcShuffle,
+    fcRestart,
+    fcStudyMissed,
+    fcGoToCard,
+    fcToggleMenu,
+    fcToggleShortcuts,
     exitFlashcards,
-    flashcardTouchStart,
-    flashcardTouchMove,
-    flashcardTouchEnd,
-    toggleFlashcardSettings: () => {
-        // TODO: Add settings modal
-        showToast('Settings coming soon!', 'info');
-    },
+    fcTouchStart,
+    fcTouchMove,
+    fcTouchEnd,
     
     // Rewards
     showPendingRewards,

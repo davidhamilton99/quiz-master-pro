@@ -1,46 +1,44 @@
-/* Flashcards Component - Stunning 3D flip cards with swipe gestures */
+/* Flashcards v2 - Premium Study Experience */
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 
 // Flashcard state
-let flashcardState = {
+let fc = {
+    quiz: null,
     cards: [],
     currentIndex: 0,
     isFlipped: false,
-    knownCards: new Set(),
-    unknownCards: new Set(),
-    shuffled: false,
-    studyMode: 'all', // 'all', 'unknown', 'known'
-    showProgress: true,
+    ratings: {}, // cardId -> 'easy' | 'good' | 'hard' | 'again'
+    sessionStats: { seen: 0, easy: 0, good: 0, hard: 0, again: 0 },
+    isShuffled: false,
+    autoAdvance: true,
+    showShortcuts: false,
 };
 
-// Touch handling for swipe
-let touchStartX = 0;
-let touchStartY = 0;
-let touchCurrentX = 0;
-let isDragging = false;
+// Touch state
+let touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 
 export function initFlashcards(quiz) {
-    // Convert quiz questions to flashcards
-    const cards = quiz.questions.map((q, index) => ({
-        id: index,
+    const cards = quiz.questions.map((q, i) => ({
+        id: i,
         front: q.question,
         back: getAnswerText(q),
         explanation: q.explanation || null,
         type: q.type,
-        originalQuestion: q,
+        question: q,
     }));
     
-    flashcardState = {
+    fc = {
+        quiz,
         cards,
         currentIndex: 0,
         isFlipped: false,
-        knownCards: new Set(),
-        unknownCards: new Set(),
-        shuffled: false,
-        studyMode: 'all',
-        showProgress: true,
+        ratings: {},
+        sessionStats: { seen: 0, easy: 0, good: 0, hard: 0, again: 0 },
+        isShuffled: false,
+        autoAdvance: true,
+        showShortcuts: false,
     };
     
     setState({ view: 'flashcards', currentQuiz: quiz });
@@ -49,447 +47,556 @@ export function initFlashcards(quiz) {
 function getAnswerText(q) {
     switch (q.type) {
         case 'truefalse':
-            return q.correct ? 'True' : 'False';
+            return q.correct ? 'True ✓' : 'False ✗';
         case 'matching':
-            return q.options.map(opt => `${opt.left} → ${opt.right}`).join('\n');
+            return (q.options || []).map(opt => `${opt.left} → ${opt.right}`).join('\n');
         case 'ordering':
-            return (q.items || q.options).map((item, i) => `${i + 1}. ${typeof item === 'string' ? item : item.text}`).join('\n');
+            const items = q.items || q.options || [];
+            return items.map((item, i) => `${i + 1}. ${typeof item === 'string' ? item : item.text}`).join('\n');
         default:
             if (Array.isArray(q.correct)) {
                 return q.correct.map(i => q.options[i]).join(', ');
             }
-            return q.options[q.correct] || 'N/A';
-    }
-}
-
-function getFilteredCards() {
-    const { cards, studyMode, knownCards, unknownCards } = flashcardState;
-    
-    switch (studyMode) {
-        case 'unknown':
-            return cards.filter(c => unknownCards.has(c.id));
-        case 'known':
-            return cards.filter(c => knownCards.has(c.id));
-        default:
-            return cards;
+            return q.options?.[q.correct] || 'N/A';
     }
 }
 
 export function renderFlashcards() {
-    const state = getState();
-    const quiz = state.currentQuiz;
-    const { currentIndex, isFlipped, knownCards, unknownCards, shuffled, studyMode } = flashcardState;
+    const card = fc.cards[fc.currentIndex];
+    const total = fc.cards.length;
+    const progress = total > 0 ? ((fc.currentIndex + 1) / total) * 100 : 0;
+    const rating = card ? fc.ratings[card.id] : null;
     
-    const filteredCards = getFilteredCards();
-    const card = filteredCards[currentIndex];
-    const total = filteredCards.length;
-    const progress = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
-    
-    const isKnown = card ? knownCards.has(card.id) : false;
-    const isUnknown = card ? unknownCards.has(card.id) : false;
+    // Calculate stats
+    const remaining = total - fc.currentIndex;
+    const masteredCount = Object.values(fc.ratings).filter(r => r === 'easy' || r === 'good').length;
+    const learningCount = Object.values(fc.ratings).filter(r => r === 'hard' || r === 'again').length;
     
     if (!card) {
-        return renderEmptyState(quiz, knownCards.size, unknownCards.size);
+        return renderCompletionScreen();
     }
-    
+
     return `
-    <div class="flashcards-container">
-        <!-- Header -->
-        <div class="flashcards-header">
-            <button class="btn btn-ghost" onclick="window.app.exitFlashcards()">
-                ← Back
+    <div class="fc2-container" 
+         ontouchstart="window.app.fcTouchStart(event)"
+         ontouchmove="window.app.fcTouchMove(event)" 
+         ontouchend="window.app.fcTouchEnd(event)">
+        
+        <!-- Top Bar -->
+        <div class="fc2-topbar">
+            <button class="fc2-close" onclick="window.app.exitFlashcards()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
             </button>
-            <div class="flashcards-title">
-                <h2>${escapeHtml(quiz?.title || 'Flashcards')}</h2>
-                <span class="flashcards-counter">${currentIndex + 1} / ${total}</span>
+            
+            <div class="fc2-progress-info">
+                <span class="fc2-counter">${fc.currentIndex + 1} / ${total}</span>
             </div>
-            <button class="btn btn-ghost" onclick="window.app.toggleFlashcardSettings()">
-                ⚙️
+            
+            <button class="fc2-menu-btn" onclick="window.app.fcToggleMenu()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+                </svg>
             </button>
         </div>
         
         <!-- Progress Bar -->
-        <div class="flashcards-progress">
-            <div class="flashcards-progress-bar" style="width: ${progress}%"></div>
+        <div class="fc2-progress-bar">
+            <div class="fc2-progress-fill" style="width: ${progress}%"></div>
+            <div class="fc2-progress-sections">
+                ${fc.cards.map((c, i) => `
+                    <div class="fc2-progress-dot ${i === fc.currentIndex ? 'current' : ''} ${fc.ratings[c.id] ? fc.ratings[c.id] : ''}"
+                         onclick="window.app.fcGoToCard(${i})"></div>
+                `).join('')}
+            </div>
         </div>
         
-        <!-- Stats Bar -->
-        <div class="flashcards-stats">
-            <button class="stat-chip ${studyMode === 'all' ? 'active' : ''}" onclick="window.app.setFlashcardMode('all')">
-                📚 All (${flashcardState.cards.length})
-            </button>
-            <button class="stat-chip known ${studyMode === 'known' ? 'active' : ''}" onclick="window.app.setFlashcardMode('known')">
-                ✓ Know (${knownCards.size})
-            </button>
-            <button class="stat-chip unknown ${studyMode === 'unknown' ? 'active' : ''}" onclick="window.app.setFlashcardMode('unknown')">
-                ✗ Learning (${unknownCards.size})
-            </button>
+        <!-- Session Stats -->
+        <div class="fc2-stats-bar">
+            <div class="fc2-stat">
+                <span class="fc2-stat-num remaining">${remaining}</span>
+                <span class="fc2-stat-label">Left</span>
+            </div>
+            <div class="fc2-stat">
+                <span class="fc2-stat-num mastered">${masteredCount}</span>
+                <span class="fc2-stat-label">Mastered</span>
+            </div>
+            <div class="fc2-stat">
+                <span class="fc2-stat-num learning">${learningCount}</span>
+                <span class="fc2-stat-label">Learning</span>
+            </div>
         </div>
         
-        <!-- Card Area -->
-        <div class="flashcards-area" 
-             ontouchstart="window.app.flashcardTouchStart(event)"
-             ontouchmove="window.app.flashcardTouchMove(event)"
-             ontouchend="window.app.flashcardTouchEnd(event)">
+        <!-- Card Stack Area -->
+        <div class="fc2-card-area">
+            <!-- Background cards for stack effect -->
+            <div class="fc2-card-stack">
+                <div class="fc2-stack-card fc2-stack-2"></div>
+                <div class="fc2-stack-card fc2-stack-1"></div>
+            </div>
             
-            <div class="flashcard-wrapper ${isFlipped ? 'flipped' : ''}" 
-                 onclick="window.app.flipCard()"
-                 id="flashcard-wrapper">
+            <!-- Main Card -->
+            <div class="fc2-card ${fc.isFlipped ? 'flipped' : ''} ${rating ? 'rated-' + rating : ''}" 
+                 id="fc2-card"
+                 onclick="window.app.fcFlip()">
                 
-                <!-- Front of Card -->
-                <div class="flashcard flashcard-front">
-                    <div class="flashcard-badge">${getTypeBadge(card.type)}</div>
-                    <div class="flashcard-content">
-                        <div class="flashcard-question">${formatCardContent(card.front)}</div>
+                <!-- Front -->
+                <div class="fc2-card-face fc2-card-front">
+                    <div class="fc2-card-type">${getTypeIcon(card.type)} ${getTypeName(card.type)}</div>
+                    <div class="fc2-card-content">
+                        ${formatContent(card.front)}
                     </div>
-                    <div class="flashcard-hint">
-                        <span>👆 Tap to flip</span>
+                    <div class="fc2-tap-hint">
+                        <span>Tap to reveal answer</span>
                     </div>
                 </div>
                 
-                <!-- Back of Card -->
-                <div class="flashcard flashcard-back">
-                    <div class="flashcard-badge answer-badge">Answer</div>
-                    <div class="flashcard-content">
-                        <div class="flashcard-answer">${formatCardContent(card.back)}</div>
-                        ${card.explanation ? `
-                            <div class="flashcard-explanation">
-                                <strong>💡 Explanation:</strong>
-                                <p>${escapeHtml(card.explanation)}</p>
-                            </div>
-                        ` : ''}
+                <!-- Back -->
+                <div class="fc2-card-face fc2-card-back">
+                    <div class="fc2-card-label">Answer</div>
+                    <div class="fc2-card-content fc2-answer">
+                        ${formatContent(card.back)}
                     </div>
-                    <div class="flashcard-hint">
-                        <span>👆 Tap to flip back</span>
-                    </div>
+                    ${card.explanation ? `
+                        <div class="fc2-explanation">
+                            <div class="fc2-explanation-title">💡 Why?</div>
+                            <div class="fc2-explanation-text">${escapeHtml(card.explanation)}</div>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
             
-            <!-- Swipe Indicators -->
-            <div class="swipe-indicator swipe-left" id="swipe-left">
-                <span>✗</span>
-                <span>Still Learning</span>
+            <!-- Swipe Overlays -->
+            <div class="fc2-swipe-overlay fc2-swipe-left" id="swipe-left-overlay">
+                <div class="fc2-swipe-icon">🔄</div>
+                <div class="fc2-swipe-text">Again</div>
             </div>
-            <div class="swipe-indicator swipe-right" id="swipe-right">
-                <span>✓</span>
-                <span>Got It!</span>
+            <div class="fc2-swipe-overlay fc2-swipe-right" id="swipe-right-overlay">
+                <div class="fc2-swipe-icon">✓</div>
+                <div class="fc2-swipe-text">Got it!</div>
             </div>
         </div>
         
-        <!-- Card Status -->
-        ${isKnown || isUnknown ? `
-            <div class="card-status ${isKnown ? 'known' : 'unknown'}">
-                ${isKnown ? '✓ Marked as Known' : '✗ Still Learning'}
+        <!-- Rating Buttons (shown after flip) -->
+        <div class="fc2-rating-area ${fc.isFlipped ? 'visible' : ''}">
+            <p class="fc2-rating-prompt">How well did you know this?</p>
+            <div class="fc2-rating-buttons">
+                <button class="fc2-rate-btn fc2-rate-again ${rating === 'again' ? 'selected' : ''}" 
+                        onclick="window.app.fcRate('again')">
+                    <span class="fc2-rate-icon">🔄</span>
+                    <span class="fc2-rate-label">Again</span>
+                    <span class="fc2-rate-key">1</span>
+                </button>
+                <button class="fc2-rate-btn fc2-rate-hard ${rating === 'hard' ? 'selected' : ''}" 
+                        onclick="window.app.fcRate('hard')">
+                    <span class="fc2-rate-icon">😓</span>
+                    <span class="fc2-rate-label">Hard</span>
+                    <span class="fc2-rate-key">2</span>
+                </button>
+                <button class="fc2-rate-btn fc2-rate-good ${rating === 'good' ? 'selected' : ''}" 
+                        onclick="window.app.fcRate('good')">
+                    <span class="fc2-rate-icon">👍</span>
+                    <span class="fc2-rate-label">Good</span>
+                    <span class="fc2-rate-key">3</span>
+                </button>
+                <button class="fc2-rate-btn fc2-rate-easy ${rating === 'easy' ? 'selected' : ''}" 
+                        onclick="window.app.fcRate('easy')">
+                    <span class="fc2-rate-icon">🎯</span>
+                    <span class="fc2-rate-label">Easy</span>
+                    <span class="fc2-rate-key">4</span>
+                </button>
             </div>
-        ` : ''}
+        </div>
         
-        <!-- Controls -->
-        <div class="flashcards-controls">
-            <button class="fc-btn fc-btn-unknown ${isUnknown ? 'active' : ''}" 
-                    onclick="window.app.markCard('unknown')"
-                    title="Still learning this">
-                <span class="fc-btn-icon">✗</span>
-                <span class="fc-btn-label">Learning</span>
+        <!-- Bottom Navigation -->
+        <div class="fc2-bottom-nav">
+            <button class="fc2-nav-btn" onclick="window.app.fcPrev()" ${fc.currentIndex === 0 ? 'disabled' : ''}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                </svg>
             </button>
             
-            <div class="fc-nav-controls">
-                <button class="fc-nav-btn" onclick="window.app.prevCard()" ${currentIndex === 0 ? 'disabled' : ''}>
-                    ‹
-                </button>
-                <button class="fc-flip-btn" onclick="window.app.flipCard()">
-                    🔄 Flip
-                </button>
-                <button class="fc-nav-btn" onclick="window.app.nextCard()" ${currentIndex >= total - 1 ? 'disabled' : ''}>
-                    ›
-                </button>
-            </div>
+            <button class="fc2-flip-btn" onclick="window.app.fcFlip()">
+                ${fc.isFlipped ? 'Tap card or press Space' : 'Flip Card'}
+            </button>
             
-            <button class="fc-btn fc-btn-known ${isKnown ? 'active' : ''}" 
-                    onclick="window.app.markCard('known')"
-                    title="I know this one">
-                <span class="fc-btn-icon">✓</span>
-                <span class="fc-btn-label">Know It</span>
+            <button class="fc2-nav-btn" onclick="window.app.fcNext()" ${fc.currentIndex >= total - 1 ? 'disabled' : ''}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
             </button>
         </div>
         
-        <!-- Keyboard Hints -->
-        <div class="keyboard-hints">
-            <span>⌨️ Space: Flip</span>
-            <span>←→: Navigate</span>
-            <span>1: Learning</span>
-            <span>2: Know It</span>
+        <!-- Keyboard Shortcuts (Desktop) -->
+        <div class="fc2-shortcuts ${fc.showShortcuts ? 'visible' : ''}">
+            <div class="fc2-shortcut"><kbd>Space</kbd> Flip card</div>
+            <div class="fc2-shortcut"><kbd>←</kbd><kbd>→</kbd> Navigate</div>
+            <div class="fc2-shortcut"><kbd>1-4</kbd> Rate card</div>
+            <div class="fc2-shortcut"><kbd>S</kbd> Shuffle</div>
+            <div class="fc2-shortcut"><kbd>Esc</kbd> Exit</div>
+        </div>
+        
+        <!-- Menu Dropdown -->
+        <div class="fc2-menu" id="fc2-menu">
+            <button onclick="window.app.fcShuffle()">🔀 Shuffle Cards</button>
+            <button onclick="window.app.fcRestart()">🔄 Restart</button>
+            <button onclick="window.app.fcToggleShortcuts()">⌨️ Keyboard Shortcuts</button>
+            <div class="fc2-menu-divider"></div>
+            <button onclick="window.app.exitFlashcards()">✕ Exit to Library</button>
         </div>
     </div>
     `;
 }
 
-function renderEmptyState(quiz, knownCount, unknownCount) {
-    const { studyMode } = flashcardState;
+function renderCompletionScreen() {
+    const total = fc.cards.length;
+    const stats = fc.sessionStats;
+    const masteredCount = Object.values(fc.ratings).filter(r => r === 'easy' || r === 'good').length;
+    const learningCount = Object.values(fc.ratings).filter(r => r === 'hard' || r === 'again').length;
+    const masteryPercent = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
     
-    let message = '';
-    let action = '';
-    
-    if (studyMode === 'unknown' && unknownCount === 0) {
-        message = "🎉 Great job! No cards left to learn.";
-        action = `<button class="btn btn-primary" onclick="window.app.setFlashcardMode('all')">Review All Cards</button>`;
-    } else if (studyMode === 'known' && knownCount === 0) {
-        message = "No cards marked as known yet. Keep studying!";
-        action = `<button class="btn btn-primary" onclick="window.app.setFlashcardMode('all')">Study All Cards</button>`;
-    } else {
-        message = "No flashcards available.";
-        action = `<button class="btn btn-primary" onclick="window.app.exitFlashcards()">Go Back</button>`;
-    }
+    // Get cards that need review
+    const againCards = fc.cards.filter(c => fc.ratings[c.id] === 'again' || fc.ratings[c.id] === 'hard');
     
     return `
-    <div class="flashcards-container">
-        <div class="flashcards-header">
-            <button class="btn btn-ghost" onclick="window.app.exitFlashcards()">← Back</button>
-            <h2>${escapeHtml(quiz?.title || 'Flashcards')}</h2>
-            <div></div>
-        </div>
-        
-        <div class="flashcards-empty">
-            <div class="empty-icon">📚</div>
-            <p>${message}</p>
-            ${action}
+    <div class="fc2-container fc2-completion">
+        <div class="fc2-completion-content">
+            <div class="fc2-completion-icon">🎉</div>
+            <h1>Session Complete!</h1>
+            <p class="fc2-completion-subtitle">You've reviewed all ${total} cards</p>
             
-            ${knownCount > 0 || unknownCount > 0 ? `
-                <div class="final-stats">
-                    <div class="final-stat known">
-                        <span class="stat-number">${knownCount}</span>
-                        <span class="stat-label">Known</span>
-                    </div>
-                    <div class="final-stat unknown">
-                        <span class="stat-number">${unknownCount}</span>
-                        <span class="stat-label">Learning</span>
-                    </div>
+            <!-- Mastery Ring -->
+            <div class="fc2-mastery-ring">
+                <svg viewBox="0 0 100 100">
+                    <circle class="fc2-ring-bg" cx="50" cy="50" r="45"/>
+                    <circle class="fc2-ring-fill" cx="50" cy="50" r="45" 
+                            stroke-dasharray="${masteryPercent * 2.83} 283"/>
+                </svg>
+                <div class="fc2-mastery-text">
+                    <span class="fc2-mastery-percent">${masteryPercent}%</span>
+                    <span class="fc2-mastery-label">Mastered</span>
                 </div>
-            ` : ''}
+            </div>
+            
+            <!-- Stats Grid -->
+            <div class="fc2-completion-stats">
+                <div class="fc2-comp-stat easy">
+                    <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'easy').length}</span>
+                    <span class="fc2-comp-label">🎯 Easy</span>
+                </div>
+                <div class="fc2-comp-stat good">
+                    <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'good').length}</span>
+                    <span class="fc2-comp-label">👍 Good</span>
+                </div>
+                <div class="fc2-comp-stat hard">
+                    <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'hard').length}</span>
+                    <span class="fc2-comp-label">😓 Hard</span>
+                </div>
+                <div class="fc2-comp-stat again">
+                    <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'again').length}</span>
+                    <span class="fc2-comp-label">🔄 Again</span>
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="fc2-completion-actions">
+                ${againCards.length > 0 ? `
+                    <button class="btn btn-primary btn-lg" onclick="window.app.fcStudyMissed()">
+                        🔄 Review ${againCards.length} Difficult Cards
+                    </button>
+                ` : ''}
+                <button class="btn ${againCards.length > 0 ? 'btn-secondary' : 'btn-primary btn-lg'}" onclick="window.app.fcRestart()">
+                    ↻ Study All Again
+                </button>
+                <button class="btn btn-ghost" onclick="window.app.exitFlashcards()">
+                    ← Back to Library
+                </button>
+            </div>
         </div>
     </div>
     `;
 }
 
-function formatCardContent(content) {
+function formatContent(content) {
     if (!content) return '';
     
-    // Handle multiline content (like matching/ordering)
+    // Handle multiline (matching/ordering)
     if (content.includes('\n')) {
-        return `<div class="card-list">${content.split('\n').map(line => 
-            `<div class="card-list-item">${escapeHtml(line)}</div>`
+        return `<div class="fc2-list">${content.split('\n').map(line => 
+            `<div class="fc2-list-item">${escapeHtml(line)}</div>`
         ).join('')}</div>`;
     }
     
     return `<p>${escapeHtml(content)}</p>`;
 }
 
-function getTypeBadge(type) {
-    const badges = {
-        'choice': '📝 Multiple Choice',
-        'truefalse': '⚡ True/False',
-        'matching': '🔗 Matching',
-        'ordering': '↕️ Ordering',
-        'multiselect': '☑️ Multi-Select',
+function getTypeIcon(type) {
+    const icons = { 
+        'choice': '📝', 'truefalse': '⚡', 'matching': '🔗', 
+        'ordering': '📋', 'multiselect': '☑️' 
     };
-    return badges[type] || '📝 Question';
+    return icons[type] || '📝';
 }
 
-// ==================== Card Actions ====================
+function getTypeName(type) {
+    const names = { 
+        'choice': 'Multiple Choice', 'truefalse': 'True/False', 
+        'matching': 'Matching', 'ordering': 'Ordering', 'multiselect': 'Multi-Select' 
+    };
+    return names[type] || 'Question';
+}
 
-export function flipCard() {
-    flashcardState.isFlipped = !flashcardState.isFlipped;
+// ==================== Actions ====================
+
+export function fcFlip() {
+    fc.isFlipped = !fc.isFlipped;
     
-    // Animate without full re-render
-    const wrapper = document.getElementById('flashcard-wrapper');
-    if (wrapper) {
-        wrapper.classList.toggle('flipped', flashcardState.isFlipped);
+    const card = document.getElementById('fc2-card');
+    if (card) {
+        card.classList.toggle('flipped', fc.isFlipped);
+        // Update rating area visibility
+        document.querySelector('.fc2-rating-area')?.classList.toggle('visible', fc.isFlipped);
     } else {
         setState({ view: 'flashcards' });
     }
 }
 
-export function nextCard() {
-    const filteredCards = getFilteredCards();
-    if (flashcardState.currentIndex < filteredCards.length - 1) {
-        flashcardState.currentIndex++;
-        flashcardState.isFlipped = false;
+export function fcNext() {
+    if (fc.currentIndex < fc.cards.length - 1) {
+        animateCardExit('left', () => {
+            fc.currentIndex++;
+            fc.isFlipped = false;
+            setState({ view: 'flashcards' });
+        });
+    } else {
+        // Go to completion
+        fc.currentIndex++;
         setState({ view: 'flashcards' });
     }
 }
 
-export function prevCard() {
-    if (flashcardState.currentIndex > 0) {
-        flashcardState.currentIndex--;
-        flashcardState.isFlipped = false;
+export function fcPrev() {
+    if (fc.currentIndex > 0) {
+        animateCardExit('right', () => {
+            fc.currentIndex--;
+            fc.isFlipped = false;
+            setState({ view: 'flashcards' });
+        });
+    }
+}
+
+export function fcGoToCard(index) {
+    if (index >= 0 && index < fc.cards.length) {
+        fc.currentIndex = index;
+        fc.isFlipped = false;
         setState({ view: 'flashcards' });
     }
 }
 
-export function markCard(status) {
-    const filteredCards = getFilteredCards();
-    const card = filteredCards[flashcardState.currentIndex];
+export function fcRate(rating) {
+    const card = fc.cards[fc.currentIndex];
     if (!card) return;
     
-    const { knownCards, unknownCards } = flashcardState;
+    fc.ratings[card.id] = rating;
+    fc.sessionStats[rating]++;
+    fc.sessionStats.seen++;
     
-    if (status === 'known') {
-        knownCards.add(card.id);
-        unknownCards.delete(card.id);
-        showToast('✓ Marked as known', 'success');
-    } else {
-        unknownCards.add(card.id);
-        knownCards.delete(card.id);
-        showToast('✗ Added to learning pile', 'info');
+    // Visual feedback
+    const cardEl = document.getElementById('fc2-card');
+    if (cardEl) {
+        cardEl.classList.add('rated', 'rated-' + rating);
     }
     
-    // Auto-advance after marking
-    setTimeout(() => {
-        if (flashcardState.currentIndex < filteredCards.length - 1) {
-            nextCard();
-        } else {
-            setState({ view: 'flashcards' });
-        }
-    }, 300);
+    // Auto advance after short delay
+    if (fc.autoAdvance) {
+        setTimeout(() => fcNext(), 400);
+    }
 }
 
-export function setFlashcardMode(mode) {
-    flashcardState.studyMode = mode;
-    flashcardState.currentIndex = 0;
-    flashcardState.isFlipped = false;
-    setState({ view: 'flashcards' });
-}
-
-export function shuffleCards() {
-    const cards = [...flashcardState.cards];
+export function fcShuffle() {
+    const cards = [...fc.cards];
     for (let i = cards.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [cards[i], cards[j]] = [cards[j], cards[i]];
     }
-    flashcardState.cards = cards;
-    flashcardState.currentIndex = 0;
-    flashcardState.isFlipped = false;
-    flashcardState.shuffled = true;
+    fc.cards = cards;
+    fc.currentIndex = 0;
+    fc.isFlipped = false;
+    fc.isShuffled = true;
     showToast('🔀 Cards shuffled!', 'success');
+    closeMenu();
     setState({ view: 'flashcards' });
 }
 
-export function resetFlashcards() {
-    flashcardState.knownCards.clear();
-    flashcardState.unknownCards.clear();
-    flashcardState.currentIndex = 0;
-    flashcardState.isFlipped = false;
-    flashcardState.studyMode = 'all';
-    showToast('🔄 Progress reset', 'info');
+export function fcRestart() {
+    fc.currentIndex = 0;
+    fc.isFlipped = false;
+    fc.ratings = {};
+    fc.sessionStats = { seen: 0, easy: 0, good: 0, hard: 0, again: 0 };
+    closeMenu();
     setState({ view: 'flashcards' });
+}
+
+export function fcStudyMissed() {
+    // Filter to only cards rated hard or again
+    const missedCards = fc.cards.filter(c => 
+        fc.ratings[c.id] === 'hard' || fc.ratings[c.id] === 'again'
+    );
+    
+    if (missedCards.length > 0) {
+        fc.cards = missedCards;
+        fc.currentIndex = 0;
+        fc.isFlipped = false;
+        fc.ratings = {};
+        fc.sessionStats = { seen: 0, easy: 0, good: 0, hard: 0, again: 0 };
+        setState({ view: 'flashcards' });
+    }
+}
+
+export function fcToggleMenu() {
+    const menu = document.getElementById('fc2-menu');
+    if (menu) menu.classList.toggle('visible');
+}
+
+export function fcToggleShortcuts() {
+    fc.showShortcuts = !fc.showShortcuts;
+    closeMenu();
+    setState({ view: 'flashcards' });
+}
+
+function closeMenu() {
+    const menu = document.getElementById('fc2-menu');
+    if (menu) menu.classList.remove('visible');
 }
 
 export function exitFlashcards() {
     setState({ view: 'library' });
 }
 
-// ==================== Touch/Swipe Handling ====================
+// ==================== Animations ====================
 
-export function flashcardTouchStart(e) {
-    if (e.target.closest('.fc-btn, .fc-nav-btn, .stat-chip')) return;
-    
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    touchCurrentX = touchStartX;
-    isDragging = false;
+function animateCardExit(direction, callback) {
+    const card = document.getElementById('fc2-card');
+    if (card) {
+        card.classList.add('exit-' + direction);
+        setTimeout(callback, 200);
+    } else {
+        callback();
+    }
 }
 
-export function flashcardTouchMove(e) {
-    if (!touchStartX) return;
+// ==================== Touch Handling ====================
+
+export function fcTouchStart(e) {
+    if (e.target.closest('button, .fc2-menu')) return;
+    touch.startX = e.touches[0].clientX;
+    touch.startY = e.touches[0].clientY;
+    touch.currentX = touch.startX;
+    touch.isDragging = false;
+}
+
+export function fcTouchMove(e) {
+    if (!touch.startX) return;
     
-    touchCurrentX = e.touches[0].clientX;
-    const deltaX = touchCurrentX - touchStartX;
-    const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+    touch.currentX = e.touches[0].clientX;
+    const deltaX = touch.currentX - touch.startX;
+    const deltaY = Math.abs(e.touches[0].clientY - touch.startY);
     
     // Only handle horizontal swipes
-    if (Math.abs(deltaX) > 20 && deltaY < 50) {
-        isDragging = true;
+    if (Math.abs(deltaX) > 30 && deltaY < 100) {
+        touch.isDragging = true;
         e.preventDefault();
         
-        const wrapper = document.getElementById('flashcard-wrapper');
-        if (wrapper) {
-            wrapper.style.transform = `translateX(${deltaX * 0.5}px) rotateY(${flashcardState.isFlipped ? 180 : 0}deg)`;
-            wrapper.style.transition = 'none';
+        const card = document.getElementById('fc2-card');
+        if (card) {
+            const rotate = deltaX * 0.05;
+            card.style.transform = `translateX(${deltaX}px) rotate(${rotate}deg)`;
+            card.style.transition = 'none';
         }
         
-        // Show swipe indicators
-        const leftIndicator = document.getElementById('swipe-left');
-        const rightIndicator = document.getElementById('swipe-right');
+        // Show swipe overlays
+        const leftOverlay = document.getElementById('swipe-left-overlay');
+        const rightOverlay = document.getElementById('swipe-right-overlay');
         
-        if (leftIndicator && rightIndicator) {
-            if (deltaX < -50) {
-                leftIndicator.classList.add('visible');
-                rightIndicator.classList.remove('visible');
-            } else if (deltaX > 50) {
-                rightIndicator.classList.add('visible');
-                leftIndicator.classList.remove('visible');
+        if (leftOverlay && rightOverlay) {
+            if (deltaX < -80) {
+                leftOverlay.classList.add('visible');
+                rightOverlay.classList.remove('visible');
+            } else if (deltaX > 80) {
+                rightOverlay.classList.add('visible');
+                leftOverlay.classList.remove('visible');
             } else {
-                leftIndicator.classList.remove('visible');
-                rightIndicator.classList.remove('visible');
+                leftOverlay.classList.remove('visible');
+                rightOverlay.classList.remove('visible');
             }
         }
     }
 }
 
-export function flashcardTouchEnd(e) {
-    const deltaX = touchCurrentX - touchStartX;
+export function fcTouchEnd(e) {
+    const deltaX = touch.currentX - touch.startX;
     
-    // Reset card position
-    const wrapper = document.getElementById('flashcard-wrapper');
-    if (wrapper) {
-        wrapper.style.transform = '';
-        wrapper.style.transition = '';
+    // Reset card
+    const card = document.getElementById('fc2-card');
+    if (card) {
+        card.style.transform = '';
+        card.style.transition = '';
     }
     
-    // Hide indicators
-    const leftIndicator = document.getElementById('swipe-left');
-    const rightIndicator = document.getElementById('swipe-right');
-    if (leftIndicator) leftIndicator.classList.remove('visible');
-    if (rightIndicator) rightIndicator.classList.remove('visible');
+    // Hide overlays
+    document.getElementById('swipe-left-overlay')?.classList.remove('visible');
+    document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    // Handle swipe action
-    if (isDragging && Math.abs(deltaX) > 100) {
-        if (deltaX < 0) {
-            markCard('unknown');
+    // Handle swipe
+    if (touch.isDragging && Math.abs(deltaX) > 120) {
+        if (fc.isFlipped) {
+            // Rate based on swipe direction
+            fcRate(deltaX > 0 ? 'good' : 'again');
         } else {
-            markCard('known');
+            // If not flipped, flip first
+            fcFlip();
         }
+    } else if (!touch.isDragging && Math.abs(deltaX) < 10) {
+        // Tap to flip
+        // Handled by onclick
     }
     
-    touchStartX = 0;
-    touchStartY = 0;
-    isDragging = false;
+    touch = { startX: 0, startY: 0, currentX: 0, isDragging: false };
 }
 
-// ==================== Keyboard Handling ====================
+// ==================== Keyboard ====================
 
-export function handleFlashcardKeyboard(e) {
+export function fcKeyHandler(e) {
     if (getState().view !== 'flashcards') return;
     
     switch (e.key) {
         case ' ':
         case 'Enter':
             e.preventDefault();
-            flipCard();
+            fcFlip();
             break;
         case 'ArrowLeft':
-            prevCard();
+            fcPrev();
             break;
         case 'ArrowRight':
-            nextCard();
+            fcNext();
             break;
         case '1':
-            markCard('unknown');
+            if (fc.isFlipped) fcRate('again');
             break;
         case '2':
-            markCard('known');
+            if (fc.isFlipped) fcRate('hard');
+            break;
+        case '3':
+            if (fc.isFlipped) fcRate('good');
+            break;
+        case '4':
+            if (fc.isFlipped) fcRate('easy');
             break;
         case 's':
-            shuffleCards();
+        case 'S':
+            fcShuffle();
             break;
         case 'Escape':
             exitFlashcards();
@@ -498,4 +605,4 @@ export function handleFlashcardKeyboard(e) {
 }
 
 // Initialize keyboard listener
-document.addEventListener('keydown', handleFlashcardKeyboard);
+document.addEventListener('keydown', fcKeyHandler);

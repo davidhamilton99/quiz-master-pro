@@ -1,673 +1,867 @@
-/* Flashcards CSS - Stunning 3D flip cards */
+/* Flashcards v2 - Premium Study Experience CSS */
 
 /* ==================== Container ==================== */
-.flashcards-container {
-    min-height: 100vh;
-    background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
-    padding: 1rem;
+.fc2-container {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 50%, #0f0f2a 100%);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    z-index: 1000;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-/* ==================== Header ==================== */
-.flashcards-header {
+/* ==================== Top Bar ==================== */
+.fc2-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 0;
-    margin-bottom: 0.5rem;
+    padding: 1rem 1.25rem;
+    flex-shrink: 0;
 }
 
-.flashcards-title {
-    text-align: center;
-}
-
-.flashcards-title h2 {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #fff;
-    margin: 0;
-}
-
-.flashcards-counter {
-    font-size: 0.875rem;
-    color: var(--text-muted);
-}
-
-/* ==================== Progress Bar ==================== */
-.flashcards-progress {
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-bottom: 1rem;
-}
-
-.flashcards-progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #8b5cf6, #ec4899);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-}
-
-/* ==================== Stats Bar ==================== */
-.flashcards-stats {
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-}
-
-.stat-chip {
+.fc2-close,
+.fc2-menu-btn {
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.375rem 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
-    color: var(--text-muted);
-    font-size: 0.75rem;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-.stat-chip:hover {
+.fc2-close:hover,
+.fc2-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.fc2-progress-info {
+    text-align: center;
+}
+
+.fc2-counter {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* ==================== Progress Bar ==================== */
+.fc2-progress-bar {
+    height: 6px;
     background: rgba(255, 255, 255, 0.1);
+    margin: 0 1.25rem;
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
 }
 
-.stat-chip.active {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: #8b5cf6;
-    color: #c4b5fd;
+.fc2-progress-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #8b5cf6, #ec4899);
+    border-radius: 3px;
+    transition: width 0.3s ease;
 }
 
-.stat-chip.known.active {
-    background: rgba(34, 197, 94, 0.2);
-    border-color: #22c55e;
-    color: #86efac;
+.fc2-progress-sections {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 2px;
+    padding: 0 2px;
 }
 
-.stat-chip.unknown.active {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: #ef4444;
-    color: #fca5a5;
+.fc2-progress-dot {
+    flex: 1;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: opacity 0.2s;
+}
+
+.fc2-progress-dot.current { opacity: 1; }
+.fc2-progress-dot.easy { background: #22c55e; opacity: 0.8; }
+.fc2-progress-dot.good { background: #3b82f6; opacity: 0.8; }
+.fc2-progress-dot.hard { background: #f59e0b; opacity: 0.8; }
+.fc2-progress-dot.again { background: #ef4444; opacity: 0.8; }
+
+/* ==================== Stats Bar ==================== */
+.fc2-stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 1rem;
+    flex-shrink: 0;
+}
+
+.fc2-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.fc2-stat-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.fc2-stat-num.remaining { color: #fff; }
+.fc2-stat-num.mastered { color: #22c55e; }
+.fc2-stat-num.learning { color: #f59e0b; }
+
+.fc2-stat-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 /* ==================== Card Area ==================== */
-.flashcards-area {
+.fc2-card-area {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    perspective: 1500px;
-    position: relative;
-    min-height: 400px;
     padding: 1rem;
+    perspective: 2000px;
+    position: relative;
+    min-height: 0;
 }
 
-/* ==================== 3D Card ==================== */
-.flashcard-wrapper {
+/* Card Stack Effect */
+.fc2-card-stack {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.fc2-stack-card {
+    position: absolute;
+    width: calc(100% - 4rem);
+    max-width: 420px;
+    height: 280px;
+    background: rgba(30, 30, 60, 0.5);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.fc2-stack-1 {
+    transform: scale(0.95) translateY(10px);
+    opacity: 0.5;
+}
+
+.fc2-stack-2 {
+    transform: scale(0.9) translateY(20px);
+    opacity: 0.3;
+}
+
+/* ==================== Main Card ==================== */
+.fc2-card {
     width: 100%;
-    max-width: 550px;
-    height: 380px;
+    max-width: 450px;
+    height: 320px;
     position: relative;
     transform-style: preserve-3d;
-    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
 }
 
-.flashcard-wrapper.flipped {
+.fc2-card.flipped {
     transform: rotateY(180deg);
 }
 
-.flashcard {
+.fc2-card.exit-left {
+    animation: exitLeft 0.2s ease forwards;
+}
+
+.fc2-card.exit-right {
+    animation: exitRight 0.2s ease forwards;
+}
+
+@keyframes exitLeft {
+    to { transform: translateX(-120%) rotate(-10deg); opacity: 0; }
+}
+
+@keyframes exitRight {
+    to { transform: translateX(120%) rotate(10deg); opacity: 0; }
+}
+
+.fc2-card.rated {
+    animation: ratedPulse 0.3s ease;
+}
+
+@keyframes ratedPulse {
+    50% { transform: scale(1.02); }
+}
+
+.fc2-card.rated-easy { box-shadow: 0 0 40px rgba(34, 197, 94, 0.4); }
+.fc2-card.rated-good { box-shadow: 0 0 40px rgba(59, 130, 246, 0.4); }
+.fc2-card.rated-hard { box-shadow: 0 0 40px rgba(245, 158, 11, 0.4); }
+.fc2-card.rated-again { box-shadow: 0 0 40px rgba(239, 68, 68, 0.4); }
+
+/* Card Faces */
+.fc2-card-face {
     position: absolute;
     width: 100%;
     height: 100%;
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
     border-radius: 24px;
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
     box-shadow: 
-        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 25px 50px rgba(0, 0, 0, 0.4),
         0 0 0 1px rgba(255, 255, 255, 0.1),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
     overflow: hidden;
 }
 
-.flashcard-front {
-    background: linear-gradient(145deg, #1e1e3f 0%, #2d2d5a 100%);
+.fc2-card-front {
+    background: linear-gradient(145deg, #1e1e4a 0%, #2a2a5a 100%);
 }
 
-.flashcard-back {
-    background: linear-gradient(145deg, #1a3a2a 0%, #0d4a2a 100%);
+.fc2-card-back {
+    background: linear-gradient(145deg, #1a4a3a 0%, #0d5a3a 100%);
     transform: rotateY(180deg);
 }
 
-/* Card Badge */
-.flashcard-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    background: rgba(139, 92, 246, 0.3);
-    border-radius: 999px;
+/* Card Type Badge */
+.fc2-card-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: rgba(139, 92, 246, 0.2);
+    border-radius: 8px;
     font-size: 0.75rem;
     color: #c4b5fd;
     font-weight: 500;
-    margin-bottom: 0.5rem;
     align-self: flex-start;
-    flex-shrink: 0;
+    margin-bottom: 0.75rem;
 }
 
-.answer-badge {
-    background: rgba(34, 197, 94, 0.3);
+.fc2-card-label {
+    padding: 0.375rem 0.75rem;
+    background: rgba(34, 197, 94, 0.2);
+    border-radius: 8px;
+    font-size: 0.75rem;
     color: #86efac;
+    font-weight: 600;
+    align-self: flex-start;
+    margin-bottom: 0.75rem;
 }
 
 /* Card Content */
-.flashcard-content {
+.fc2-card-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    align-items: center;
-    text-align: center;
     overflow-y: auto;
-    min-height: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
-.flashcard-question,
-.flashcard-answer {
+.fc2-card-content p {
     font-size: 1.25rem;
-    line-height: 1.6;
-    color: #fff;
-    max-width: 100%;
-}
-
-.flashcard-answer {
-    color: #86efac;
-}
-
-.flashcard-explanation {
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    text-align: left;
-    width: 100%;
-}
-
-.flashcard-explanation strong {
-    color: #fbbf24;
-    font-size: 0.875rem;
-}
-
-.flashcard-explanation p {
-    color: var(--text-muted);
-    font-size: 0.875rem;
-    margin-top: 0.5rem;
     line-height: 1.5;
-}
-
-/* Card List (for matching/ordering) */
-.card-list {
-    text-align: left;
-    width: 100%;
-}
-
-.card-list-item {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    font-size: 1rem;
-}
-
-.card-list-item:last-child {
-    border-bottom: none;
-}
-
-/* Card Hint */
-.flashcard-hint {
+    color: #fff;
     text-align: center;
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    opacity: 0.6;
+    margin: 0;
 }
 
-/* ==================== Swipe Indicators ==================== */
-.swipe-indicator {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 1rem;
-    border-radius: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-}
-
-.swipe-indicator.visible {
-    opacity: 1;
-}
-
-.swipe-indicator span:first-child {
-    font-size: 2rem;
-}
-
-.swipe-indicator span:last-child {
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.swipe-left {
-    left: 1rem;
-    background: rgba(239, 68, 68, 0.9);
-    color: white;
-}
-
-.swipe-right {
-    right: 1rem;
-    background: rgba(34, 197, 94, 0.9);
-    color: white;
-}
-
-/* ==================== Card Status ==================== */
-.card-status {
-    text-align: center;
-    padding: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    border-radius: 8px;
-    margin: 0.5rem auto;
-    max-width: 200px;
-}
-
-.card-status.known {
-    background: rgba(34, 197, 94, 0.2);
+.fc2-answer p {
     color: #86efac;
-}
-
-.card-status.unknown {
-    background: rgba(239, 68, 68, 0.2);
-    color: #fca5a5;
-}
-
-/* ==================== Controls ==================== */
-.flashcards-controls {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 0;
-    gap: 1rem;
-}
-
-.fc-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.75rem 1.25rem;
-    border: 2px solid transparent;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-width: 80px;
-}
-
-.fc-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.fc-btn-icon {
-    font-size: 1.5rem;
-}
-
-.fc-btn-label {
-    font-size: 0.75rem;
     font-weight: 500;
 }
 
-.fc-btn-unknown:hover,
-.fc-btn-unknown.active {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: #ef4444;
-    color: #fca5a5;
-}
-
-.fc-btn-known:hover,
-.fc-btn-known.active {
-    background: rgba(34, 197, 94, 0.2);
-    border-color: #22c55e;
-    color: #86efac;
-}
-
-/* Navigation Controls */
-.fc-nav-controls {
+.fc2-list {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 0.5rem;
 }
 
-.fc-nav-btn {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
+.fc2-list-item {
+    padding: 0.625rem 0.875rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 1rem;
     color: #fff;
-    font-size: 1.5rem;
+}
+
+.fc2-card-back .fc2-list-item {
+    color: #86efac;
+}
+
+/* Explanation */
+.fc2-explanation {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fc2-explanation-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fbbf24;
+    margin-bottom: 0.375rem;
+}
+
+.fc2-explanation-text {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.5;
+}
+
+/* Tap Hint */
+.fc2-tap-hint {
+    text-align: center;
+    margin-top: auto;
+    padding-top: 0.75rem;
+}
+
+.fc2-tap-hint span {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* ==================== Swipe Overlays ==================== */
+.fc2-swipe-overlay {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 1.5rem;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.fc2-swipe-overlay.visible {
+    opacity: 1;
+}
+
+.fc2-swipe-left {
+    left: 1.5rem;
+    background: rgba(239, 68, 68, 0.95);
+}
+
+.fc2-swipe-right {
+    right: 1.5rem;
+    background: rgba(34, 197, 94, 0.95);
+}
+
+.fc2-swipe-icon {
+    font-size: 2rem;
+}
+
+.fc2-swipe-text {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* ==================== Rating Area ==================== */
+.fc2-rating-area {
+    padding: 0 1.25rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.fc2-rating-area.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.fc2-rating-prompt {
+    text-align: center;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 0.75rem;
+}
+
+.fc2-rating-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+.fc2-rate-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.875rem 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid transparent;
+    border-radius: 16px;
     cursor: pointer;
     transition: all 0.2s ease;
+    position: relative;
+}
+
+.fc2-rate-btn:active {
+    transform: scale(0.95);
+}
+
+.fc2-rate-icon {
+    font-size: 1.5rem;
+}
+
+.fc2-rate-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.fc2-rate-key {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.375rem;
+    font-size: 0.625rem;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 500;
+}
+
+.fc2-rate-again:hover, .fc2-rate-again.selected { 
+    background: rgba(239, 68, 68, 0.2); 
+    border-color: #ef4444; 
+}
+.fc2-rate-hard:hover, .fc2-rate-hard.selected { 
+    background: rgba(245, 158, 11, 0.2); 
+    border-color: #f59e0b; 
+}
+.fc2-rate-good:hover, .fc2-rate-good.selected { 
+    background: rgba(59, 130, 246, 0.2); 
+    border-color: #3b82f6; 
+}
+.fc2-rate-easy:hover, .fc2-rate-easy.selected { 
+    background: rgba(34, 197, 94, 0.2); 
+    border-color: #22c55e; 
+}
+
+/* ==================== Bottom Navigation ==================== */
+.fc2-bottom-nav {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    flex-shrink: 0;
 }
 
-.fc-nav-btn:hover:not(:disabled) {
+.fc2-nav-btn {
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fc2-nav-btn:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
     transform: scale(1.1);
 }
 
-.fc-nav-btn:disabled {
+.fc2-nav-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
 }
 
-.fc-flip-btn {
-    padding: 0.75rem 1.5rem;
-    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+.fc2-flip-btn {
+    padding: 0.875rem 2rem;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
     border: none;
     border-radius: 999px;
     color: #fff;
+    font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-}
-
-.fc-flip-btn:hover {
-    transform: scale(1.05);
     box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
 }
 
-/* ==================== Keyboard Hints ==================== */
-.keyboard-hints {
+.fc2-flip-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+}
+
+/* ==================== Keyboard Shortcuts ==================== */
+.fc2-shortcuts {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
     display: flex;
-    justify-content: center;
-    gap: 1rem;
-    padding: 0.5rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    opacity: 0.5;
+    gap: 1.5rem;
+    padding: 0.875rem 1.25rem;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
     flex-wrap: wrap;
+    justify-content: center;
 }
 
-@media (max-width: 640px) {
-    .keyboard-hints {
-        display: none;
-    }
+.fc2-shortcuts.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
-/* ==================== Empty State ==================== */
-.flashcards-empty {
+.fc2-shortcut {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.fc2-shortcut kbd {
+    padding: 0.25rem 0.5rem;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.7rem;
+}
+
+/* ==================== Menu ==================== */
+.fc2-menu {
+    position: fixed;
+    top: 70px;
+    right: 1.25rem;
+    background: #1e1e3f;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+    pointer-events: none;
+    transition: all 0.2s ease;
+    z-index: 100;
+}
+
+.fc2-menu.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.fc2-menu button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.875rem 1.25rem;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 0.9375rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.fc2-menu button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.fc2-menu-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== Completion Screen ==================== */
+.fc2-completion {
+    background: radial-gradient(ellipse at center top, #1a1a4a 0%, #0a0a1a 70%);
+}
+
+.fc2-completion-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
     padding: 2rem;
+    text-align: center;
 }
 
-.empty-icon {
+.fc2-completion-icon {
     font-size: 4rem;
     margin-bottom: 1rem;
+    animation: bounce 0.6s ease;
 }
 
-.flashcards-empty p {
-    font-size: 1.125rem;
-    color: var(--text-muted);
-    margin-bottom: 1.5rem;
+@keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
 }
 
-.final-stats {
-    display: flex;
-    gap: 2rem;
-    margin-top: 2rem;
+.fc2-completion-content h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 0.5rem;
 }
 
-.final-stat {
+.fc2-completion-subtitle {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 2rem;
+}
+
+/* Mastery Ring */
+.fc2-mastery-ring {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    margin-bottom: 2rem;
+}
+
+.fc2-mastery-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.fc2-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 8;
+}
+
+.fc2-ring-fill {
+    fill: none;
+    stroke: url(#masteryGradient);
+    stroke: #22c55e;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dasharray 1s ease;
+}
+
+.fc2-mastery-text {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 1rem 2rem;
-    border-radius: 16px;
+    justify-content: center;
 }
 
-.final-stat.known {
-    background: rgba(34, 197, 94, 0.1);
-}
-
-.final-stat.unknown {
-    background: rgba(239, 68, 68, 0.1);
-}
-
-.stat-number {
+.fc2-mastery-percent {
     font-size: 2.5rem;
     font-weight: 700;
-}
-
-.final-stat.known .stat-number {
     color: #22c55e;
+    line-height: 1;
 }
 
-.final-stat.unknown .stat-number {
-    color: #ef4444;
-}
-
-.stat-label {
-    font-size: 0.875rem;
-    color: var(--text-muted);
+.fc2-mastery-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
     margin-top: 0.25rem;
 }
 
-/* ==================== Question Slider (Wizard) ==================== */
-.question-slider {
+/* Completion Stats */
+.fc2-completion-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
     width: 100%;
-    margin-top: 0.75rem;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-    outline: none;
+    max-width: 400px;
 }
 
-.question-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    background: linear-gradient(135deg, #8b5cf6, #ec4899);
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
-    transition: transform 0.2s ease;
-}
-
-.question-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-}
-
-.question-slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    background: linear-gradient(135deg, #8b5cf6, #ec4899);
-    border-radius: 50%;
-    cursor: pointer;
-    border: none;
-}
-
-/* Number Input Group */
-.number-input-group {
+.fc2-comp-stat {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.number-input-group .btn {
-    min-width: 44px;
-    height: 44px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.question-count-input {
-    width: 90px;
-    padding: 0.625rem;
-    text-align: center;
-    font-size: 1.25rem;
-    font-weight: 700;
-    background: rgba(139, 92, 246, 0.1);
-    border: 2px solid rgba(139, 92, 246, 0.3);
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 12px;
-    color: #fff;
-    -moz-appearance: textfield;
 }
 
-.question-count-input::-webkit-outer-spin-button,
-.question-count-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+.fc2-comp-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
 }
 
-.question-count-input:focus {
-    outline: none;
-    border-color: var(--primary);
-    background: rgba(139, 92, 246, 0.15);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
-}
+.fc2-comp-stat.easy .fc2-comp-num { color: #22c55e; }
+.fc2-comp-stat.good .fc2-comp-num { color: #3b82f6; }
+.fc2-comp-stat.hard .fc2-comp-num { color: #f59e0b; }
+.fc2-comp-stat.again .fc2-comp-num { color: #ef4444; }
 
-.wizard-hint {
+.fc2-comp-label {
     font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 0.5rem;
-    text-align: right;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 0.375rem;
 }
 
-/* ==================== Animations ==================== */
-@keyframes cardEnter {
-    from {
-        opacity: 0;
-        transform: scale(0.9) translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-.flashcard-wrapper {
-    animation: cardEnter 0.3s ease;
-}
-
-/* ==================== Responsive ==================== */
-@media (max-width: 480px) {
-    .flashcards-area {
-        min-height: 280px;
-        padding: 0.5rem;
-    }
-    
-    .flashcard-wrapper {
-        height: 260px;
-    }
-    
-    .flashcard {
-        padding: 1rem;
-        border-radius: 16px;
-    }
-    
-    .flashcard-question,
-    .flashcard-answer {
-        font-size: 1rem;
-    }
-    
-    .flashcards-controls {
-        padding: 0.75rem 0;
-    }
-    
-    .fc-btn {
-        padding: 0.5rem 0.75rem;
-        min-width: 60px;
-    }
-    
-    .fc-btn-icon {
-        font-size: 1.25rem;
-    }
-    
-    .fc-btn-label {
-        font-size: 0.65rem;
-    }
-    
-    .fc-flip-btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-    }
-}
-
-/* ==================== Library Card Flashcard Button ==================== */
-.quiz-card-main-actions {
+/* Completion Actions */
+.fc2-completion-actions {
     display: flex;
-    gap: 0.5rem;
-    align-items: center;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 320px;
 }
 
-.flashcard-btn {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3)) !important;
-    border: 1px solid rgba(139, 92, 246, 0.5) !important;
-    color: #c4b5fd !important;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    padding: 0.375rem 0.75rem !important;
+.fc2-completion-actions .btn {
+    width: 100%;
+    justify-content: center;
 }
 
-.flashcard-btn:hover {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.5), rgba(236, 72, 153, 0.5)) !important;
-    transform: scale(1.02);
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-}
-
-/* Secondary button style for library */
 .btn-secondary {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    color: var(--text-muted);
 }
 
 .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.15);
-    color: #fff;
 }
 
-/* ==================== Dark Mode Enhancements ==================== */
-@media (prefers-color-scheme: dark) {
-    .flashcard-front {
-        background: linear-gradient(145deg, #1e1e3f 0%, #2d2d5a 100%);
+/* ==================== Responsive ==================== */
+@media (max-width: 480px) {
+    .fc2-topbar {
+        padding: 0.75rem 1rem;
     }
     
-    .flashcard-back {
-        background: linear-gradient(145deg, #1a3a2a 0%, #0d4a2a 100%);
+    .fc2-close,
+    .fc2-menu-btn {
+        width: 40px;
+        height: 40px;
     }
+    
+    .fc2-stats-bar {
+        gap: 1.5rem;
+        padding: 0.75rem;
+    }
+    
+    .fc2-stat-num {
+        font-size: 1.25rem;
+    }
+    
+    .fc2-card-area {
+        padding: 0.75rem;
+    }
+    
+    .fc2-card {
+        height: 280px;
+    }
+    
+    .fc2-card-face {
+        padding: 1.25rem;
+    }
+    
+    .fc2-card-content p {
+        font-size: 1.125rem;
+    }
+    
+    .fc2-rating-buttons {
+        gap: 0.375rem;
+    }
+    
+    .fc2-rate-btn {
+        padding: 0.75rem 0.25rem;
+    }
+    
+    .fc2-rate-icon {
+        font-size: 1.25rem;
+    }
+    
+    .fc2-rate-label {
+        font-size: 0.65rem;
+    }
+    
+    .fc2-bottom-nav {
+        padding: 1rem;
+    }
+    
+    .fc2-nav-btn {
+        width: 44px;
+        height: 44px;
+    }
+    
+    .fc2-flip-btn {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.9375rem;
+    }
+    
+    .fc2-shortcuts {
+        display: none;
+    }
+    
+    .fc2-stack-card {
+        display: none;
+    }
+    
+    .fc2-completion-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Desktop enhancements */
+@media (min-width: 768px) {
+    .fc2-card {
+        max-width: 500px;
+        height: 360px;
+    }
+    
+    .fc2-card-content p {
+        font-size: 1.5rem;
+    }
+    
+    .fc2-rate-btn:hover {
+        transform: translateY(-2px);
+    }
+}
+
+/* Prevent text selection while swiping */
+.fc2-container * {
+    -webkit-touch-callout: none;
+}
+
+/* Smooth scrolling in card content */
+.fc2-card-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.fc2-card-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fc2-card-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
 }
