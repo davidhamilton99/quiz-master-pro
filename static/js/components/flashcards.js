@@ -539,15 +539,20 @@ export function fcTouchEnd(e) {
     document.getElementById('swipe-left-overlay')?.classList.remove('visible');
     document.getElementById('swipe-right-overlay')?.classList.remove('visible');
     
-    // Handle swipe or tap - only when interaction started on the card
+    // Only act on interactions that started on the card
     if (touch.onCard) {
         if (touch.isDragging && Math.abs(deltaX) > 100) {
+            // Completed swipe
             if (fc.isFlipped) {
                 fcRate(deltaX > 0 ? 'good' : 'again');
             } else {
                 fcFlip();
             }
+        } else if (!touch.isDragging) {
+            // Pure tap = flip
+            fcFlip();
         }
+        // isDragging but under threshold = aborted swipe, do nothing
     }
     
     touch = { startX: 0, startY: 0, currentX: 0, isDragging: false, onCard: false };
