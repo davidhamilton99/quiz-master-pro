@@ -46,6 +46,8 @@ let state = {
     timerMinutes: 15,
     timeRemaining: 900,
     quizStartTime: null,
+    questionStartTime: null,   // Timestamp when current question was shown
+    questionTimes: {},         // {questionIndex: totalMs} per-question time tracking
     
     // Results
     quizResults: null,
@@ -85,6 +87,35 @@ let state = {
     
     // Cached in-progress quizzes (Bug #1 fix - for synchronous access)
     inProgressQuizzes: [],
+
+    // Certifications & Dashboard
+    certifications: [],
+    userCertifications: [],
+    activeCertification: null,
+    domainPerformance: [],
+    certTrends: [],
+    weakQuestions: [],
+    showCertPicker: false,
+    certFilterQuery: '',
+
+    // Exam Simulation
+    simulationMode: false,
+    simulationConfig: null,
+
+    // Spaced Repetition Review
+    reviewCards: [],
+    reviewIndex: 0,
+    reviewShowAnswer: false,
+    reviewedCount: 0,
+    reviewCorrect: 0,
+    reviewStats: {},
+
+    // Bookmarks
+    bookmarkedQuestions: new Set(),
+
+    // Study sessions
+    studySummary: [],
+    activeStudySessionId: null,
 };
 
 const listeners = [];
