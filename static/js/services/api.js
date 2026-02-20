@@ -455,3 +455,100 @@ export async function recordSimulation(payload) {
         body: JSON.stringify(payload)
     });
 }
+
+// ==================== Spaced Repetition ====================
+
+/**
+ * Get questions due for review
+ */
+export async function getDueReviews(certId = null, limit = 20) {
+    let url = `/review/due?limit=${limit}`;
+    if (certId) url += `&certification_id=${certId}`;
+    const data = await apiCall(url);
+    return data.cards || [];
+}
+
+/**
+ * Get SRS stats (due counts, totals)
+ */
+export async function getReviewStats() {
+    return await apiCall('/review/stats');
+}
+
+/**
+ * Rate a question after review (runs SM-2)
+ */
+export async function rateReview(questionId, quality) {
+    return await apiCall('/review/rate', {
+        method: 'POST',
+        body: JSON.stringify({ question_id: questionId, quality })
+    });
+}
+
+/**
+ * Add questions to SRS deck
+ */
+export async function addToReview(questionIds) {
+    return await apiCall('/review/add', {
+        method: 'POST',
+        body: JSON.stringify({ question_ids: questionIds })
+    });
+}
+
+// ==================== Bookmarks ====================
+
+/**
+ * Get all bookmarks
+ */
+export async function getBookmarks() {
+    const data = await apiCall('/bookmarks');
+    return data.bookmarks || [];
+}
+
+/**
+ * Bookmark a question
+ */
+export async function addBookmark(questionId, note = null) {
+    return await apiCall('/bookmarks', {
+        method: 'POST',
+        body: JSON.stringify({ question_id: questionId, note })
+    });
+}
+
+/**
+ * Remove a bookmark
+ */
+export async function removeBookmark(questionId) {
+    return await apiCall(`/bookmarks/${questionId}`, { method: 'DELETE' });
+}
+
+// ==================== Study Sessions ====================
+
+/**
+ * Start a study session
+ */
+export async function startStudySession(sessionType, quizId = null, certId = null) {
+    const data = await apiCall('/study-sessions', {
+        method: 'POST',
+        body: JSON.stringify({ session_type: sessionType, quiz_id: quizId, certification_id: certId })
+    });
+    return data.session_id;
+}
+
+/**
+ * End a study session
+ */
+export async function endStudySession(sessionId, stats) {
+    return await apiCall(`/study-sessions/${sessionId}`, {
+        method: 'PUT',
+        body: JSON.stringify(stats)
+    });
+}
+
+/**
+ * Get study time summary (last 7 days)
+ */
+export async function getStudySummary() {
+    const data = await apiCall('/study-sessions/summary');
+    return data.days || [];
+}

@@ -4,11 +4,12 @@ import { escapeHtml } from '../utils/dom.js';
 
 export function renderResults() {
     const state = getState();
-    const { correct, total, percentage, isPerfect, answers } = state.quizResults || {};
+    const results = state.quizResults || {};
+    const { correct, total, percentage, isPerfect, answers } = results;
     const quiz = state.currentQuiz;
     const profile = state.playerProfile;
     const levelInfo = getLevelInfo(profile.xp);
-    
+
     if (!quiz) {
         return `<div class="results-page container">
             <div class="text-center">
@@ -17,27 +18,50 @@ export function renderResults() {
             </div>
         </div>`;
     }
-    
-    const message = getMessage(percentage);
+
+    const isSim = results.isSimulation;
+    const message = isSim ? getSimMessage(results.passed, percentage) : getMessage(percentage);
     const tierColors = {
         bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700',
         platinum: '#e5e4e2', diamond: '#b9f2ff', legendary: '#ff6b6b'
     };
-    
+
     return `
+<style>
+.sim-pass-badge{display:inline-block;padding:0.5rem 1.5rem;border-radius:2rem;font-size:1.1rem;font-weight:700;margin-bottom:1rem}
+.sim-pass-badge.pass{background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3)}
+.sim-pass-badge.fail{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)}
+.sim-cert-name{font-size:0.85rem;color:#a1a1aa;margin-bottom:0.5rem}
+.domain-breakdown{margin:1.5rem 0;text-align:left}
+.domain-breakdown-title{font-size:0.9rem;font-weight:600;color:#e4e4e7;margin-bottom:0.75rem}
+.domain-row{display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+.domain-row:last-child{border-bottom:none}
+.domain-row-name{flex:1;font-size:0.85rem;color:#a1a1aa}
+.domain-row-score{font-size:0.85rem;font-weight:500;min-width:60px;text-align:right}
+.domain-row-bar{width:80px;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.domain-row-fill{height:100%;border-radius:3px}
+.sim-time{font-size:0.8rem;color:#71717a;margin-top:0.5rem}
+</style>
         <div class="results-page">
             <div class="container">
                 <div class="results-hero">
-                    ${isPerfect ? '<div class="perfect-banner">🏆 PERFECT SCORE! 🏆</div>' : ''}
-                    
+                    ${isSim ? `
+                        <div class="sim-pass-badge ${results.passed ? 'pass' : 'fail'}">
+                            ${results.passed ? '✓ PASSED' : '✕ FAILED'}
+                        </div>
+                        <div class="sim-cert-name">${escapeHtml(results.certName || '')}</div>
+                    ` : ''}
+                    ${isPerfect && !isSim ? '<div class="perfect-banner">🏆 PERFECT SCORE! 🏆</div>' : ''}
+
                     <div class="results-score ${isPerfect ? 'perfect' : ''}" style="--score-color: ${getScoreColor(percentage)}">
                         <span class="results-score-pct" id="score-counter">0</span>
                         <span class="results-score-percent">%</span>
                     </div>
-                    
+
                     <h2 class="results-msg">${message.emoji} ${message.text}</h2>
                     <p class="text-muted">${escapeHtml(quiz.title)}</p>
-                    
+                    ${isSim && results.timeTaken ? `<div class="sim-time">Completed in ${Math.floor(results.timeTaken / 60)}m ${results.timeTaken % 60}s</div>` : ''}
+
                     <div class="results-stats">
                         <div class="stat-card">
                             <div class="stat-value text-success">${correct}</div>
@@ -52,7 +76,10 @@ export function renderResults() {
                             <div class="stat-label">Total</div>
                         </div>
                     </div>
-                    
+
+                    ${isSim && results.domainScores ? renderDomainBreakdown(results.domainScores) : ''}
+
+                    ${!isSim ? `
                     <!-- XP & Progress Section -->
                     <div class="results-progress card">
                         <div class="progress-header">
@@ -76,11 +103,18 @@ export function renderResults() {
                             <span class="xp-bar-text">${levelInfo.xpInLevel} / ${levelInfo.xpForNext} XP to level ${levelInfo.level + 1}</span>
                         </div>
                     </div>
-                    
+                    ` : ''}
+
                     <div class="results-actions">
-                        <button class="btn btn-primary btn-lg" onclick="window.app.retryQuiz()">
-                            🔄 Try Again
-                        </button>
+                        ${isSim ? `
+                            <button class="btn btn-primary btn-lg" onclick="window.app.openDashboard()">
+                                📊 Back to Dashboard
+                            </button>
+                        ` : `
+                            <button class="btn btn-primary btn-lg" onclick="window.app.retryQuiz()">
+                                🔄 Try Again
+                            </button>
+                        `}
                         <button class="btn btn-secondary" onclick="window.app.reviewQuiz()">
                             📝 Review Answers
                         </button>
@@ -92,6 +126,40 @@ export function renderResults() {
             </div>
         </div>
     `;
+}
+
+function renderDomainBreakdown(domainScores) {
+    const entries = Object.entries(domainScores);
+    if (entries.length === 0) return '';
+
+    return `
+    <div class="domain-breakdown">
+        <div class="domain-breakdown-title">Domain Breakdown</div>
+        ${entries.map(([name, data]) => {
+            const pct = data.total > 0 ? Math.round(data.correct / data.total * 100) : 0;
+            const color = pct >= 80 ? '#34d399' : pct >= 60 ? '#fbbf24' : '#ef4444';
+            return `
+            <div class="domain-row">
+                <span class="domain-row-name">${escapeHtml(name)}</span>
+                <span class="domain-row-score" style="color:${color}">${data.correct}/${data.total}</span>
+                <div class="domain-row-bar">
+                    <div class="domain-row-fill" style="width:${pct}%;background:${color}"></div>
+                </div>
+            </div>`;
+        }).join('')}
+    </div>`;
+}
+
+function getSimMessage(passed, percentage) {
+    if (passed) {
+        if (percentage >= 95) return { emoji: '🏆', text: 'Outstanding! Ready for exam day!' };
+        if (percentage >= 85) return { emoji: '🌟', text: 'Excellent - you\'re well prepared!' };
+        return { emoji: '✅', text: 'You passed! Keep practicing to build confidence.' };
+    } else {
+        if (percentage >= 60) return { emoji: '📈', text: 'Almost there - focus on weak domains.' };
+        if (percentage >= 40) return { emoji: '💪', text: 'Making progress - review the fundamentals.' };
+        return { emoji: '📚', text: 'More study needed - focus on domain objectives.' };
+    }
 }
 
 export function renderReview() {

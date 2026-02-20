@@ -4,7 +4,7 @@ import {
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
     getLevelInfo
 } from '../state.js';
-import { getQuiz, saveAttempt } from '../services/api.js';
+import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, removeBookmark, startStudySession, endStudySession } from '../services/api.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 import { TIME, STREAK, QUIZ } from '../utils/constants.js';
@@ -205,6 +205,7 @@ export function renderQuiz() {
             </div>
             <div class="flex items-center gap-2">
                 ${state.timerEnabled ? `<div id="timer" class="quiz-timer ${state.timeRemaining <= TIME.TIMER_WARNING_SECONDS ? 'urgent' : ''}">${formatTime(state.timeRemaining)}</div>` : ''}
+                ${q.id ? `<button class="btn btn-icon btn-ghost ${(state.bookmarkedQuestions || new Set()).has(q.id) ? 'bookmarked' : ''}" onclick="window.app.toggleBookmark(${q.id})" title="Bookmark question" style="${(state.bookmarkedQuestions || new Set()).has(q.id) ? 'color:#fbbf24' : ''}">&#9733;</button>` : ''}
                 <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
             </div>
         </header>
@@ -1144,6 +1145,25 @@ export function toggleFlag() {
     saveQuizProgress();
 }
 
+export async function toggleBookmark(questionId) {
+    const state = getState();
+    const bookmarked = new Set(state.bookmarkedQuestions || []);
+    try {
+        if (bookmarked.has(questionId)) {
+            await removeBookmark(questionId);
+            bookmarked.delete(questionId);
+            showToast('Bookmark removed', 'info');
+        } else {
+            await addBookmark(questionId);
+            bookmarked.add(questionId);
+            showToast('Bookmarked!', 'success');
+        }
+        setState({ bookmarkedQuestions: bookmarked });
+    } catch (e) {
+        showToast('Failed to update bookmark', 'error');
+    }
+}
+
 // ==================== QUIZ START ====================
 
 export async function startQuiz(quizId, options = {}) {
@@ -1210,10 +1230,19 @@ export async function startQuiz(quizId, options = {}) {
         if (options.timed) {
             startTimer();
         }
-        
+
         // Update daily streak
         updateDailyStreak();
-        
+
+        // Start study session tracking
+        try {
+            const sessionType = getState().simulationMode ? 'simulation' : 'quiz';
+            const sessionId = await startStudySession(sessionType, quiz.id);
+            setState({ activeStudySessionId: sessionId }, true);
+        } catch (e) {
+            console.error('Failed to start study session:', e);
+        }
+
         hideLoading();
     } catch (error) {
         hideLoading();
@@ -1297,29 +1326,121 @@ export async function submitQuiz() {
         }
     });
 
-    try {
-        await saveAttempt(quiz.id, {
-            score: correct,
-            total,
-            percentage,
-            answers: answersMap,
-            question_times: state.questionTimes || {},
-            study_mode: state.studyMode,
-            timed: state.timerEnabled,
-            max_streak: state.maxQuizStreak,
-            time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) :
-                (state.quizStartTime ? Math.round((Date.now() - state.quizStartTime) / 1000) : null)
+    const timeTaken = state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) :
+        (state.quizStartTime ? Math.round((Date.now() - state.quizStartTime) / 1000) : null);
+
+    // Handle exam simulation mode
+    if (state.simulationMode && state.simulationConfig) {
+        const simConfig = state.simulationConfig;
+        const passingScore = simConfig.passing_score || 70;
+        const passingScale = simConfig.passing_scale || 'percentage';
+        // For scaled scores (CompTIA), approximate: percentage maps roughly to scaled
+        const passed = passingScale === 'percentage' ? percentage >= passingScore :
+            percentage >= (passingScore / 10); // rough scaled-to-pct mapping
+
+        // Build domain scores
+        const domainScores = {};
+        quiz.questions.forEach((q, i) => {
+            const domainName = q.domainName || 'Untagged';
+            if (!domainScores[domainName]) domainScores[domainName] = { correct: 0, total: 0 };
+            domainScores[domainName].total++;
+            if (checkIfCorrect(state.answers[i], q, i)) {
+                domainScores[domainName].correct++;
+            }
         });
-    } catch (e) {
-        console.error('Failed to save attempt:', e);
+
+        // Build answer detail map keyed by question ID for backend performance tracking
+        const answersDetail = {};
+        quiz.questions.forEach((q, i) => {
+            if (q.id && state.answers[i] !== undefined) {
+                answersDetail[String(q.id)] = state.answers[i];
+            }
+        });
+
+        try {
+            await recordSimulation({
+                certification_id: simConfig.certification.id,
+                score: correct,
+                total,
+                percentage,
+                passed,
+                time_taken: timeTaken,
+                time_limit: simConfig.time_limit,
+                domain_scores: domainScores,
+                answers: state.answers,
+                answers_detail: answersDetail,
+                question_times: state.questionTimes || {}
+            });
+        } catch (e) {
+            console.error('Failed to record simulation:', e);
+        }
+
+        setState({
+            view: 'results',
+            quizResults: {
+                correct, total, percentage, isPerfect, answers: state.answers,
+                isSimulation: true, passed, domainScores,
+                certName: simConfig.certification.name,
+                passingScore, passingScale,
+                timeTaken
+            },
+            simulationMode: false,
+            simulationConfig: null
+        });
+    } else {
+        // Normal quiz attempt
+        try {
+            await saveAttempt(quiz.id, {
+                score: correct,
+                total,
+                percentage,
+                answers: answersMap,
+                question_times: state.questionTimes || {},
+                study_mode: state.studyMode,
+                timed: state.timerEnabled,
+                max_streak: state.maxQuizStreak,
+                time_taken: timeTaken
+            });
+        } catch (e) {
+            console.error('Failed to save attempt:', e);
+        }
+
+        clearQuizProgress(quiz.id);
+
+        setState({
+            view: 'results',
+            quizResults: { correct, total, percentage, isPerfect, answers: state.answers }
+        });
     }
-    
-    clearQuizProgress(quiz.id);
-    
-    setState({
-        view: 'results',
-        quizResults: { correct, total, percentage, isPerfect, answers: state.answers }
-    });
+
+    // Auto-add incorrect answers to SRS review deck
+    try {
+        const incorrectIds = [];
+        quiz.questions.forEach((q, i) => {
+            if (q.id && !checkIfCorrect(state.answers[i], q, i)) {
+                incorrectIds.push(q.id);
+            }
+        });
+        if (incorrectIds.length > 0) {
+            await addToReview(incorrectIds);
+        }
+    } catch (e) {
+        console.error('Failed to add incorrect answers to SRS:', e);
+    }
+
+    // End study session tracking
+    if (state.activeStudySessionId) {
+        try {
+            await endStudySession(state.activeStudySessionId, {
+                questions_reviewed: total,
+                questions_correct: correct,
+                duration_seconds: timeTaken || 0
+            });
+            setState({ activeStudySessionId: null }, true);
+        } catch (e) {
+            console.error('Failed to end study session:', e);
+        }
+    }
 }
 
 export function exitQuiz() {
