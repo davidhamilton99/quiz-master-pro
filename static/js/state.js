@@ -87,35 +87,6 @@ let state = {
     
     // Cached in-progress quizzes (Bug #1 fix - for synchronous access)
     inProgressQuizzes: [],
-
-    // Certifications & Dashboard
-    certifications: [],
-    userCertifications: [],
-    activeCertification: null,
-    domainPerformance: [],
-    certTrends: [],
-    weakQuestions: [],
-    showCertPicker: false,
-    certFilterQuery: '',
-
-    // Exam Simulation
-    simulationMode: false,
-    simulationConfig: null,
-
-    // Spaced Repetition Review
-    reviewCards: [],
-    reviewIndex: 0,
-    reviewShowAnswer: false,
-    reviewedCount: 0,
-    reviewCorrect: 0,
-    reviewStats: {},
-
-    // Bookmarks
-    bookmarkedQuestions: new Set(),
-
-    // Study sessions
-    studySummary: [],
-    activeStudySessionId: null,
 };
 
 const listeners = [];

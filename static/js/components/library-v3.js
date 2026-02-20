@@ -42,12 +42,6 @@ export function renderLibrary() {
                 </div>
                 
                 <div class="header-actions">
-                    <button class="btn btn-ghost btn-icon" onclick="window.app.openDashboard()" title="Certification Dashboard">
-                        🎯
-                    </button>
-                    <button class="btn btn-ghost btn-icon" onclick="window.app.startReview()" title="Spaced Repetition Review">
-                        🔄
-                    </button>
                     <button class="btn btn-ghost btn-icon" onclick="window.app.navigate('studyGuide')" title="Study Guide Builder">
                         📚
                     </button>
