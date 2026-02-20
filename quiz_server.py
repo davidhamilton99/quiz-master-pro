@@ -251,6 +251,55 @@ def init_db():
 
     c.execute('CREATE INDEX IF NOT EXISTS idx_sim_user_cert ON exam_simulations(user_id, certification_id)')
 
+    # === Phase 3: Spaced Repetition, Bookmarks, Study Sessions ===
+
+    c.execute('''CREATE TABLE IF NOT EXISTS srs_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        ease_factor REAL DEFAULT 2.5,
+        interval_days INTEGER DEFAULT 0,
+        repetitions INTEGER DEFAULT 0,
+        next_review_at TIMESTAMP,
+        last_reviewed_at TIMESTAMP,
+        quality INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, question_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS bookmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, question_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS study_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        session_type TEXT NOT NULL,
+        quiz_id INTEGER,
+        certification_id INTEGER,
+        questions_reviewed INTEGER DEFAULT 0,
+        questions_correct INTEGER DEFAULT 0,
+        duration_seconds INTEGER DEFAULT 0,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('CREATE INDEX IF NOT EXISTS idx_srs_user_next ON srs_cards(user_id, next_review_at)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_ss_user_date ON study_sessions(user_id, started_at)')
+
     # Add new columns to quizzes table (safe to run multiple times)
     try:
         c.execute('ALTER TABLE quizzes ADD COLUMN certification_id INTEGER REFERENCES certifications(id)')
@@ -1293,6 +1342,258 @@ def record_exam_simulation():
     conn.commit()
     conn.close()
     return jsonify({'message': 'Simulation recorded'}), 201
+
+# === Phase 3: Spaced Repetition (SM-2), Bookmarks, Study Sessions ===
+
+import math
+
+def sm2_algorithm(quality, ease_factor, interval, repetitions):
+    """SM-2 spaced repetition algorithm.
+    quality: 0-5 rating (0=blackout, 5=perfect recall)
+    Returns: (new_ease_factor, new_interval, new_repetitions, next_review_days)
+    """
+    if quality >= 3:
+        if repetitions == 0:
+            interval = 1
+        elif repetitions == 1:
+            interval = 6
+        else:
+            interval = round(interval * ease_factor)
+        repetitions += 1
+    else:
+        repetitions = 0
+        interval = 1
+
+    ease_factor = max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
+    return ease_factor, interval, repetitions
+
+@app.route('/api/review/due', methods=['GET'])
+@token_required
+def get_due_reviews():
+    """Get questions due for spaced repetition review."""
+    limit = request.args.get('limit', 20, type=int)
+    cert_id = request.args.get('certification_id', type=int)
+    conn = get_db()
+    c = conn.cursor()
+
+    query = '''SELECT sc.*, q.question_text, q.type, q.options, q.correct, q.pairs,
+                      q.code, q.code_language, q.explanation, q.quiz_id, qz.title as quiz_title
+        FROM srs_cards sc
+        JOIN questions q ON sc.question_id = q.id
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        WHERE sc.user_id = ? AND sc.status IN ('new', 'learning', 'review')
+        AND (sc.next_review_at IS NULL OR sc.next_review_at <= ?)'''
+    params = [request.user_id, datetime.now()]
+
+    if cert_id:
+        query += ''' AND EXISTS (SELECT 1 FROM question_domains qd
+            JOIN domains d ON qd.domain_id = d.id
+            WHERE qd.question_id = sc.question_id AND d.certification_id = ?)'''
+        params.append(cert_id)
+
+    query += ' ORDER BY sc.next_review_at ASC NULLS FIRST LIMIT ?'
+    params.append(limit)
+
+    c.execute(query, params)
+    cards = []
+    for row in c.fetchall():
+        card = dict(row)
+        card['options'] = json.loads(card['options']) if card['options'] else None
+        card['correct'] = json.loads(card['correct']) if card['correct'] else None
+        card['pairs'] = json.loads(card['pairs']) if card['pairs'] else None
+        cards.append(card)
+
+    conn.close()
+    return jsonify({'cards': cards})
+
+@app.route('/api/review/stats', methods=['GET'])
+@token_required
+def get_review_stats():
+    """Get SRS statistics for the user."""
+    conn = get_db()
+    c = conn.cursor()
+
+    now = datetime.now()
+    week_from_now = now + timedelta(days=7)
+
+    c.execute('SELECT COUNT(*) as total FROM srs_cards WHERE user_id = ?', (request.user_id,))
+    total = c.fetchone()['total']
+
+    c.execute('''SELECT COUNT(*) as due_now FROM srs_cards
+        WHERE user_id = ? AND status IN ('new','learning','review')
+        AND (next_review_at IS NULL OR next_review_at <= ?)''', (request.user_id, now))
+    due_now = c.fetchone()['due_now']
+
+    c.execute('''SELECT COUNT(*) as due_week FROM srs_cards
+        WHERE user_id = ? AND status IN ('new','learning','review')
+        AND (next_review_at IS NULL OR next_review_at <= ?)''', (request.user_id, week_from_now))
+    due_week = c.fetchone()['due_week']
+
+    c.execute("SELECT COUNT(*) as new_cards FROM srs_cards WHERE user_id = ? AND status = 'new'", (request.user_id,))
+    new_cards = c.fetchone()['new_cards']
+
+    c.execute("SELECT COUNT(*) as graduated FROM srs_cards WHERE user_id = ? AND status = 'graduated'", (request.user_id,))
+    graduated = c.fetchone()['graduated']
+
+    conn.close()
+    return jsonify({'total': total, 'due_now': due_now, 'due_week': due_week,
+                    'new_cards': new_cards, 'graduated': graduated})
+
+@app.route('/api/review/rate', methods=['POST'])
+@token_required
+def rate_review():
+    """Rate a question after review and apply SM-2 algorithm."""
+    data = request.get_json()
+    question_id = data['question_id']
+    quality = data['quality']  # 0-5
+
+    conn = get_db()
+    c = conn.cursor()
+
+    c.execute('SELECT * FROM srs_cards WHERE user_id = ? AND question_id = ?',
+              (request.user_id, question_id))
+    card = c.fetchone()
+    if not card:
+        conn.close()
+        return jsonify({'error': 'Card not found'}), 404
+
+    card = dict(card)
+    ef, interval, reps = sm2_algorithm(
+        quality, card['ease_factor'], card['interval_days'], card['repetitions'])
+
+    next_review = datetime.now() + timedelta(days=interval)
+    status = 'learning' if reps <= 1 else 'review'
+    if interval > 21:
+        status = 'graduated'
+
+    c.execute('''UPDATE srs_cards SET ease_factor=?, interval_days=?, repetitions=?,
+        next_review_at=?, last_reviewed_at=?, quality=?, status=?, updated_at=?
+        WHERE user_id = ? AND question_id = ?''',
+        (ef, interval, reps, next_review, datetime.now(), quality, status,
+         datetime.now(), request.user_id, question_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'ease_factor': ef, 'interval_days': interval, 'next_review': next_review.isoformat(), 'status': status})
+
+@app.route('/api/review/add', methods=['POST'])
+@token_required
+def add_to_review():
+    """Add questions to the SRS deck."""
+    data = request.get_json()
+    question_ids = data.get('question_ids', [])
+    conn = get_db()
+    c = conn.cursor()
+    added = 0
+    for q_id in question_ids:
+        try:
+            c.execute('''INSERT INTO srs_cards (user_id, question_id, next_review_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, question_id) DO NOTHING''',
+                (request.user_id, q_id, datetime.now()))
+            if c.rowcount > 0:
+                added += 1
+        except Exception:
+            pass
+    conn.commit()
+    conn.close()
+    return jsonify({'message': f'Added {added} cards', 'added': added})
+
+@app.route('/api/bookmarks', methods=['GET'])
+@token_required
+def get_bookmarks():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''SELECT b.*, q.question_text, q.type, q.options, q.explanation,
+                      q.quiz_id, qz.title as quiz_title
+        FROM bookmarks b
+        JOIN questions q ON b.question_id = q.id
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        WHERE b.user_id = ?
+        ORDER BY b.created_at DESC''', (request.user_id,))
+    bookmarks = []
+    for row in c.fetchall():
+        bm = dict(row)
+        bm['options'] = json.loads(bm['options']) if bm['options'] else None
+        bookmarks.append(bm)
+    conn.close()
+    return jsonify({'bookmarks': bookmarks})
+
+@app.route('/api/bookmarks', methods=['POST'])
+@token_required
+def add_bookmark():
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('''INSERT INTO bookmarks (user_id, question_id, note)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, question_id) DO UPDATE SET note=excluded.note''',
+            (request.user_id, data['question_id'], data.get('note')))
+        conn.commit()
+        return jsonify({'message': 'Bookmarked'}), 201
+    finally:
+        conn.close()
+
+@app.route('/api/bookmarks/<int:question_id>', methods=['DELETE'])
+@token_required
+def remove_bookmark(question_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM bookmarks WHERE user_id = ? AND question_id = ?',
+              (request.user_id, question_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Removed'})
+
+@app.route('/api/study-sessions', methods=['POST'])
+@token_required
+def start_study_session():
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''INSERT INTO study_sessions (user_id, session_type, quiz_id, certification_id)
+        VALUES (?, ?, ?, ?)''',
+        (request.user_id, data.get('session_type', 'quiz'),
+         data.get('quiz_id'), data.get('certification_id')))
+    session_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'session_id': session_id}), 201
+
+@app.route('/api/study-sessions/<int:session_id>', methods=['PUT'])
+@token_required
+def end_study_session(session_id):
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''UPDATE study_sessions SET questions_reviewed=?, questions_correct=?,
+        duration_seconds=?, ended_at=?
+        WHERE id = ? AND user_id = ?''',
+        (data.get('questions_reviewed', 0), data.get('questions_correct', 0),
+         data.get('duration_seconds', 0), datetime.now(), session_id, request.user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Session updated'})
+
+@app.route('/api/study-sessions/summary', methods=['GET'])
+@token_required
+def get_study_summary():
+    """Get study time summary for last 7 days."""
+    conn = get_db()
+    c = conn.cursor()
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    c.execute('''SELECT DATE(started_at) as day,
+        SUM(duration_seconds) as total_seconds,
+        SUM(questions_reviewed) as total_questions,
+        SUM(questions_correct) as total_correct
+        FROM study_sessions
+        WHERE user_id = ? AND started_at >= ?
+        GROUP BY DATE(started_at)
+        ORDER BY day''', (request.user_id, seven_days_ago))
+    days = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return jsonify({'days': days})
 
 # === Study Guide Builder ===
 

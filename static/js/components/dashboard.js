@@ -10,6 +10,8 @@ export function renderDashboard() {
     const domains = state.domainPerformance || [];
     const trends = state.certTrends || [];
     const weakQs = state.weakQuestions || [];
+    const reviewStats = state.reviewStats || {};
+    const studySummary = state.studySummary || [];
 
     return `
 <style>
@@ -63,12 +65,39 @@ export function renderDashboard() {
 .dash-mini-bars{display:flex;flex-direction:column;gap:4px;margin-top:0.5rem}
 .dash-mini-bar{height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
 .dash-mini-fill{height:100%;border-radius:2px}
+.dash-quick-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:2rem}
+.dash-stat-card{background:#16161e;border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1.25rem;text-align:center;cursor:pointer;transition:all 0.2s}
+.dash-stat-card:hover{border-color:rgba(167,139,250,0.3)}
+.dash-stat-val{font-size:2rem;font-weight:700;margin-bottom:0.25rem}
+.dash-stat-label{font-size:0.8rem;color:#71717a}
+.dash-stat-sub{font-size:0.7rem;color:#52525b;margin-top:0.25rem}
+.dash-study-chart{display:flex;align-items:flex-end;gap:4px;height:60px;margin-top:0.75rem;padding:0 0.5rem}
+.dash-study-bar{flex:1;background:rgba(167,139,250,0.3);border-radius:3px 3px 0 0;min-height:2px;transition:height 0.3s}
+.dash-study-labels{display:flex;justify-content:space-between;font-size:0.6rem;color:#52525b;padding:0 0.5rem;margin-top:2px}
 </style>
 <div class="dash-container">
     <div class="dash-header">
         <button class="dash-back" onclick="window.app.navigate('library')">← Library</button>
         <div class="dash-title">Certification Dashboard</div>
         <button class="dash-add-btn" onclick="window.app.showCertPicker()">+ Add Certification</button>
+    </div>
+
+    <div class="dash-quick-stats">
+        <div class="dash-stat-card" onclick="window.app.startReview()">
+            <div class="dash-stat-val" style="color:${(reviewStats.due_today || 0) > 0 ? '#a78bfa' : '#34d399'}">${reviewStats.due_today || 0}</div>
+            <div class="dash-stat-label">Due for Review</div>
+            <div class="dash-stat-sub">${reviewStats.total || 0} total cards</div>
+        </div>
+        <div class="dash-stat-card">
+            <div class="dash-stat-val" style="color:#67e8f9">${reviewStats.graduated || 0}</div>
+            <div class="dash-stat-label">Mastered</div>
+            <div class="dash-stat-sub">${reviewStats.due_week || 0} due this week</div>
+        </div>
+        <div class="dash-stat-card">
+            <div class="dash-stat-val" style="color:#fbbf24">${formatStudyTime(studySummary)}</div>
+            <div class="dash-stat-label">Study Time (7d)</div>
+            ${renderStudyChart(studySummary)}
+        </div>
     </div>
 
     ${certs.length === 0 ? `
@@ -169,4 +198,45 @@ function renderDetailView(cert, domains, trends, weakQs) {
         </div>
     </div>` : ''}
     `;
+}
+
+function formatStudyTime(days) {
+    if (!days || days.length === 0) return '0m';
+    const totalSecs = days.reduce((sum, d) => sum + (d.total_seconds || 0), 0);
+    if (totalSecs < 60) return `${totalSecs}s`;
+    if (totalSecs < 3600) return `${Math.round(totalSecs / 60)}m`;
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.round((totalSecs % 3600) / 60);
+    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+}
+
+function renderStudyChart(days) {
+    if (!days || days.length === 0) {
+        return '<div class="dash-stat-sub">No study sessions yet</div>';
+    }
+    // Ensure we have 7 days of data, filling gaps with 0
+    const last7 = [];
+    const dayNames = ['S','M','T','W','T','F','S'];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        const match = days.find(day => day.date === dateStr);
+        last7.push({
+            date: dateStr,
+            seconds: match ? match.total_seconds : 0,
+            label: dayNames[d.getDay()]
+        });
+    }
+    const maxSecs = Math.max(...last7.map(d => d.seconds), 1);
+    return `
+        <div class="dash-study-chart">
+            ${last7.map(d => {
+                const pct = Math.max(3, (d.seconds / maxSecs) * 100);
+                return `<div class="dash-study-bar" style="height:${pct}%" title="${Math.round(d.seconds / 60)}m"></div>`;
+            }).join('')}
+        </div>
+        <div class="dash-study-labels">
+            ${last7.map(d => `<span>${d.label}</span>`).join('')}
+        </div>`;
 }
