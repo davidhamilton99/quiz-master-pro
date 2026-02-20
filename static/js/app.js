@@ -11,9 +11,9 @@ import {
     confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu 
 } from './components/library-v3.js';
 import {
-    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect,
-    nextQuestion, prevQuestion, goToQuestion, toggleFlag, toggleBookmark, exitQuiz, submitQuiz, stopTimer,
-    selectMatchLeft, selectMatchRight, unmatchItem, clearAllMatches,
+    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
+    nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
+    selectMatchLeft, selectMatchRight, unmatchItem, clearAllMatches, 
     moveOrderItem, initQuizHandlers, checkMatchingAnswer, checkOrderingAnswer
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
@@ -34,18 +34,6 @@ import {
     fcToggleMenu, fcToggleShortcuts, exitFlashcards,
     fcTouchStart, fcTouchMove, fcTouchEnd
 } from './components/flashcards.js';
-
-// Certification dashboard & picker
-import { renderDashboard } from './components/dashboard.js';
-import { renderCertPicker } from './components/certPicker.js';
-import { renderReviewSession } from './components/review.js';
-import {
-    getCertifications, getUserCertifications, enrollCertification, unenrollCertification,
-    getCertPerformance, getCertTrends, getWeakQuestions, startSimulation, recordSimulation,
-    migrateQuizzes, getDueReviews, getReviewStats, rateReview, addToReview,
-    getBookmarks, addBookmark, removeBookmark,
-    startStudySession, endStudySession, getStudySummary
-} from './services/api.js';
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
@@ -328,13 +316,6 @@ function render() {
         case 'flashcards':
             content = renderFlashcards();
             break;
-        case 'dashboard':
-            showHUD = true;
-            content = renderDashboard() + (state.showCertPicker ? renderCertPicker() : '');
-            break;
-        case 'srsReview':
-            content = renderReviewSession();
-            break;
         default:
             // Default based on auth state
             if (state.isAuthenticated) {
@@ -472,7 +453,6 @@ window.app = {
     prevQuestion,
     goToQuestion,
     toggleFlag,
-    toggleBookmark,
     exitQuiz,
     submitQuiz,
     
@@ -548,219 +528,6 @@ window.app = {
     
     // Rewards
     showPendingRewards,
-
-    // Certification Dashboard
-    showCertPicker: async () => {
-        try {
-            const certs = await getCertifications();
-            setState({ certifications: certs, showCertPicker: true, certFilterQuery: '' });
-        } catch (e) {
-            showToast('Failed to load certifications', 'error');
-        }
-    },
-    closeCertPicker: () => setState({ showCertPicker: false }),
-    filterCerts: (query) => setState({ certFilterQuery: query }),
-    enrollCert: async (certId) => {
-        try {
-            await enrollCertification(certId);
-            const userCerts = await getUserCertifications();
-            setState({ userCertifications: userCerts, showCertPicker: false });
-            showToast('Enrolled in certification!', 'success');
-        } catch (e) {
-            showToast('Failed to enroll', 'error');
-        }
-    },
-    selectCert: async (certId) => {
-        try {
-            showLoading();
-            const [domains, trends, weakQs] = await Promise.all([
-                getCertPerformance(certId),
-                getCertTrends(certId),
-                getWeakQuestions(certId)
-            ]);
-            const state = getState();
-            const cert = (state.userCertifications || []).find(c => c.certification_id === certId);
-            setState({
-                activeCertification: cert || { certification_id: certId },
-                domainPerformance: domains,
-                certTrends: trends,
-                weakQuestions: weakQs
-            });
-            hideLoading();
-        } catch (e) {
-            hideLoading();
-            showToast('Failed to load performance data', 'error');
-        }
-    },
-    startSimulation: async (certId) => {
-        try {
-            showLoading();
-            const sim = await startSimulation(certId);
-            if (!sim || !sim.questions || sim.questions.length === 0) {
-                hideLoading();
-                showToast('No questions available for this certification. Tag your quiz questions with domains first.', 'warning');
-                return;
-            }
-            setState({
-                view: 'quiz',
-                currentQuiz: {
-                    id: `sim-${certId}`,
-                    title: `${sim.certification.name} - Practice Exam`,
-                    questions: sim.questions,
-                    isSimulation: true
-                },
-                simulationMode: true,
-                simulationConfig: sim,
-                currentQuestionIndex: 0,
-                answers: [],
-                flaggedQuestions: new Set(),
-                studyMode: false,
-                randomizeOptions: true,
-                optionShuffles: {},
-                showAnswer: false,
-                quizStreak: 0,
-                maxQuizStreak: 0,
-                timerEnabled: true,
-                timerMinutes: Math.ceil(sim.time_limit / 60),
-                timeRemaining: sim.time_limit,
-                quizStartTime: Date.now(),
-                questionStartTime: Date.now(),
-                questionTimes: {}
-            });
-            hideLoading();
-        } catch (e) {
-            hideLoading();
-            showToast('Failed to start simulation: ' + e.message, 'error');
-        }
-    },
-    openDashboard: async () => {
-        try {
-            showLoading();
-            const [userCerts, reviewStats, studySummary] = await Promise.all([
-                getUserCertifications(),
-                getReviewStats().catch(() => ({})),
-                getStudySummary().catch(() => [])
-            ]);
-            setState({
-                view: 'dashboard',
-                userCertifications: userCerts,
-                activeCertification: null,
-                reviewStats,
-                studySummary
-            });
-            hideLoading();
-        } catch (e) {
-            hideLoading();
-            setState({ view: 'dashboard', userCertifications: [], reviewStats: {}, studySummary: [] });
-        }
-    },
-    migrateQuizzes: async () => {
-        try {
-            const result = await migrateQuizzes();
-            showToast(`Migrated ${result.migrated} quizzes`, 'success');
-            await loadQuizzes();
-        } catch (e) {
-            showToast('Migration failed: ' + e.message, 'error');
-        }
-    },
-
-    // Spaced Repetition Review
-    startReview: async (certId = null) => {
-        try {
-            showLoading();
-            const [cards, stats] = await Promise.all([
-                getDueReviews(certId),
-                getReviewStats()
-            ]);
-            let sessionId = null;
-            if (cards.length > 0) {
-                try {
-                    sessionId = await startStudySession('review', null, certId);
-                } catch (e) {
-                    console.error('Failed to start review session:', e);
-                }
-            }
-            setState({
-                view: 'srsReview',
-                reviewCards: cards,
-                reviewIndex: 0,
-                reviewShowAnswer: false,
-                reviewedCount: 0,
-                reviewCorrect: 0,
-                reviewStats: stats,
-                activeStudySessionId: sessionId
-            });
-            hideLoading();
-        } catch (e) {
-            hideLoading();
-            showToast('Failed to load review cards', 'error');
-        }
-    },
-    revShowAnswer: () => setState({ reviewShowAnswer: true }),
-    revRate: async (quality) => {
-        const state = getState();
-        const cards = state.reviewCards || [];
-        const idx = state.reviewIndex || 0;
-        const card = cards[idx];
-        if (!card) return;
-        try {
-            await rateReview(card.question_id, quality);
-        } catch (e) {
-            console.error('Failed to rate review:', e);
-        }
-        const newReviewed = (state.reviewedCount || 0) + 1;
-        const newCorrect = (state.reviewCorrect || 0) + (quality >= 3 ? 1 : 0);
-        setState({
-            reviewIndex: idx + 1,
-            reviewShowAnswer: false,
-            reviewedCount: newReviewed,
-            reviewCorrect: newCorrect
-        });
-        // End study session when all cards reviewed
-        if (idx + 1 >= cards.length && state.activeStudySessionId) {
-            try {
-                await endStudySession(state.activeStudySessionId, {
-                    questions_reviewed: newReviewed,
-                    questions_correct: newCorrect
-                });
-                setState({ activeStudySessionId: null }, true);
-            } catch (e) {
-                console.error('Failed to end review session:', e);
-            }
-        }
-    },
-    exitReview: async () => {
-        const state = getState();
-        if (state.activeStudySessionId) {
-            try {
-                await endStudySession(state.activeStudySessionId, {
-                    questions_reviewed: state.reviewedCount || 0,
-                    questions_correct: state.reviewCorrect || 0
-                });
-            } catch (e) {
-                console.error('Failed to end review session:', e);
-            }
-        }
-        setState({ view: 'library', reviewCards: [], reviewIndex: 0, activeStudySessionId: null });
-    },
-
-    // Bookmarks
-    addBookmark: async (questionId) => {
-        try {
-            await addBookmark(questionId);
-            showToast('Bookmarked!', 'success');
-        } catch (e) {
-            showToast('Failed to bookmark', 'error');
-        }
-    },
-    removeBookmark: async (questionId) => {
-        try {
-            await removeBookmark(questionId);
-            showToast('Bookmark removed', 'info');
-        } catch (e) {
-            showToast('Failed to remove bookmark', 'error');
-        }
-    },
 };
 
 // ==================== INITIALIZE ====================

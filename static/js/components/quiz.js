@@ -1420,18 +1420,6 @@ export async function submitQuiz() {
             if (q.id && !checkIfCorrect(state.answers[i], q, i)) {
                 incorrectIds.push(q.id);
             }
-    try {
-        await saveAttempt(quiz.id, {
-            score: correct,
-            total,
-            percentage,
-            answers: answersMap,
-            question_times: state.questionTimes || {},
-            study_mode: state.studyMode,
-            timed: state.timerEnabled,
-            max_streak: state.maxQuizStreak,
-            time_taken: state.timerEnabled ? (state.timerMinutes * 60 - state.timeRemaining) :
-                (state.quizStartTime ? Math.round((Date.now() - state.quizStartTime) / 1000) : null)
         });
         if (incorrectIds.length > 0) {
             await addToReview(incorrectIds);
