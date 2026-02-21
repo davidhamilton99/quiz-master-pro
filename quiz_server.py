@@ -3103,10 +3103,31 @@ def seed_sub_objectives():
     conn.close()
 
 
+# Admin endpoint to manually trigger seeding (useful for PythonAnywhere)
+@app.route('/api/admin/seed', methods=['POST'])
+def admin_seed():
+    try:
+        init_db()
+        seed_certifications()
+        seed_sub_objectives()
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT COUNT(*) as cnt FROM certifications')
+        cert_count = c.fetchone()['cnt']
+        c.execute('SELECT COUNT(*) as cnt FROM domains')
+        domain_count = c.fetchone()['cnt']
+        conn.close()
+        return jsonify({'message': 'Seeded', 'certifications': cert_count, 'domains': domain_count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Initialize database tables on module load (for WSGI)
-init_db()
-seed_certifications()
-seed_sub_objectives()
+try:
+    init_db()
+    seed_certifications()
+    seed_sub_objectives()
+except Exception as e:
+    print(f"[STARTUP] DB init error: {e}", flush=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
