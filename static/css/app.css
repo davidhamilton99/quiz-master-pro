@@ -4,64 +4,66 @@
    ============================================ */
 
 :root {
-    /* Core palette - rich purples and blues */
-    --primary: #8b5cf6;
+    /* Core palette - rich indigo & violet */
+    --primary: #7c5cfc;
     --primary-light: #a78bfa;
-    --primary-dark: #7c3aed;
-    --primary-glow: rgba(139, 92, 246, 0.5);
-    
+    --primary-dark: #6d28d9;
+    --primary-glow: rgba(124, 92, 252, 0.45);
+
     --accent: #06b6d4;
     --accent-light: #22d3ee;
-    --accent-glow: rgba(6, 182, 212, 0.4);
-    
+    --accent-glow: rgba(6, 182, 212, 0.35);
+
     --success: #10b981;
     --success-light: #34d399;
     --success-glow: rgba(16, 185, 129, 0.4);
-    
+
     --error: #ef4444;
     --error-light: #f87171;
     --error-glow: rgba(239, 68, 68, 0.4);
-    
+
     --warning: #f59e0b;
     --warning-light: #fbbf24;
-    
-    /* Backgrounds */
-    --bg-primary: #0a0a0f;
-    --bg-secondary: rgba(15, 15, 25, 0.8);
-    --bg-tertiary: rgba(25, 25, 40, 0.6);
-    --bg-card: rgba(20, 20, 35, 0.7);
-    --bg-hover: rgba(40, 40, 60, 0.5);
-    
+
+    /* Backgrounds - deeper, richer */
+    --bg-primary: #07060e;
+    --bg-secondary: rgba(12, 10, 24, 0.85);
+    --bg-tertiary: rgba(22, 18, 42, 0.65);
+    --bg-card: rgba(16, 14, 32, 0.75);
+    --bg-hover: rgba(36, 30, 64, 0.5);
+
     /* Text */
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    
+    --text-primary: #f0eef6;
+    --text-secondary: #9b95b0;
+    --text-muted: #6b6585;
+
     /* Borders */
-    --border: rgba(255, 255, 255, 0.08);
-    --border-light: rgba(255, 255, 255, 0.12);
-    --border-glow: rgba(139, 92, 246, 0.3);
-    
+    --border: rgba(255, 255, 255, 0.06);
+    --border-light: rgba(255, 255, 255, 0.1);
+    --border-glow: rgba(124, 92, 252, 0.35);
+
     /* Fonts */
+    --font-display: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-    
+
     /* Spacing & Radius */
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-xl: 24px;
     --radius-full: 9999px;
-    
-    /* Shadows */
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
-    --shadow-glow: 0 0 40px var(--primary-glow);
-    
+
+    /* Shadows - deeper */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.6);
+    --shadow-glow: 0 0 50px var(--primary-glow);
+
     /* Transitions */
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ==================== RESET & BASE ==================== */
