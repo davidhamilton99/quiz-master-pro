@@ -697,22 +697,21 @@ h3 {
     font-size: 0.8125rem;
 }
 
-/* Options - tactile feel */
+/* Options - tactile feel, targeted transitions to avoid flicker */
 .option {
     border-radius: 14px;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
 .option:not(.selected):not(.revealed):hover {
-    transform: translateX(6px);
+    transform: translateX(4px);
     border-color: rgba(124, 92, 252, 0.25);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .option.selected {
     border-color: var(--primary) !important;
     background: rgba(124, 92, 252, 0.12) !important;
-    box-shadow: 0 0 24px rgba(124, 92, 252, 0.15), inset 0 0 0 1px rgba(124, 92, 252, 0.1) !important;
+    box-shadow: 0 0 20px rgba(124, 92, 252, 0.15);
 }
 
 .option-letter {
@@ -724,12 +723,12 @@ h3 {
 /* T/F options */
 .tf-option {
     border-radius: 16px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .tf-option:not(.selected):not(.revealed):hover {
-    transform: translateY(-6px);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
 }
 
 /* Quiz footer */
@@ -742,7 +741,7 @@ h3 {
 /* Question dots */
 .q-dot {
     border-radius: 10px;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .q-dot.current {
@@ -1141,8 +1140,17 @@ h3 {
    MICRO-ANIMATIONS & POLISH
    ============================================================ */
 
-/* Smooth page transitions */
-#app > * {
+/* Smooth page transitions - only on navigation, not within-quiz re-renders */
+#app > .landing-page,
+#app > .auth-page,
+#app > .library-page,
+#app > .results-page,
+#app > .review-page,
+#app > .create-page,
+#app > .flashcards-page,
+#app > .wizard-page,
+#app > .study-guide-page,
+#app > .player-hud {
     animation: pageEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
