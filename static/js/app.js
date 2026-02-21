@@ -41,6 +41,7 @@ import { renderCertPicker } from './components/certPicker.js';
 import {
     getUserCertifications, enrollCertification, unenrollCertification,
     getCertPerformance, getCertTrends, getWeakQuestions, getCertification,
+    getCertifications,
     startSimulation as apiStartSimulation
 } from './services/api.js';
 
@@ -544,12 +545,29 @@ window.app = {
     showPendingRewards,
 
     // Dashboard & Certifications
-    showCertPicker: () => {
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.innerHTML = `<div class="modal">${renderCertPicker()}</div>`;
-        document.body.appendChild(modal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    showCertPicker: async () => {
+        try {
+            const certs = await getCertifications();
+            setState({ certifications: certs });
+        } catch (e) {
+            showToast('Failed to load certifications', 'error');
+            return;
+        }
+        const existing = document.getElementById('cert-picker-container');
+        if (existing) existing.remove();
+        const container = document.createElement('div');
+        container.id = 'cert-picker-container';
+        container.innerHTML = renderCertPicker();
+        document.body.appendChild(container);
+    },
+    closeCertPicker: () => {
+        const container = document.getElementById('cert-picker-container');
+        if (container) container.remove();
+    },
+    filterCerts: (query) => {
+        setState({ certFilterQuery: query }, true);
+        const container = document.getElementById('cert-picker-container');
+        if (container) container.innerHTML = renderCertPicker();
     },
     selectCert: async (certId) => {
         try {
@@ -583,7 +601,7 @@ window.app = {
             const userCerts = await getUserCertifications();
             setState({ userCertifications: userCerts });
             showToast('Enrolled in certification!', 'success');
-            const modal = document.querySelector('.modal-overlay');
+            const modal = document.getElementById('cert-picker-container');
             if (modal) modal.remove();
         } catch (e) {
             showToast('Failed to enroll', 'error');
