@@ -1215,15 +1215,28 @@ export async function toggleBookmark(questionId) {
 
 export async function startQuiz(quizId, options = {}) {
     showLoading();
-    
+
     try {
-        const quiz = await getQuiz(quizId);
-        
+        const isSimulation = !!options.simulation;
+        let quiz;
+
+        if (isSimulation) {
+            // Build a synthetic quiz object from simulation data
+            const sim = options.simulation;
+            quiz = {
+                id: null,
+                title: sim.certification.name + ' Practice Exam',
+                questions: sim.questions,
+            };
+        } else {
+            quiz = await getQuiz(quizId);
+        }
+
         let savedProgress = null;
-        if (!options.restart) {
+        if (!options.restart && !isSimulation) {
             savedProgress = await loadQuizProgress(quizId);
         }
-        
+
         if (savedProgress && !options.restart) {
             // Restore saved progress
             setState({
@@ -1246,7 +1259,7 @@ export async function startQuiz(quizId, options = {}) {
                 questionStartTime: Date.now(),
                 questionTimes: savedProgress.questionTimes || {}
             });
-            
+
             showToast('Resuming quiz...', 'info');
         } else {
             // Fresh start
@@ -1268,12 +1281,14 @@ export async function startQuiz(quizId, options = {}) {
                 timeRemaining: (options.minutes || 15) * 60,
                 quizStartTime: Date.now(),
                 questionStartTime: Date.now(),
-                questionTimes: {}
+                questionTimes: {},
+                simulationMode: isSimulation,
+                simulationConfig: isSimulation ? options.simulation : null,
             });
-            
+
             if (window.sounds) window.sounds.playQuizStart();
         }
-        
+
         if (options.timed) {
             startTimer();
         }
@@ -1283,7 +1298,7 @@ export async function startQuiz(quizId, options = {}) {
 
         // Start study session tracking
         try {
-            const sessionType = getState().simulationMode ? 'simulation' : 'quiz';
+            const sessionType = isSimulation ? 'simulation' : 'quiz';
             const sessionId = await startStudySession(sessionType, quiz.id);
             setState({ activeStudySessionId: sessionId }, true);
         } catch (e) {
