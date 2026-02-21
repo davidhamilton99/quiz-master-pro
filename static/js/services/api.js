@@ -4,7 +4,7 @@
 import { showToast } from '../utils/toast.js';
 import { API } from '../utils/constants.js';
 
-const API_URL = 'https://davidhamilton.pythonanywhere.com/api';
+const API_URL = window.location.origin + '/api';
 
 // State update callback - set by state.js to avoid circular import
 let stateUpdater = null;
@@ -454,4 +454,98 @@ export async function recordSimulation(payload) {
         method: 'POST',
         body: JSON.stringify(payload)
     });
+}
+
+// ==================== Study Sessions ====================
+
+/**
+ * Start a study session
+ * @returns {Promise<number>} session_id
+ */
+export async function startStudySession(sessionType, quizId = null, certId = null) {
+    const data = await apiCall('/study-sessions', {
+        method: 'POST',
+        body: JSON.stringify({ session_type: sessionType, quiz_id: quizId, certification_id: certId })
+    });
+    return data.session_id;
+}
+
+/**
+ * End a study session
+ */
+export async function endStudySession(sessionId, stats = {}) {
+    return await apiCall(`/study-sessions/${sessionId}`, {
+        method: 'PUT',
+        body: JSON.stringify(stats)
+    });
+}
+
+/**
+ * Get study session statistics
+ */
+export async function getStudyStats(period = 'week') {
+    return await apiCall(`/study-sessions/stats?period=${period}`);
+}
+
+// ==================== Readiness Dashboard ====================
+
+/**
+ * Get certification readiness data (aggregated domains, simulations, study time, prediction)
+ */
+export async function getCertReadiness(certId) {
+    return await apiCall(`/certifications/${certId}/readiness`);
+}
+
+// ==================== Spaced Repetition (SRS) ====================
+
+/**
+ * Add questions to SRS review queue
+ */
+export async function addToReview(questionIds) {
+    return await apiCall('/srs/cards', {
+        method: 'POST',
+        body: JSON.stringify({ questionIds })
+    });
+}
+
+/**
+ * Get cards due for review
+ */
+export async function getDueCards(limit = 20) {
+    return await apiCall(`/srs/due?limit=${limit}`);
+}
+
+/**
+ * Submit a review result (SM-2 algorithm)
+ */
+export async function submitReview(cardId, quality) {
+    return await apiCall('/srs/review', {
+        method: 'POST',
+        body: JSON.stringify({ cardId, quality })
+    });
+}
+
+/**
+ * Get SRS statistics
+ */
+export async function getSrsStats() {
+    return await apiCall('/srs/stats');
+}
+
+// ==================== Bookmarks (stubs) ====================
+
+/**
+ * Bookmark a question
+ */
+export async function addBookmark(questionId) {
+    console.log('addBookmark:', questionId, '(pending implementation)');
+    return { success: true };
+}
+
+/**
+ * Remove a bookmark
+ */
+export async function removeBookmark(questionId) {
+    console.log('removeBookmark:', questionId, '(pending implementation)');
+    return { success: true };
 }

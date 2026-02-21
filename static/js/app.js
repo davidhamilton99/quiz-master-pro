@@ -21,7 +21,7 @@ import {
     renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz,
     openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt,
     toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
-    saveField, changeType, savePair, saveOption
+    saveField, changeType, savePair, saveOption, linkCertification, setQuestionDomain
 } from './components/create.js';
 import {
     renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
@@ -34,6 +34,15 @@ import {
     fcToggleMenu, fcToggleShortcuts, exitFlashcards,
     fcTouchStart, fcTouchMove, fcTouchEnd
 } from './components/flashcards.js';
+
+// Dashboard
+import { renderDashboard, loadStudyStats } from './components/dashboard.js';
+import { renderCertPicker } from './components/certPicker.js';
+import {
+    getUserCertifications, enrollCertification, unenrollCertification,
+    getCertPerformance, getCertTrends, getWeakQuestions, getCertification,
+    startSimulation as apiStartSimulation
+} from './services/api.js';
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
@@ -316,6 +325,9 @@ function render() {
         case 'flashcards':
             content = renderFlashcards();
             break;
+        case 'dashboard':
+            content = renderDashboard();
+            break;
         default:
             // Default based on auth state
             if (state.isAuthenticated) {
@@ -496,6 +508,8 @@ window.app = {
     changeType,
     savePair,
     saveOption,
+    linkCertification,
+    setQuestionDomain,
     
     // Study Guide Builder
     sgHandleFile,
@@ -528,6 +542,74 @@ window.app = {
     
     // Rewards
     showPendingRewards,
+
+    // Dashboard & Certifications
+    showCertPicker: () => {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `<div class="modal">${renderCertPicker()}</div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    },
+    selectCert: async (certId) => {
+        try {
+            showLoading();
+            const [domains, trends, weakQs] = await Promise.all([
+                getCertPerformance(certId),
+                getCertTrends(certId),
+                getWeakQuestions(certId, 10),
+            ]);
+            const userCerts = getState().userCertifications || [];
+            const activeCert = userCerts.find(c => c.certification_id === certId);
+            setState({ activeCertification: activeCert, domainPerformance: domains, certTrends: trends, weakQuestions: weakQs });
+            hideLoading();
+        } catch (e) {
+            hideLoading();
+            showToast('Failed to load certification data', 'error');
+        }
+    },
+    loadDashboard: async () => {
+        try {
+            const userCerts = await getUserCertifications();
+            setState({ userCertifications: userCerts, view: 'dashboard' });
+        } catch (e) {
+            showToast('Failed to load certifications', 'error');
+            setState({ view: 'dashboard' });
+        }
+    },
+    enrollCert: async (certId, targetDate) => {
+        try {
+            await enrollCertification(certId, targetDate);
+            const userCerts = await getUserCertifications();
+            setState({ userCertifications: userCerts });
+            showToast('Enrolled in certification!', 'success');
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) modal.remove();
+        } catch (e) {
+            showToast('Failed to enroll', 'error');
+        }
+    },
+    startSimulation: async (certId) => {
+        try {
+            showLoading();
+            const sim = await apiStartSimulation(certId);
+            if (!sim || !sim.questions || sim.questions.length === 0) {
+                hideLoading();
+                showToast('No questions available for simulation. Add questions tagged with this certification first.', 'warning');
+                return;
+            }
+            startQuiz(null, {
+                studyMode: false,
+                timed: true,
+                minutes: Math.ceil(sim.time_limit / 60),
+                simulation: sim,
+            });
+            hideLoading();
+        } catch (e) {
+            hideLoading();
+            showToast('Failed to start simulation: ' + e.message, 'error');
+        }
+    },
 };
 
 // ==================== INITIALIZE ====================

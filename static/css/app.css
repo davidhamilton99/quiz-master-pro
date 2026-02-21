@@ -2534,6 +2534,53 @@ h3 { font-size: 1.25rem; }
     margin-top: 0;
 }
 
+/* Per-option explanations inline */
+.option-explanation {
+    display: block;
+    font-size: 0.82rem;
+    margin-top: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: var(--radius-sm, 4px);
+    line-height: 1.4;
+}
+.option-explanation.correct {
+    color: #16a34a;
+    background: rgba(22, 163, 74, 0.08);
+}
+.option-explanation.incorrect {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.08);
+}
+
+/* Per-option explanations summary in study feedback */
+.option-explanations-summary {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border-left: 4px solid var(--warning, #f59e0b);
+}
+.option-explanations-summary ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+}
+.option-explanations-summary li {
+    padding: 0.4rem 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+}
+.option-explanations-summary li:last-child {
+    border-bottom: none;
+}
+.option-explanations-summary .opt-exp-correct {
+    color: #16a34a;
+}
+.option-explanations-summary .opt-exp-incorrect {
+    color: #dc2626;
+}
+
 /* ============================================
    FIX OPTION SELECTION - NO FLICKER
    ============================================ */

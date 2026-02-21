@@ -286,9 +286,39 @@ function renderStudyModeFeedback(q, state) {
     if (q.explanation) {
         feedbackHtml += `<div class="explanation"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>`;
     }
-    
+
+    // Show per-option explanations summary
+    if (q.optionExplanations && (q.type === 'choice' || !q.type)) {
+        let displayOptions = q.options;
+        let displayCorrect = q.correct;
+        let displayToOriginal = null;
+
+        if (state.randomizeOptions && state.optionShuffles[state.currentQuestionIndex]) {
+            const shuffle = state.optionShuffles[state.currentQuestionIndex];
+            displayOptions = shuffle.shuffledOptions;
+            displayCorrect = shuffle.newCorrect;
+            displayToOriginal = shuffle.mapping;
+        }
+
+        let hasAnyExp = false;
+        let expHtml = '<div class="option-explanations-summary"><strong>Option Breakdown:</strong><ul>';
+        displayOptions.forEach((opt, i) => {
+            const origIdx = displayToOriginal ? displayToOriginal[i] : i;
+            const expText = q.optionExplanations[origIdx] || q.optionExplanations[String(origIdx)];
+            if (expText) {
+                hasAnyExp = true;
+                const isCorrectOpt = Array.isArray(displayCorrect) ? displayCorrect.includes(i) : displayCorrect === i;
+                const letter = String.fromCharCode(65 + i);
+                const colorClass = isCorrectOpt ? 'opt-exp-correct' : 'opt-exp-incorrect';
+                expHtml += `<li class="${colorClass}"><strong>${letter}.</strong> ${escapeHtml(expText)}</li>`;
+            }
+        });
+        expHtml += '</ul></div>';
+        if (hasAnyExp) feedbackHtml += expHtml;
+    }
+
     feedbackHtml += `</div>`;
-    
+
     return feedbackHtml;
 }
 
@@ -444,16 +474,22 @@ function renderMultipleChoice(q, questionIndex) {
     const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
     
+    // Build mapping from display index to original index for option explanations
+    let displayToOriginal = null;
+    if (state.randomizeOptions && state.optionShuffles[questionIndex]) {
+        displayToOriginal = state.optionShuffles[questionIndex].mapping;
+    }
+
     let html = '<div class="options-grid">';
     displayOptions.forEach((opt, i) => {
         const letter = String.fromCharCode(65 + i);
-        const isSelected = isMulti 
-            ? (userAnswer || []).includes(i) 
+        const isSelected = isMulti
+            ? (userAnswer || []).includes(i)
             : userAnswer === i;
-        const isCorrectOpt = isMulti 
-            ? displayCorrect.includes(i) 
+        const isCorrectOpt = isMulti
+            ? displayCorrect.includes(i)
             : displayCorrect === i;
-        
+
         let cls = 'option';
         // Always show selected state
         if (isSelected) {
@@ -464,20 +500,31 @@ function renderMultipleChoice(q, questionIndex) {
             if (isCorrectOpt) cls += ' correct';
             if (isSelected && !isCorrectOpt) cls += ' incorrect';
         }
-        
+
         const checkType = isMulti ? 'checkbox' : 'radio';
         const checked = isSelected ? 'checked' : '';
-        
+
+        // Get per-option explanation if available
+        let optExpHtml = '';
+        if (showingAnswer && q.optionExplanations) {
+            const origIdx = displayToOriginal ? displayToOriginal[i] : i;
+            const expText = q.optionExplanations[origIdx] || q.optionExplanations[String(origIdx)];
+            if (expText) {
+                const expClass = isCorrectOpt ? 'option-explanation correct' : 'option-explanation incorrect';
+                optExpHtml = `<div class="${expClass}">${escapeHtml(expText)}</div>`;
+            }
+        }
+
         html += `
             <label class="${cls}">
-                <input type="${checkType}" 
-                    name="q${questionIndex}" 
-                    value="${i}" 
-                    ${checked} 
+                <input type="${checkType}"
+                    name="q${questionIndex}"
+                    value="${i}"
+                    ${checked}
                     ${disabled}
                     onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
                 <span class="option-letter">${letter}</span>
-                <span class="option-text">${escapeHtml(opt)}</span>
+                <span class="option-text">${escapeHtml(opt)}${optExpHtml}</span>
             </label>
         `;
     });
