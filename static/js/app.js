@@ -607,6 +607,33 @@ window.app = {
             showToast('Failed to enroll', 'error');
         }
     },
+    // Select a cert and smoothly scroll the detail section into view
+    selectCertAndScroll: async (certId) => {
+        await window.app.selectCert(certId);
+        // After re-render, scroll the detail panel into view
+        requestAnimationFrame(() => {
+            const detail = document.getElementById('dash-detail');
+            if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    },
+
+    unenrollCert: async (certId, certName) => {
+        if (!confirm(`Remove "${certName}" from your dashboard? Your quiz history won't be affected.`)) return;
+        try {
+            await unenrollCertification(certId);
+            const userCerts = await getUserCertifications();
+            const state = getState();
+            const stillActive = state.activeCertification?.certification_id === certId;
+            setState({
+                userCertifications: userCerts,
+                ...(stillActive ? { activeCertification: null, domainPerformance: [], certTrends: [], weakQuestions: [] } : {}),
+            });
+            showToast(`Removed ${certName}`, 'success');
+        } catch (e) {
+            showToast('Failed to remove certification', 'error');
+        }
+    },
+
     startSimulation: async (certId) => {
         try {
             showLoading();
