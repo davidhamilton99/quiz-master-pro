@@ -1,5 +1,5 @@
-/* Quiz Component - COMPLETE FIX: Mobile Support + Randomization + All Improvements */
-import { 
+/* Quiz Component */
+import {
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
     getLevelInfo
@@ -8,6 +8,7 @@ import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, remov
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 import { TIME, STREAK, QUIZ } from '../utils/constants.js';
+import { icon } from '../utils/icons.js';
 
 let timerInterval = null;
 
@@ -206,7 +207,7 @@ export function renderQuiz() {
             <div class="flex items-center gap-2">
                 ${state.timerEnabled ? `<div id="timer" class="quiz-timer ${state.timeRemaining <= TIME.TIMER_WARNING_SECONDS ? 'urgent' : ''}">${formatTime(state.timeRemaining)}</div>` : ''}
                 ${q.id ? `<button class="btn btn-icon btn-ghost ${(state.bookmarkedQuestions || new Set()).has(q.id) ? 'bookmarked' : ''}" onclick="window.app.toggleBookmark(${q.id})" title="Bookmark question" style="${(state.bookmarkedQuestions || new Set()).has(q.id) ? 'color:#fbbf24' : ''}">&#9733;</button>` : ''}
-                <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
+                <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">${icon('flag')}</button>
             </div>
         </header>
         <main class="quiz-main"><div class="quiz-content">

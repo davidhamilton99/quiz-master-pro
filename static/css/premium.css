@@ -1,6 +1,5 @@
 /* ============================================
-   QUIZ MASTER PRO - PREMIUM VISUAL LAYER
-   The obsessive-craftsperson upgrade.
+   QUIZ MASTER PRO - Premium Visual Layer
    Loaded LAST to override base styles.
    ============================================ */
 
@@ -47,8 +46,8 @@ body::after {
     z-index: -1;
 }
 
-/* Smooth scroll everywhere */
-* {
+/* Smooth scroll */
+html {
     scroll-behavior: smooth;
 }
 
@@ -809,15 +808,11 @@ h3 {
     width: 180px;
     height: 180px;
     background: rgba(14, 12, 28, 0.8);
-    border: 4px solid;
-    border-image: linear-gradient(135deg, var(--primary), #a855f7, #06b6d4) 1;
+    border: 4px solid var(--primary);
     border-radius: 50%;
     box-shadow:
         0 0 60px rgba(124, 92, 252, 0.2),
         inset 0 0 40px rgba(124, 92, 252, 0.05);
-    /* Fix border-image not working with border-radius */
-    border-image: none;
-    border-color: var(--primary);
 }
 
 .results-score.perfect {

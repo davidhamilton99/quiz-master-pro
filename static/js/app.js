@@ -1,9 +1,10 @@
-/* Quiz Master Pro - Main Entry Point - v2.0 with Landing Page & Wizard */
+/* Quiz Master Pro - Main Entry Point */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings, loadInProgressQuizzes } from './state.js';
 import { loadQuizzes, logout, createQuiz } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
+import { icon } from './utils/icons.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { 
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
@@ -82,7 +83,6 @@ async function exportAs(quizId, format) {
         const modal = document.getElementById('export-modal');
         if (modal) modal.remove();
     } catch (error) {
-        console.error('Export failed:', error);
         showToast('Export failed', 'error');
     }
 }
@@ -102,7 +102,6 @@ async function handleImport(file) {
         showToast('Quiz imported successfully!', 'success');
     } catch (error) {
         hideLoading();
-        console.error('Import failed:', error);
         showToast('Import failed: ' + error.message, 'error');
     }
 }
@@ -120,7 +119,7 @@ function showQuizOptions(quizId) {
         <div class="modal">
             <div class="modal-header">
                 <h2>Start Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
             </div>
             <div class="modal-body">
                 <h3 style="margin-bottom: 1rem;">${quiz.title}</h3>
@@ -228,23 +227,23 @@ function showCreateOptions() {
         <div class="modal">
             <div class="modal-header">
                 <h2>Create New Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
             </div>
             <div class="modal-body">
                 <p class="text-muted mb-4">How would you like to create your quiz?</p>
-                
+
                 <div class="create-options">
                     <button class="create-option" onclick="window.app.startWizard()">
-                        <div class="create-option-icon">🤖</div>
+                        <div class="create-option-icon">${icon('bot', 'icon-2xl')}</div>
                         <div class="create-option-content">
                             <h3>AI-Assisted</h3>
                             <p>Get step-by-step help using ChatGPT or Claude to generate questions from your notes</p>
                         </div>
                         <span class="create-option-badge">Recommended</span>
                     </button>
-                    
+
                     <button class="create-option" onclick="window.app.startManualCreate()">
-                        <div class="create-option-icon">✍️</div>
+                        <div class="create-option-icon">${icon('penLine', 'icon-2xl')}</div>
                         <div class="create-option-content">
                             <h3>Manual Entry</h3>
                             <p>Type or paste questions directly using our text format or visual editor</p>
@@ -618,7 +617,31 @@ window.app = {
     },
 
     unenrollCert: async (certId, certName) => {
-        if (!confirm(`Remove "${certName}" from your dashboard? Your quiz history won't be affected.`)) return;
+        const confirmed = await new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2>Remove Certification</h2>
+                        <button class="btn btn-ghost btn-icon" data-action="cancel">${icon('x')}</button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Remove <strong>${certName}</strong> from your dashboard? Your quiz history won't be affected.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                        <button class="btn btn-primary danger" data-action="confirm">Remove</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.closest('[data-action="cancel"]')) { overlay.remove(); resolve(false); }
+                if (e.target.closest('[data-action="confirm"]')) { overlay.remove(); resolve(true); }
+            });
+        });
+        if (!confirmed) return;
         try {
             await unenrollCertification(certId);
             const userCerts = await getUserCertifications();
@@ -674,7 +697,7 @@ async function init() {
             // Bug #1 fix: Load and cache in-progress quizzes
             await loadInProgressQuizzes();
         } catch (e) {
-            console.error('Failed to load quizzes:', e);
+            showToast('Failed to load quizzes', 'error');
         }
     } else {
         // Not logged in - show landing page

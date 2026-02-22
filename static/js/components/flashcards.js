@@ -1,7 +1,8 @@
-/* Flashcards v2 - Premium Study Experience */
+/* Flashcards v2 */
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
+import { icon } from '../utils/icons.js';
 
 // Flashcard state
 let fc = {
@@ -165,7 +166,7 @@ export function renderFlashcards() {
                     </div>
                     ${card.explanation ? `
                         <div class="fc2-explanation">
-                            <div class="fc2-explanation-title">💡 Why?</div>
+                            <div class="fc2-explanation-title">${icon('lightbulb')} Why?</div>
                             <div class="fc2-explanation-text">${escapeHtml(card.explanation)}</div>
                         </div>
                     ` : ''}
@@ -174,11 +175,11 @@ export function renderFlashcards() {
             
             <!-- Swipe Overlays -->
             <div class="fc2-swipe-overlay fc2-swipe-left" id="swipe-left-overlay">
-                <div class="fc2-swipe-icon">🔄</div>
+                <div class="fc2-swipe-icon">${icon('rotateCcw', 'icon-xl')}</div>
                 <div class="fc2-swipe-text">Again</div>
             </div>
             <div class="fc2-swipe-overlay fc2-swipe-right" id="swipe-right-overlay">
-                <div class="fc2-swipe-icon">✓</div>
+                <div class="fc2-swipe-icon">${icon('check', 'icon-xl')}</div>
                 <div class="fc2-swipe-text">Got it!</div>
             </div>
         </div>
@@ -189,25 +190,25 @@ export function renderFlashcards() {
             <div class="fc2-rating-buttons">
                 <button class="fc2-rate-btn fc2-rate-again ${rating === 'again' ? 'selected' : ''}" 
                         onclick="window.app.fcRate('again')">
-                    <span class="fc2-rate-icon">🔄</span>
+                    <span class="fc2-rate-icon">${icon('rotateCcw')}</span>
                     <span class="fc2-rate-label">Again</span>
                     <span class="fc2-rate-key">1</span>
                 </button>
-                <button class="fc2-rate-btn fc2-rate-hard ${rating === 'hard' ? 'selected' : ''}" 
+                <button class="fc2-rate-btn fc2-rate-hard ${rating === 'hard' ? 'selected' : ''}"
                         onclick="window.app.fcRate('hard')">
-                    <span class="fc2-rate-icon">😓</span>
+                    <span class="fc2-rate-icon">${icon('alertTriangle')}</span>
                     <span class="fc2-rate-label">Hard</span>
                     <span class="fc2-rate-key">2</span>
                 </button>
-                <button class="fc2-rate-btn fc2-rate-good ${rating === 'good' ? 'selected' : ''}" 
+                <button class="fc2-rate-btn fc2-rate-good ${rating === 'good' ? 'selected' : ''}"
                         onclick="window.app.fcRate('good')">
-                    <span class="fc2-rate-icon">👍</span>
+                    <span class="fc2-rate-icon">${icon('check')}</span>
                     <span class="fc2-rate-label">Good</span>
                     <span class="fc2-rate-key">3</span>
                 </button>
-                <button class="fc2-rate-btn fc2-rate-easy ${rating === 'easy' ? 'selected' : ''}" 
+                <button class="fc2-rate-btn fc2-rate-easy ${rating === 'easy' ? 'selected' : ''}"
                         onclick="window.app.fcRate('easy')">
-                    <span class="fc2-rate-icon">🎯</span>
+                    <span class="fc2-rate-icon">${icon('target')}</span>
                     <span class="fc2-rate-label">Easy</span>
                     <span class="fc2-rate-key">4</span>
                 </button>
@@ -244,9 +245,9 @@ export function renderFlashcards() {
         
         <!-- Menu Dropdown -->
         <div class="fc2-menu" id="fc2-menu">
-            <button onclick="window.app.fcShuffle()">🔀 Shuffle Cards</button>
-            <button onclick="window.app.fcRestart()">🔄 Restart</button>
-            <button onclick="window.app.fcToggleShortcuts()">⌨️ Keyboard Shortcuts</button>
+            <button onclick="window.app.fcShuffle()">${icon('shuffle')} Shuffle Cards</button>
+            <button onclick="window.app.fcRestart()">${icon('rotateCcw')} Restart</button>
+            <button onclick="window.app.fcToggleShortcuts()">${icon('settings')} Keyboard Shortcuts</button>
             <div class="fc2-menu-divider"></div>
             <button onclick="window.app.exitFlashcards()">✕ Exit to Library</button>
         </div>
@@ -267,7 +268,7 @@ function renderCompletionScreen() {
     return `
     <div class="fc2-container fc2-completion">
         <div class="fc2-completion-content">
-            <div class="fc2-completion-icon">🎉</div>
+            <div class="fc2-completion-icon">${icon('trophy', 'icon-3xl')}</div>
             <h1>Session Complete!</h1>
             <p class="fc2-completion-subtitle">You've reviewed all ${total} cards</p>
             
@@ -288,19 +289,19 @@ function renderCompletionScreen() {
             <div class="fc2-completion-stats">
                 <div class="fc2-comp-stat easy">
                     <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'easy').length}</span>
-                    <span class="fc2-comp-label">🎯 Easy</span>
+                    <span class="fc2-comp-label">${icon('target')} Easy</span>
                 </div>
                 <div class="fc2-comp-stat good">
                     <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'good').length}</span>
-                    <span class="fc2-comp-label">👍 Good</span>
+                    <span class="fc2-comp-label">${icon('check')} Good</span>
                 </div>
                 <div class="fc2-comp-stat hard">
                     <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'hard').length}</span>
-                    <span class="fc2-comp-label">😓 Hard</span>
+                    <span class="fc2-comp-label">${icon('alertTriangle')} Hard</span>
                 </div>
                 <div class="fc2-comp-stat again">
                     <span class="fc2-comp-num">${Object.values(fc.ratings).filter(r => r === 'again').length}</span>
-                    <span class="fc2-comp-label">🔄 Again</span>
+                    <span class="fc2-comp-label">${icon('rotateCcw')} Again</span>
                 </div>
             </div>
             
@@ -308,7 +309,7 @@ function renderCompletionScreen() {
             <div class="fc2-completion-actions">
                 ${againCards.length > 0 ? `
                     <button class="btn btn-primary btn-lg" onclick="window.app.fcStudyMissed()">
-                        🔄 Review ${againCards.length} Difficult Cards
+                        ${icon('rotateCcw')} Review ${againCards.length} Difficult Cards
                     </button>
                 ` : ''}
                 <button class="btn ${againCards.length > 0 ? 'btn-secondary' : 'btn-primary btn-lg'}" onclick="window.app.fcRestart()">
@@ -337,11 +338,14 @@ function formatContent(content) {
 }
 
 function getTypeIcon(type) {
-    const icons = { 
-        'choice': '📝', 'truefalse': '⚡', 'matching': '🔗', 
-        'ordering': '📋', 'multiselect': '☑️' 
+    const typeIcons = {
+        'choice': icon('circleCheck'),
+        'truefalse': icon('toggleLeft'),
+        'matching': icon('link'),
+        'ordering': icon('listOrdered'),
+        'multiselect': icon('check')
     };
-    return icons[type] || '📝';
+    return typeIcons[type] || icon('circleCheck');
 }
 
 function getTypeName(type) {
@@ -427,7 +431,7 @@ export function fcShuffle() {
     fc.currentIndex = 0;
     fc.isFlipped = false;
     fc.isShuffled = true;
-    showToast('🔀 Cards shuffled!', 'success');
+    showToast('Cards shuffled!', 'success');
     closeMenu();
     setState({ view: 'flashcards' });
 }

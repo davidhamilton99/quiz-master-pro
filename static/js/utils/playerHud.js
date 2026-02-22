@@ -4,6 +4,7 @@
 
 import { getState, getLevelInfo, getTierColor } from '../state.js';
 import { escapeHtml } from './dom.js';
+import { icon } from './icons.js';
 
 export function renderPlayerHUD() {
     const state = getState();
@@ -33,7 +34,7 @@ export function renderPlayerHUD() {
                     </div>
                 ` : ''}
                 <div class="gems-display" title="${profile.gems} gems">
-                    <span class="gem-icon">💎</span>
+                    <span class="gem-icon">${icon('gem')}</span>
                     <span class="gem-count">${formatNumber(profile.gems)}</span>
                 </div>
             </div>
@@ -45,7 +46,7 @@ export function renderQuizStreakDisplay(streak) {
     if (streak < 3) return '';
     
     const intensity = Math.min(Math.floor(streak / 5), 3);
-    const fires = '🔥'.repeat(intensity + 1);
+    const fires = icon('flame').repeat(intensity + 1);
     
     let message = '';
     let className = 'streak-indicator';
@@ -107,7 +108,7 @@ export function renderLevelUpModal(levelInfo) {
                 <h3 class="level-up-rank" style="color: ${tierColor}">${escapeHtml(levelInfo.title)}</h3>
                 <div class="level-up-rewards">
                     <div class="reward-item">
-                        <span class="reward-icon">💎</span>
+                        <span class="reward-icon">${icon('gem')}</span>
                         <span class="reward-text">+${levelInfo.level * 5} Gems</span>
                     </div>
                 </div>
@@ -129,11 +130,11 @@ export function renderAchievementUnlock(achievement) {
                 <p class="achievement-desc">${escapeHtml(achievement.desc)}</p>
                 <div class="achievement-rewards">
                     <span class="reward-item">
-                        <span class="reward-icon">✨</span>
+                        <span class="reward-icon">${icon('sparkles')}</span>
                         <span>+${achievement.xp} XP</span>
                     </span>
                     <span class="reward-item">
-                        <span class="reward-icon">💎</span>
+                        <span class="reward-icon">${icon('gem')}</span>
                         <span>+10 Gems</span>
                     </span>
                 </div>
@@ -186,11 +187,9 @@ export function renderStatsCard(profile) {
 
 // Helper functions
 function getStreakEmoji(streak) {
-    if (streak >= 100) return '☀️';
-    if (streak >= 30) return '🌋';
-    if (streak >= 14) return '🔥🔥🔥';
-    if (streak >= 7) return '🔥🔥';
-    return '🔥';
+    if (streak >= 14) return icon('flame', 'icon-lg') + icon('flame', 'icon-lg') + icon('flame', 'icon-lg');
+    if (streak >= 7) return icon('flame', 'icon-lg') + icon('flame', 'icon-lg');
+    return icon('flame', 'icon-lg');
 }
 
 function formatNumber(num) {
