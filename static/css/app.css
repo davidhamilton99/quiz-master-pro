@@ -673,7 +673,7 @@ h3 { font-size: 1.25rem; }
 
 /* Visual Editor */
 .editor-layout { display: grid; grid-template-columns: 280px 1fr; flex: 1; min-height: 0; }
-.editor-sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1.5rem; overflow-y: auto; }
+.editor-sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1.5rem; overflow-y: auto; min-height: 0; }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; font-weight: 500; }
 .editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .editor-item {
@@ -701,7 +701,7 @@ h3 { font-size: 1.25rem; }
 .editor-item-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.875rem; }
 .editor-item-type { font-size: 0.875rem; opacity: 0.6; }
 
-.editor-main { padding: 2rem; overflow-y: auto; background: var(--bg-primary); }
+.editor-main { padding: 2rem; overflow-y: auto; background: var(--bg-primary); min-height: 0; }
 .editor-card { max-width: 700px; margin: 0 auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 2rem; backdrop-filter: blur(20px); }
 .editor-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
 
@@ -823,8 +823,14 @@ h3 { font-size: 1.25rem; }
 
 /* ==================== RESPONSIVE ==================== */
 @media (max-width: 768px) {
-    .editor-layout { grid-template-columns: 1fr; }
+    /* Editor: drop the fixed-height panel layout, let body scroll naturally */
+    .editor-layout { grid-template-columns: 1fr; flex: none; min-height: auto; }
     .editor-sidebar { display: none; }
+    .editor-main { overflow-y: visible; padding: 1rem; }
+    /* Header: wrap cert picker + save button to a second line */
+    .create-header-inner { flex-wrap: wrap; gap: 0.5rem; }
+    .create-header-inner > div { width: 100%; display: flex; gap: 0.5rem; }
+    .create-header-inner > div select { flex: 1; min-width: 0; }
     .matching-columns { grid-template-columns: 1fr; gap: 1.5rem; }
     .results-stats { grid-template-columns: 1fr; }
     .tf-options { grid-template-columns: 1fr; }

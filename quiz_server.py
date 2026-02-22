@@ -1213,7 +1213,7 @@ def start_exam_simulation(cert_id):
 
     total_questions = cert.get('total_questions') or 60
     data = request.get_json() or {}
-    requested_count = data.get('question_count', total_questions)
+    requested_count = data.get('question_count') or total_questions
 
     import random
     selected_questions = []
