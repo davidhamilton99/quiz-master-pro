@@ -40,21 +40,31 @@ export function renderLibrary() {
                     <div class="brand-logo">🎓</div>
                     <span class="brand-name">Quiz Master Pro</span>
                 </div>
-                
+
+                <nav class="header-nav">
+                    <button class="nav-link active" onclick="window.app.navigate('library')">
+                        <span class="nav-icon">📚</span>
+                        <span class="nav-text">Library</span>
+                    </button>
+                    <button class="nav-link" onclick="window.app.loadDashboard()">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">Dashboard</span>
+                    </button>
+                    <button class="nav-link" onclick="window.app.navigate('studyGuide')">
+                        <span class="nav-icon">📖</span>
+                        <span class="nav-text">Study Guide</span>
+                    </button>
+                </nav>
+
                 <div class="header-actions">
-                    <button class="btn btn-ghost btn-icon" onclick="window.app.loadDashboard()" title="Certification Dashboard">
-                        📊
-                    </button>
-                    <button class="btn btn-ghost btn-icon" onclick="window.app.navigate('studyGuide')" title="Study Guide Builder">
-                        📚
-                    </button>
                     <button class="btn btn-primary" onclick="window.app.showCreateOptions()">
                         <span class="btn-icon-left">+</span>
                         Create
                     </button>
                     <div class="user-menu">
                         <button class="user-avatar" onclick="window.app.toggleMenu()">
-                            ${state.user?.username?.charAt(0).toUpperCase() || 'U'}
+                            <span class="avatar-initial">${state.user?.username?.charAt(0).toUpperCase() || 'U'}</span>
+                            <span class="avatar-chevron">▾</span>
                         </button>
                         <div id="user-menu" class="dropdown-menu hidden">
                             <div class="dropdown-header">
