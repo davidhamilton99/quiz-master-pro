@@ -1,6 +1,5 @@
 /* ============================================
-   QUIZ MASTER PRO - SPECTACULAR DESIGN
-   Modern, animated, glassmorphism UI
+   QUIZ MASTER PRO - Design System
    ============================================ */
 
 :root {
@@ -135,6 +134,28 @@ h3 { font-size: 1.25rem; }
 .mb-4 { margin-bottom: 1rem; }
 .hidden { display: none !important; }
 
+/* ==================== ICONS ==================== */
+.icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    vertical-align: -0.125em;
+    line-height: 1;
+}
+.icon svg {
+    width: 100%;
+    height: 100%;
+}
+.icon-sm { font-size: 1rem; }
+.icon-md { font-size: 1.25rem; }
+.icon-lg { font-size: 1.5rem; }
+.icon-xl { font-size: 2rem; }
+.icon-2xl { font-size: 2.5rem; }
+.icon-3xl { font-size: 3rem; }
+
 /* ==================== BUTTONS ==================== */
 .btn {
     display: inline-flex;
@@ -200,6 +221,8 @@ h3 { font-size: 1.25rem; }
 .btn-icon { padding: 0.625rem; min-width: 40px; }
 .btn.danger { color: var(--error); }
 .btn.danger:hover { background: rgba(239, 68, 68, 0.1); }
+.btn-primary.danger { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35); }
+.btn-primary.danger:hover:not(:disabled) { box-shadow: 0 8px 28px rgba(239, 68, 68, 0.5); filter: brightness(1.1); }
 
 /* ==================== CARDS ==================== */
 .card {
@@ -353,7 +376,7 @@ h3 { font-size: 1.25rem; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); }
 .modal-header h2 { font-size: 1.25rem; }
 .modal-body { padding: 1.5rem; }
-.modal-footer { display: flex; gap: 0.75rem; padding: 1.25rem 1.5rem; border-top: 1px solid var(--border); }
+.modal-footer { display: flex; gap: 0.75rem; padding: 1.25rem 1.5rem; border-top: 1px solid var(--border); justify-content: flex-end; }
 
 /* ==================== TOAST ==================== */
 #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 900; display: flex; flex-direction: column; gap: 0.75rem; }

@@ -24,7 +24,7 @@ export const ExportService = {
             md += `## Question ${i + 1}\n\n${q.question}\n\n`;
             if (q.code) md += '```\n' + q.code + '\n```\n\n';
             if (q.options) q.options.forEach((opt, j) => { md += `${q.correct.includes(j) ? '✓' : '○'} ${String.fromCharCode(65 + j)}. ${opt}\n`; });
-            if (q.explanation) md += `\n> 💡 ${q.explanation}\n`;
+            if (q.explanation) md += `\n> ${q.explanation}\n`;
             md += '\n---\n\n';
         });
         return md;

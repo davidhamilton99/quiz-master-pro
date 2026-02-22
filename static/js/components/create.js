@@ -1,8 +1,9 @@
-/* Create/Edit Component - PHASE 2: Image & Code Language Support */
+/* Create/Edit Component */
 import { getState, setState } from '../state.js';
 import { getQuiz, createQuiz, updateQuiz, getCertifications, getCertification, assignQuestionDomains } from '../services/api.js';
 import { escapeHtml, getRandomColor, showLoading, hideLoading } from '../utils/dom.js';
 import { parseQuizData, questionsToText } from '../utils/parser.js';
+import { icon } from '../utils/icons.js';
 import { showToast } from '../utils/toast.js';
 
 // Cached certs list for dropdown
@@ -97,7 +98,7 @@ True
 4. [match] Match terms:
 A. HTTP => 80
 B. SSH => 22</pre></div>` : ''}
-        <div class="flex gap-3 mt-6"><button class="btn btn-secondary flex-1" onclick="window.app.openVisual()">🎨 Visual Editor</button><button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">💾 Save Quiz</button></div>
+        <div class="flex gap-3 mt-6"><button class="btn btn-secondary flex-1" onclick="window.app.openVisual()">${icon('edit')} Visual Editor</button><button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">${icon('check')} Save Quiz</button></div>
     </main></div>`;
 }
 
@@ -142,7 +143,7 @@ function renderVisual() {
             <div class="editor-card">
                 <div class="editor-card-header">
                     <h3>Question ${qIdx + 1}</h3>
-                    ${questions.length > 1 ? `<button class="btn btn-sm btn-ghost danger" onclick="window.app.deleteQ(${qIdx})">🗑️ Delete</button>` : ''}
+                    ${questions.length > 1 ? `<button class="btn btn-sm btn-ghost danger" onclick="window.app.deleteQ(${qIdx})">${icon('trash')} Delete</button>` : ''}
                 </div>
                 
                 <div class="form-group">
@@ -188,19 +189,19 @@ function renderVisual() {
                     <label class="label">Question Type</label>
                     <div class="type-selector">
                         <button class="type-btn${q.type === 'choice' ? ' active' : ''}" onclick="window.app.changeType('choice')">
-                            <span class="type-btn-icon">✓</span>
+                            <span class="type-btn-icon">${icon('circleCheck')}</span>
                             <span class="type-btn-label">Multiple Choice</span>
                         </button>
                         <button class="type-btn${q.type === 'ordering' ? ' active' : ''}" onclick="window.app.changeType('ordering')">
-                            <span class="type-btn-icon">↕️</span>
+                            <span class="type-btn-icon">${icon('listOrdered')}</span>
                             <span class="type-btn-label">Ordering</span>
                         </button>
                         <button class="type-btn${q.type === 'truefalse' ? ' active' : ''}" onclick="window.app.changeType('truefalse')">
-                            <span class="type-btn-icon">⚡</span>
+                            <span class="type-btn-icon">${icon('toggleLeft')}</span>
                             <span class="type-btn-label">True/False</span>
                         </button>
                         <button class="type-btn${q.type === 'matching' ? ' active' : ''}" onclick="window.app.changeType('matching')">
-                            <span class="type-btn-icon">🔗</span>
+                            <span class="type-btn-icon">${icon('link')}</span>
                             <span class="type-btn-label">Matching</span>
                         </button>
                     </div>
@@ -229,7 +230,7 @@ function renderVisual() {
 }
 
 function getTypeIcon(type) {
-    return { choice: '✓', ordering: '↕️', truefalse: '⚡', matching: '🔗' }[type] || '✓';
+    return { choice: '&#10003;', ordering: '&#8597;', truefalse: '&#9889;', matching: '&#8596;' }[type] || '&#10003;';
 }
 
 function renderTypeEditor(q, qIdx) {
