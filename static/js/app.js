@@ -6,6 +6,7 @@ import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { icon } from './utils/icons.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
+import { dismissVerifyBanner } from './utils/nav.js';
 import {
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
     setSort, setCategory, clearFilters, toggleMenu,
@@ -371,6 +372,30 @@ window.app = {
     setAuthMode,
     handleAuth,
     logout: () => { logout(); setState({ view: 'landing', isAuthenticated: false }); },
+
+    // Email verification
+    dismissVerifyBanner,
+    resendVerification: async () => {
+        try {
+            const { apiCall } = await import('./services/api.js');
+            await apiCall('/auth/resend-verification', { method: 'POST' });
+            showToast('Verification token generated — check server log (dev mode)', 'success');
+        } catch (e) {
+            showToast('Could not send verification', 'error');
+        }
+    },
+
+    // Password strength meter
+    updatePwdStrength: (pw) => {
+        const el = document.getElementById('pwd-strength');
+        if (!el) return;
+        const hasUpper = /[A-Z]/.test(pw);
+        const hasNum   = /[0-9]/.test(pw);
+        const hasSpec  = /[^A-Za-z0-9]/.test(pw);
+        const score    = (pw.length >= 8 ? 1 : 0) + (pw.length >= 12 ? 1 : 0)
+                       + (hasUpper ? 1 : 0) + (hasNum ? 1 : 0) + (hasSpec ? 1 : 0);
+        el.className = 'pwd-strength ' + (score <= 2 ? 'pwd-weak' : score <= 3 ? 'pwd-ok' : 'pwd-strong');
+    },
 
     // Landing page
     scrollToHowItWorks,
