@@ -286,7 +286,7 @@ function renderQuizCard(quiz, progressList) {
     
     return `
     <div class="quiz-card-v3" onclick="window.app.openStudyModal(${quiz.id})">
-        <div class="quiz-card-accent" style="background: ${quiz.color || getRandomGradient()}"></div>
+        <div class="quiz-card-accent" style="background: ${quiz.color || getStableGradient(quiz.id)}"></div>
         
         <div class="quiz-card-body">
             <div class="quiz-card-header">
@@ -415,7 +415,7 @@ function renderStudyModal(quiz) {
     `;
 }
 
-function getRandomGradient() {
+function getStableGradient(quizId) {
     const gradients = [
         'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -424,7 +424,7 @@ function getRandomGradient() {
         'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
         'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
     ];
-    return gradients[Math.floor(Math.random() * gradients.length)];
+    return gradients[(quizId || 0) % gradients.length];
 }
 
 function getFilteredQuizzes(state) {

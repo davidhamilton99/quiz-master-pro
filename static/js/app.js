@@ -1,6 +1,6 @@
 /* Quiz Master Pro - Main Entry Point - v2.0 with Landing Page & Wizard */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings, loadInProgressQuizzes } from './state.js';
-import { loadQuizzes, logout, createQuiz } from './services/api.js';
+import { loadQuizzes, logout, createQuiz, logEvent } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
@@ -43,17 +43,9 @@ import {
     wizardSetContent, wizardPreviewContent, wizardFinish, exitWizard
 } from './components/wizard.js';
 
-// Import sounds, animations, and playerHUD
-import * as sounds from './utils/sounds.js';
-import * as animations from './utils/animations.js';
-import { renderPlayerHUD, renderLevelUpModal, renderAchievementUnlock } from './utils/playerHud.js';
-
-// Make sounds and animations available globally for quiz.js to use
-window.sounds = sounds;
-window.animations = animations;
-
-// Initialize audio on first user interaction
-sounds.initAudio();
+// Lightweight animation utils (shake/pulse only - gamification removed)
+import { addShakeAnimation, addPulseAnimation } from './utils/animations.js';
+window.animations = { addShakeAnimation, addPulseAnimation };
 
 const app = document.getElementById('app');
 
@@ -175,40 +167,6 @@ function launchQuiz(quizId) {
     startQuiz(quizId, { studyMode, randomizeOptions, timed, minutes });
 }
 
-// ==================== PENDING REWARDS ====================
-
-function showPendingRewards() {
-    const state = getState();
-    
-    if (state.pendingLevelUp) {
-        if (window.sounds) window.sounds.playLevelUp();
-        if (window.animations) window.animations.showLevelUpEffect();
-        
-        const modal = document.createElement('div');
-        modal.innerHTML = renderLevelUpModal(state.pendingLevelUp);
-        document.body.appendChild(modal.firstElementChild);
-        
-        setState({ pendingLevelUp: null });
-        return;
-    }
-    
-    if (state.pendingAchievements && state.pendingAchievements.length > 0) {
-        const achievement = state.pendingAchievements[0];
-        if (window.sounds) window.sounds.playAchievement();
-        if (window.animations) window.animations.showAchievementEffect();
-        
-        const modal = document.createElement('div');
-        modal.innerHTML = renderAchievementUnlock(achievement);
-        document.body.appendChild(modal.firstElementChild);
-        
-        setState({ 
-            pendingAchievements: state.pendingAchievements.slice(1)
-        });
-    }
-}
-
-window.showPendingRewards = showPendingRewards;
-
 // ==================== CREATE OPTIONS MODAL ====================
 
 function showCreateOptions() {
@@ -268,11 +226,26 @@ function startManualCreate() {
 // ==================== RENDER ====================
 
 function render() {
+    try {
+        renderInternal();
+    } catch (err) {
+        console.error('Render error:', err);
+        const app = document.getElementById('app');
+        if (app) {
+            app.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:1rem;color:#f8fafc;font-family:sans-serif;">
+                    <h2 style="margin:0">Something went wrong</h2>
+                    <p style="margin:0;color:#94a3b8;">Please reload the page to continue.</p>
+                    <button onclick="location.reload()" style="padding:0.5rem 1.5rem;background:#8b5cf6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;">Reload</button>
+                </div>`;
+        }
+    }
+}
+
+function renderInternal() {
     const state = getState();
-    
     let content = '';
-    let showHUD = false;
-    
+
     switch (state.view) {
         case 'landing':
             content = renderLanding();
@@ -282,7 +255,6 @@ function render() {
             content = renderAuth();
             break;
         case 'library':
-            showHUD = false; // v3 library has its own header
             content = renderLibrary();
             break;
         case 'wizard':
@@ -297,7 +269,6 @@ function render() {
             }, 50);
             break;
         case 'results':
-            showHUD = true;
             content = renderResults();
             setTimeout(animateScoreCounter, 100);
             break;
@@ -305,11 +276,9 @@ function render() {
             content = renderReview();
             break;
         case 'create':
-            showHUD = true;
             content = renderCreate();
             break;
         case 'studyGuide':
-            showHUD = true;
             content = renderStudyGuide();
             setTimeout(initStudyGuideDragDrop, 50);
             break;
@@ -317,26 +286,10 @@ function render() {
             content = renderFlashcards();
             break;
         default:
-            // Default based on auth state
-            if (state.isAuthenticated) {
-                showHUD = false; // v3 library has its own header
-                content = renderLibrary();
-            } else {
-                content = renderLanding();
-            }
+            content = state.isAuthenticated ? renderLibrary() : renderLanding();
     }
-    
-    // Wrap content with HUD if needed
-    if (showHUD && state.isAuthenticated) {
-        app.innerHTML = renderPlayerHUD() + content;
-    } else {
-        app.innerHTML = content;
-    }
-    
-    // Check for pending rewards after render
-    if (state.pendingLevelUp || (state.pendingAchievements && state.pendingAchievements.length > 0)) {
-        setTimeout(showPendingRewards, 500);
-    }
+
+    app.innerHTML = content;
 }
 
 // Subscribe to state changes
@@ -526,8 +479,6 @@ window.app = {
     fcTouchMove,
     fcTouchEnd,
     
-    // Rewards
-    showPendingRewards,
 };
 
 // ==================== INITIALIZE ====================
@@ -539,6 +490,7 @@ async function init() {
     // Try to restore auth session
     if (loadAuth()) {
         loadProfile();
+        logEvent('login');
         setState({ view: 'library' });
         try {
             const quizzes = await loadQuizzes();

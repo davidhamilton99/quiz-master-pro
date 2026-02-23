@@ -31,6 +31,8 @@
     --bg-tertiary: rgba(25, 25, 40, 0.6);
     --bg-card: rgba(20, 20, 35, 0.7);
     --bg-hover: rgba(40, 40, 60, 0.5);
+    --bg-dark: #0a0a0f;
+    --bg-elevated: rgba(25, 25, 40, 0.9);
     
     /* Text */
     --text-primary: #f8fafc;
