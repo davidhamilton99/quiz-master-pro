@@ -630,10 +630,18 @@ export function handleSearchInput(query) {
         if (input) input.setSelectionRange(query.length, query.length);
     }, 0);
 
-    // Also commit to state.searchQuery after a short delay (for clear-button visibility etc.)
+    // Commit to state.searchQuery after a short delay (for clear-button / persistence)
+    // and restore focus again because this setState triggers a second re-render
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
         setState({ searchQuery: query });
+        setTimeout(() => {
+            const input = document.getElementById('library-search');
+            if (input) {
+                input.focus();
+                input.setSelectionRange(query.length, query.length);
+            }
+        }, 0);
     }, 300);
 }
 
