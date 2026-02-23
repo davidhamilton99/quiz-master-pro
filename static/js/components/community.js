@@ -9,7 +9,7 @@ import { showToast } from '../utils/toast.js';
 // Module-level cache
 let _communityQuizzes = null;
 let _communityLoading = false;
-let _activeCertFilter = '';   // '' = all
+let _activeCertFilter = null; // null = no selection (show all); '' = "All" explicitly clicked
 let _communitySearch = '';
 
 export async function loadCommunityQuizzes() {
@@ -17,7 +17,7 @@ export async function loadCommunityQuizzes() {
     _communityLoading = true;
     try {
         const params = new URLSearchParams();
-        if (_activeCertFilter) params.set('cert_id', _activeCertFilter);
+        if (_activeCertFilter !== null && _activeCertFilter !== '') params.set('cert_id', _activeCertFilter);
         if (_communitySearch) params.set('q', _communitySearch);
         const data = await apiCall(`/community/quizzes?${params}`);
         _communityQuizzes = data.quizzes || [];
@@ -26,12 +26,13 @@ export async function loadCommunityQuizzes() {
         _communityQuizzes = [];
     }
     _communityLoading = false;
-    if (getState().view === 'community') setState({}, true);
+    if (getState().view === 'community') setState({});
 }
 
 export function setCommunityFilter(certId) {
     _activeCertFilter = certId;
     _communityQuizzes = null;
+    setState({});   // immediately re-render to show active pill
     loadCommunityQuizzes();
 }
 
@@ -84,7 +85,7 @@ export function renderCommunity() {
                 </div>
 
                 <div class="comm-cert-filters">
-                    <button class="cert-filter-btn ${!_activeCertFilter ? 'active' : ''}" onclick="window.app.setCommunityFilter('')">
+                    <button class="cert-filter-btn ${_activeCertFilter === '' ? 'active' : ''}" onclick="window.app.setCommunityFilter('')">
                         All
                     </button>
                     ${certs.slice(0, 8).map(c => `
