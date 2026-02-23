@@ -5126,11 +5126,66 @@ select:focus:not(:focus-visible) {
     .comm-grid { grid-template-columns: 1fr; }
 }
 
+/* Readiness cert pills — horizontal scroll on all mobile */
+.readiness-cert-pills {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.readiness-cert-pills::-webkit-scrollbar { display: none; }
+.readiness-cert-pills .cert-pill { flex-shrink: 0; }
+
 @media (max-width: 480px) {
     .app-header .header-top { height: 56px; }
     .app-header .brand-name { display: none; }
     .home-hero { flex-direction: column; align-items: flex-start; }
+
+    /* Community filter pills — horizontal scroll on small phones */
+    .comm-cert-filters {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 2px;
+    }
+    .comm-cert-filters::-webkit-scrollbar { display: none; }
+    .cert-filter-btn { flex-shrink: 0; }
+
+    /* Tighter side padding on small phones */
+    .home-container,
+    .readiness-main .container,
+    .comm-main .container { padding: 0 1rem; }
 }
+
+/* ── Verify Email Banner ──────────────────────────────────────────── */
+.verify-banner {
+    background: rgba(251, 191, 36, 0.1);
+    border-bottom: 1px solid rgba(251, 191, 36, 0.3);
+    padding: 0.6rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--warning);
+    flex-wrap: wrap;
+}
+.verify-banner-actions { display: flex; gap: 0.5rem; align-items: center; }
+.verify-dismiss { font-size: 1rem; padding: 0.1rem 0.5rem; line-height: 1; }
+
+/* ── Password Strength Meter ────────────────────────────────────── */
+.pwd-strength {
+    height: 4px;
+    border-radius: 2px;
+    margin-top: 6px;
+    transition: width 0.25s, background 0.25s;
+    width: 0;
+}
+.pwd-strength.pwd-weak   { background: var(--error);   width: 33%; }
+.pwd-strength.pwd-ok     { background: var(--warning); width: 66%; }
+.pwd-strength.pwd-strong { background: var(--success); width: 100%; }
+
 /* ── Share Settings Modal ────────────────────────────────────────── */
 .share-settings-modal .modal-body {
     display: flex;

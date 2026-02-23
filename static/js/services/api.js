@@ -134,11 +134,7 @@ export async function register(username, password, email = null) {
     try {
         const data = await apiCall('/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ 
-                username, 
-                password, 
-                email: email || `${username}@quiz.local` 
-            })
+            body: JSON.stringify({ username, password, email })
         });
         
         // Save to localStorage (Bug #4 fix)

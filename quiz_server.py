@@ -79,6 +79,17 @@ def init_db():
         is_active BOOLEAN DEFAULT 1
     )''')
     
+    # Email verification columns (added in Phase 3 — idempotent ALTER TABLE)
+    for _col, _def in [
+        ('email_verified',      'BOOLEAN DEFAULT 0'),
+        ('email_token',         'TEXT'),
+        ('email_token_expires', 'TIMESTAMP'),
+    ]:
+        try:
+            c.execute(f'ALTER TABLE users ADD COLUMN {_col} {_def}')
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
     c.execute('''CREATE TABLE IF NOT EXISTS sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -604,24 +615,35 @@ def register():
         return jsonify({'error': 'Username must be 3+ characters'}), 400
     if not password or len(password) < 8:
         return jsonify({'error': 'Password must be 8+ characters'}), 400
-    
+    if not email:
+        return jsonify({'error': 'Email address is required'}), 400
+
     h, salt = hash_password(password)
     conn = get_db()
     c = conn.cursor()
-    
+
     try:
-        c.execute('INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)',
-            (username, email or f'{username}@quiz.local', h, salt))
+        verify_token = secrets.token_urlsafe(32)
+        verify_expires = datetime.now() + timedelta(hours=24)
+        c.execute(
+            '''INSERT INTO users (username, email, password_hash, salt,
+                                  email_verified, email_token, email_token_expires)
+               VALUES (?, ?, ?, ?, 0, ?, ?)''',
+            (username, email, h, salt, verify_token, verify_expires))
         user_id = c.lastrowid
-        
+
         token = secrets.token_hex(32)
         c.execute('INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)',
             (user_id, token, datetime.now() + timedelta(days=7)))
-        
+
         conn.commit()
-        return jsonify({'token': token, 'user': {'id': user_id, 'username': username}}), 201
-    except sqlite3.IntegrityError as e:
-        return jsonify({'error': 'Username taken'}), 409
+        print(f"[DEV] Email verify token for {username}: {verify_token}")
+        return jsonify({
+            'token': token,
+            'user': {'id': user_id, 'username': username, 'email_verified': False}
+        }), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Username or email already taken'}), 409
     finally:
         conn.close()
 
@@ -634,21 +656,87 @@ def login():
     
     conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT id, username, password_hash, salt, is_active FROM users WHERE username = ?', (username,))
+    c.execute(
+        '''SELECT id, username, password_hash, salt, is_active,
+                  COALESCE(email_verified, 0) as email_verified
+           FROM users WHERE username = ?''', (username,))
     user = c.fetchone()
-    
+
     if not user or not user['is_active'] or not verify_password(password, user['password_hash'], user['salt']):
         conn.close()
         return jsonify({'error': 'Invalid credentials'}), 401
-    
+
+    # Prune expired sessions for this user
+    c.execute('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?',
+              (user['id'], datetime.now()))
+
     token = secrets.token_hex(32)
     c.execute('INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)',
         (user['id'], token, datetime.now() + timedelta(days=7)))
     c.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
     conn.commit()
     conn.close()
-    
-    return jsonify({'token': token, 'user': {'id': user['id'], 'username': user['username']}})
+
+    return jsonify({
+        'token': token,
+        'user': {
+            'id': user['id'],
+            'username': user['username'],
+            'email_verified': bool(user['email_verified'])
+        }
+    })
+
+@app.route('/api/auth/resend-verification', methods=['POST'])
+@token_required
+def resend_verification():
+    """Generate a new verification token and (dev) print it to the server log."""
+    conn = get_db()
+    c = conn.cursor()
+    # Check if already verified
+    c.execute('SELECT COALESCE(email_verified, 0) FROM users WHERE id = ?', (request.user_id,))
+    row = c.fetchone()
+    if row and row[0]:
+        conn.close()
+        return jsonify({'message': 'Email already verified'}), 200
+
+    verify_token = secrets.token_urlsafe(32)
+    verify_expires = datetime.now() + timedelta(hours=24)
+    with _db_write_lock:
+        c.execute(
+            'UPDATE users SET email_token = ?, email_token_expires = ? WHERE id = ?',
+            (verify_token, verify_expires, request.user_id))
+        conn.commit()
+    conn.close()
+    print(f"[DEV] Email verify token for user {request.user_id}: {verify_token}")
+    return jsonify({'message': 'Verification token generated (dev: check server log)'})
+
+
+@app.route('/api/auth/verify-email', methods=['GET'])
+def verify_email():
+    """Mark an account as verified given a valid token (no auth required)."""
+    token = request.args.get('token', '').strip()
+    if not token:
+        return jsonify({'error': 'Token required'}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+    c.execute(
+        '''SELECT id FROM users
+           WHERE email_token = ? AND email_token_expires > ?''',
+        (token, datetime.now()))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Invalid or expired token'}), 400
+
+    with _db_write_lock:
+        c.execute(
+            'UPDATE users SET email_verified = 1, email_token = NULL, email_token_expires = NULL WHERE id = ?',
+            (row['id'],))
+        conn.commit()
+    conn.close()
+    return jsonify({'message': 'Email verified successfully'})
+
 
 # === Quiz Routes ===
 

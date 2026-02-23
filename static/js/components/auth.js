@@ -43,13 +43,14 @@ export function renderAuth() {
 
                     ${!isLogin ? `
                     <div class="form-group">
-                        <label class="label">Email <span class="optional">(optional)</span></label>
+                        <label class="label">Email</label>
                         <input
                             type="email"
                             id="auth-email"
                             class="input"
                             placeholder="your@email.com"
                             autocomplete="email"
+                            required
                         >
                     </div>
                     ` : ''}
@@ -60,11 +61,13 @@ export function renderAuth() {
                             type="password"
                             id="auth-password"
                             class="input input-lg"
-                            placeholder="Enter password"
+                            placeholder="${isLogin ? 'Enter password' : 'At least 8 characters'}"
                             autocomplete="${isLogin ? 'current-password' : 'new-password'}"
                             required
-                            minlength="4"
+                            minlength="8"
+                            ${!isLogin ? 'oninput="window.app.updatePwdStrength(this.value)"' : ''}
                         >
+                        ${!isLogin ? '<div class="pwd-strength" id="pwd-strength"></div>' : ''}
                     </div>
 
                     ${state.authError ? `
@@ -116,8 +119,13 @@ export async function handleAuth() {
         return;
     }
 
-    if (password.length < 4) {
-        setState({ authError: 'Password must be at least 4 characters' });
+    if (password.length < 8) {
+        setState({ authError: 'Password must be at least 8 characters' });
+        return;
+    }
+
+    if (!isLogin && !email) {
+        setState({ authError: 'Email address is required' });
         return;
     }
 

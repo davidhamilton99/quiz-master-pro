@@ -1,12 +1,20 @@
 /* Shared Navigation - 4-zone app nav + mobile tab bar */
-import { getState } from '../state.js';
+import { getState, setState } from '../state.js';
 import { escapeHtml } from './dom.js';
 import { icon } from './icons.js';
 import { getLevelInfo } from '../state.js';
 
+let _verifyBannerDismissed = false;
+
+export function dismissVerifyBanner() {
+    _verifyBannerDismissed = true;
+    setState({});
+}
+
 export function renderNav(activeView) {
     const state = getState();
     const levelInfo = getLevelInfo();
+    const showVerifyBanner = state.user && !state.user.email_verified && !_verifyBannerDismissed;
 
     return `
     <header class="app-header">
@@ -65,6 +73,16 @@ export function renderNav(activeView) {
             </div>
         </div>
     </header>
+
+    ${showVerifyBanner ? `
+    <div class="verify-banner">
+        <span>${icon('alertTriangle')} Please verify your email address to secure your account.</span>
+        <div class="verify-banner-actions">
+            <button class="btn btn-sm btn-ghost" onclick="window.app.resendVerification()">Resend email</button>
+            <button class="btn btn-sm btn-ghost verify-dismiss" onclick="window.app.dismissVerifyBanner()">✕</button>
+        </div>
+    </div>
+    ` : ''}
 
     <!-- Mobile Bottom Tab Bar -->
     <nav class="mobile-tab-bar">
