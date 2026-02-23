@@ -724,9 +724,11 @@ def update_quiz(id):
     conn = get_db()
     c = conn.cursor()
     # Dual-write: update JSON blob AND normalized questions
-    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, certification_id=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
+    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, certification_id=?, is_public=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
         (data.get('title'), data.get('description', ''), json.dumps(questions_list),
-         data.get('color', '#6366f1'), data.get('certification_id'), datetime.now(), id, request.user_id))
+         data.get('color', '#6366f1'), data.get('certification_id'),
+         1 if data.get('is_public') else 0,
+         datetime.now(), id, request.user_id))
     # Replace normalized questions: delete old, insert new
     c.execute('DELETE FROM questions WHERE quiz_id = ?', (id,))
     _insert_questions_for_quiz(c, id, questions_list)
@@ -742,7 +744,8 @@ def update_quiz_settings(id):
     conn = get_db()
     c = conn.cursor()
     with _db_write_lock:
-        c.execute('''UPDATE quizzes SET is_public=?, certification_id=?, last_modified=?
+        c.execute('''UPDATE quizzes
+                     SET is_public=?, certification_id=?, last_modified=?
                      WHERE id=? AND user_id=?''',
                   (1 if data.get('is_public') else 0,
                    data.get('certification_id') or None,

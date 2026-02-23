@@ -476,9 +476,14 @@ function renderStudyModal(quiz) {
             </div>
 
             <div class="study-modal-footer">
+                ${quiz.is_owned ? `
                 <button class="btn btn-ghost" onclick="window.app.editQuiz(${quiz.id})">
                     ${icon('edit')} Edit Quiz
                 </button>
+                <button class="btn btn-ghost" onclick="window.app.showShareSettings(${quiz.id})">
+                    ${icon('globe')} Share
+                </button>
+                ` : ''}
                 <button class="btn btn-ghost" onclick="window.app.showExportModal(${quiz.id})">
                     ${icon('share')} Export
                 </button>
@@ -646,9 +651,7 @@ export function toggleCardMenu(quizId, btnEl) {
     if (existing) { existing.remove(); return; }
     document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
 
-    const rect = (btnEl || document.querySelector(`[data-menu-id="${quizId}"]`))?.getBoundingClientRect();
-    if (!rect) return;
-
+    const rect = btnEl.getBoundingClientRect();
     const menu = document.createElement('div');
     menu.className = 'card-menu card-menu-float';
     menu.dataset.quizId = quizId;
@@ -763,12 +766,72 @@ export async function confirmDelete(quizId) {
     });
 }
 
+export async function showShareSettings(quizId) {
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === quizId);
+    if (!quiz) return;
+
+    // Fetch certs lazily — they may not be loaded yet on the library page
+    let certs = state.certifications || [];
+    if (!certs.length) {
+        try {
+            certs = await getCertifications();
+            setState({ certifications: certs });
+        } catch (e) { /* proceed with empty list */ }
+    }
+
+    const certOptions = certs.map(c =>
+        `<option value="${c.id}" ${quiz.certification_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal share-settings-modal">
+            <div class="modal-header">
+                <h2>${icon('globe')} Share Settings</h2>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
+            </div>
+            <div class="modal-body">
+                <div class="share-toggle-row">
+                    <div class="share-toggle-info">
+                        <div class="share-toggle-label">Make Public</div>
+                        <div class="share-toggle-desc">Anyone can find and study this quiz</div>
+                    </div>
+                    <input type="checkbox" id="share-public-toggle" class="toggle-checkbox" ${quiz.is_public ? 'checked' : ''}>
+                </div>
+                <div class="share-cert-section">
+                    <div class="share-cert-label">Link to Certification <span class="share-cert-optional">(optional)</span></div>
+                    <select id="share-cert-select" class="share-cert-select">
+                        <option value="">— None —</option>
+                        ${certOptions}
+                    </select>
+                    <div class="share-cert-hint">Helps students find it under the right certification</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                <button class="btn btn-primary" id="save-share-btn">${icon('check')} Save</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#save-share-btn').addEventListener('click', async () => {
+        const isPublic = overlay.querySelector('#share-public-toggle').checked;
+        const certId = parseInt(overlay.querySelector('#share-cert-select').value) || null;
+        overlay.remove();
+        await updateQuizSettings(quizId, { isPublic, certificationId: certId });
+    });
+}
+
 // Close menus when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.user-menu')) {
         const menu = document.getElementById('user-menu');
         if (menu) menu.classList.add('hidden');
     }
+    // Close floating card menus when clicking outside the menu or the ⋮ button
     if (!e.target.closest('.card-menu-float') && !e.target.closest('.quiz-card-menu')) {
         document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
     }

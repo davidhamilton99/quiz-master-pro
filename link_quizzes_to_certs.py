@@ -21,8 +21,9 @@ DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
 # Keyword rules: (pattern, cert_code)
 # Ordered from most-specific to least-specific.
 KEYWORD_RULES = [
-    # CCNA - Wendell Odom textbook chapters
-    (r'chapter\s+\d+\s+vol', 'cisco-ccna-200-301'),
+    # CCNA - Wendell Odom Official Cert Guide Vol 1 & 2 chapter quizzes.
+    # Actual titles: "Chapter 1 - Vol 1", "Chapter 2- Vol 1", "Chapter 1 Vol 2", "Chapter 27 - Vol"
+    (r'chapter\s+\d+[\s-]+vol', 'cisco-ccna-200-301'),
     (r'ccna\s+week\s+\d+', 'cisco-ccna-200-301'),
     (r'\bccna\b', 'cisco-ccna-200-301'),
     (r'200-301', 'cisco-ccna-200-301'),
@@ -34,21 +35,32 @@ KEYWORD_RULES = [
     (r'security\s+part\s+\d+', 'comptia-sec-sy0-701'),
     (r'\bcryptography\b', 'comptia-sec-sy0-701'),
     (r'\bfirewalls?\b', 'comptia-sec-sy0-701'),
+    (r'introductory\s+to\s+security', 'comptia-sec-sy0-701'),
 
     # Network+
     (r'network\+', 'comptia-net-n10-009'),
     (r'n10-009', 'comptia-net-n10-009'),
+    (r'\bdhcp\b', 'comptia-net-n10-009'),
+    (r'\bdns\b', 'comptia-net-n10-009'),
+    (r'subnets?\s+and\s+sites', 'comptia-net-n10-009'),
+    (r'network\s+admin', 'comptia-net-n10-009'),
 
-    # A+ Core 2
-    (r'operating\s+systems?\s+part\s+\d+', 'comptia-a-core2-221-1102'),
+    # A+ Core 2 - OS, security, software troubleshooting, operational procedures
+    # Also covers Windows Server, Hyper-V, Group Policy (all A+ Core 2 OS domain topics)
+    (r'operating\s+systems?\s+\(part', 'comptia-a-core2-221-1102'),
     (r'\boperational\s+procedures?\b', 'comptia-a-core2-221-1102'),
     (r'\bsoftware\s+troubleshooting\b', 'comptia-a-core2-221-1102'),
     (r'220-1102', 'comptia-a-core2-221-1102'),
     (r'a\+\s+core\s+2', 'comptia-a-core2-221-1102'),
+    (r'hyper.?v', 'comptia-a-core2-221-1102'),
+    (r'windows\s+server', 'comptia-a-core2-221-1102'),
+    (r'group\s+policy', 'comptia-a-core2-221-1102'),
 
-    # A+ Core 1
+    # A+ Core 1 - Hardware, mobile, networking, virtualization chapters
+    # "CompTIA A+ Chapter X: [Topic]" titles are all Core 1 topics in the dataset
     (r'220-1101', 'comptia-a-core1-221-1101'),
     (r'a\+\s+core\s+1', 'comptia-a-core1-221-1101'),
+    (r'comptia\s+a\+\s+chapter', 'comptia-a-core1-221-1101'),
 ]
 
 def get_db():

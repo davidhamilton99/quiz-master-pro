@@ -406,7 +406,7 @@ window.app = {
     // Readiness
     setReadinessTab,
     selectReadinessCert,
-    
+
     // Create options
     showCreateOptions,
     startWizard,

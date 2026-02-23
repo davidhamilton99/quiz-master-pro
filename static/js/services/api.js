@@ -240,6 +240,24 @@ export async function updateQuiz(id, payload) {
 }
 
 /**
+ * Update quiz visibility and cert link only (no question rewrite)
+ */
+export async function updateQuizSettings(id, { isPublic, certificationId }) {
+    try {
+        await apiCall(`/quizzes/${id}/settings`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_public: isPublic, certification_id: certificationId || null })
+        });
+        await loadQuizzes();
+        showToast(isPublic ? 'Quiz is now public!' : 'Quiz set to private', 'success');
+        return { success: true };
+    } catch (err) {
+        showToast(err.message || 'Failed to update settings', 'error');
+        return { success: false };
+    }
+}
+
+/**
  * Delete quiz
  */
 export async function deleteQuiz(id) {

@@ -4309,7 +4309,7 @@ select:focus:not(:focus-visible) {
     .sg-iframe {
         height: 400px;
     }
-}}
+}
 
 /* ============================================================
    PHASE 2 - Navigation Redesign
@@ -5130,4 +5130,106 @@ select:focus:not(:focus-visible) {
     .app-header .header-top { height: 56px; }
     .app-header .brand-name { display: none; }
     .home-hero { flex-direction: column; align-items: flex-start; }
+}
+/* ── Share Settings Modal ────────────────────────────────────────── */
+.share-settings-modal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+}
+.share-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+}
+.share-toggle-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: 0.2rem;
+}
+.share-toggle-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.toggle-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 48px;
+    height: 26px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 13px;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.25s;
+}
+.toggle-checkbox::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: left 0.25s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.toggle-checkbox:checked {
+    background: var(--primary);
+}
+.toggle-checkbox:checked::after {
+    left: 25px;
+}
+.share-cert-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.share-cert-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+.share-cert-optional {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.share-cert-select {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: auto;
+}
+.share-cert-select:focus {
+    border-color: var(--primary);
+}
+.share-cert-select option {
+    background: #1a1a2e;
+    color: var(--text-primary);
+}
+.share-cert-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.quiz-public-badge {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: 0.25rem;
+    flex-shrink: 0;
 }
