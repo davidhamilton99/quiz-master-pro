@@ -12,6 +12,8 @@ import sqlite3
 import hashlib
 import secrets
 import json
+import os
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -19,6 +21,27 @@ app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'static'))
 CORS(app)
 
 DATABASE = os.path.join(BASE_DIR, 'quiz_master.db')
+
+# Admin token for protected admin endpoints (set this to a secret value in production)
+ADMIN_TOKEN = os.environ.get('QUIZ_ADMIN_TOKEN', 'change-me-in-production')
+
+# DB write lock for SQLite thread safety
+_db_write_lock = threading.Lock()
+
+# Rate limiting (Flask-Limiter)
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[],
+        storage_uri="memory://"
+    )
+    LIMITER_AVAILABLE = True
+except ImportError:
+    LIMITER_AVAILABLE = False
+    print("Warning: flask-limiter not installed. Rate limiting disabled. Install with: pip install flask-limiter")
 
 # === Static Routes ===
 
@@ -37,7 +60,7 @@ def serve_static(filename):
 # === Database ===
 
 def get_db():
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -269,8 +292,7 @@ def init_db():
     )''')
     c.execute('CREATE INDEX IF NOT EXISTS idx_ss_user ON study_sessions(user_id, started_at)')
 
-    # === Phase 4: Spaced Repetition System (SRS) ===
-
+    # Spaced Repetition System (SRS)
     c.execute('''CREATE TABLE IF NOT EXISTS srs_cards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -287,8 +309,27 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
     )''')
-
     c.execute('CREATE INDEX IF NOT EXISTS idx_srs_user_next ON srs_cards(user_id, next_review_at)')
+
+    # Phase 7.4 - Usage analytics event log
+    c.execute('''CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        event TEXT NOT NULL,
+        metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at)')
+
+    # Phase 7.2 - Additional performance indexes
+    c.execute('CREATE INDEX IF NOT EXISTS idx_questions_quiz_id ON questions(quiz_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_question_performance_user ON question_performance(user_id, question_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_question_domains_domain ON question_domains(domain_id)')
+
+    # Enable WAL mode for better concurrent read performance
+    conn.execute('PRAGMA journal_mode=WAL')
 
     # Add new columns to quizzes table (safe to run multiple times)
     try:
@@ -543,7 +584,16 @@ def token_required(f):
 
 # === Auth Routes ===
 
+def rate_limit(limit_str):
+    """Decorator that applies rate limiting if flask-limiter is available."""
+    def decorator(f):
+        if LIMITER_AVAILABLE:
+            return limiter.limit(limit_str)(f)
+        return f
+    return decorator
+
 @app.route('/api/auth/register', methods=['POST'])
+@rate_limit("5 per hour")
 def register():
     data = request.get_json()
     username = data.get('username', '').strip()
@@ -552,8 +602,8 @@ def register():
     
     if not username or len(username) < 3:
         return jsonify({'error': 'Username must be 3+ characters'}), 400
-    if not password or len(password) < 4:
-        return jsonify({'error': 'Password must be 4+ characters'}), 400
+    if not password or len(password) < 8:
+        return jsonify({'error': 'Password must be 8+ characters'}), 400
     
     h, salt = hash_password(password)
     conn = get_db()
@@ -576,6 +626,7 @@ def register():
         conn.close()
 
 @app.route('/api/auth/login', methods=['POST'])
+@rate_limit("10 per minute")
 def login():
     data = request.get_json()
     username = data.get('username', '').strip()
@@ -606,7 +657,13 @@ def login():
 def get_quizzes():
     conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT * FROM quizzes WHERE user_id = ? ORDER BY last_modified DESC', (request.user_id,))
+    # Return owned quizzes + all public quizzes, owned ones first
+    c.execute('''
+        SELECT *, (user_id = ?) as is_owned
+        FROM quizzes
+        WHERE user_id = ? OR is_public = 1
+        ORDER BY is_owned DESC, last_modified DESC
+    ''', (request.user_id, request.user_id))
     quizzes = [dict(r) for r in c.fetchall()]
     for q in quizzes:
         # Dual-path: read from normalized table if migrated
@@ -2334,6 +2391,110 @@ def get_cert_readiness(cert_id):
 @app.route('/api/health')
 def health():
     return jsonify({'status': 'ok'})
+
+# === Admin Routes ===
+
+def require_admin_token(f):
+    """Decorator requiring X-Admin-Token header matching ADMIN_TOKEN."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('X-Admin-Token', '')
+        if not secrets.compare_digest(token, ADMIN_TOKEN):
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/api/admin/seed', methods=['POST'])
+@require_admin_token
+def admin_seed():
+    """Manually trigger certification seeding (protected by admin token)."""
+    seed_certifications()
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT COUNT(*) as cnt FROM certifications')
+    count = c.fetchone()['cnt']
+    conn.close()
+    return jsonify({'message': f'Seed complete. {count} certifications in database.'})
+
+@app.route('/api/admin/cleanup-sessions', methods=['POST'])
+@require_admin_token
+def cleanup_sessions():
+    """Delete expired sessions. Run daily via cron."""
+    conn = get_db()
+    c = conn.cursor()
+    with _db_write_lock:
+        c.execute('DELETE FROM sessions WHERE expires_at < datetime("now")')
+        deleted = c.rowcount
+        conn.commit()
+    conn.close()
+    return jsonify({'message': f'Deleted {deleted} expired sessions.'})
+
+@app.route('/api/admin/events', methods=['GET'])
+@require_admin_token
+def admin_events():
+    """Event log summary: events per user per day, most-used features, drop-off points."""
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        # Events per user per day (last 30 days)
+        c.execute('''
+            SELECT u.username, date(e.created_at) as day, e.event, COUNT(*) as count
+            FROM events e
+            LEFT JOIN users u ON e.user_id = u.id
+            WHERE e.created_at >= datetime("now", "-30 days")
+            GROUP BY e.user_id, day, e.event
+            ORDER BY day DESC, count DESC
+        ''')
+        daily = [dict(r) for r in c.fetchall()]
+
+        # Most used features (all time)
+        c.execute('''
+            SELECT event, COUNT(*) as count
+            FROM events
+            GROUP BY event
+            ORDER BY count DESC
+        ''')
+        feature_counts = [dict(r) for r in c.fetchall()]
+
+        # Active users (last 7 days)
+        c.execute('''
+            SELECT COUNT(DISTINCT user_id) as active_users
+            FROM events
+            WHERE created_at >= datetime("now", "-7 days")
+        ''')
+        active = c.fetchone()['active_users']
+
+        conn.close()
+        return jsonify({
+            'active_users_7d': active,
+            'feature_counts': feature_counts,
+            'daily_breakdown': daily
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+# === Event Logging ===
+
+@app.route('/api/events', methods=['POST'])
+@token_required
+def log_event():
+    """Log a frontend event. Called from the browser on key user actions."""
+    data = request.get_json()
+    event_name = data.get('event', '').strip()
+    if not event_name:
+        return jsonify({'error': 'event required'}), 400
+    metadata = data.get('metadata')
+    conn = get_db()
+    c = conn.cursor()
+    with _db_write_lock:
+        c.execute(
+            'INSERT INTO events (user_id, event, metadata) VALUES (?, ?, ?)',
+            (request.user_id, event_name, json.dumps(metadata) if metadata else None)
+        )
+        conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
 
 def seed_certifications():
     """Seed the certifications and domains tables with initial IT certification data."""

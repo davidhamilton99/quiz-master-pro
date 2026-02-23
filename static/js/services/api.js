@@ -456,6 +456,16 @@ export async function recordSimulation(payload) {
     });
 }
 
+/**
+ * Log an analytics event (fire-and-forget, never throws)
+ */
+export function logEvent(event, metadata = null) {
+    apiCall('/events', {
+        method: 'POST',
+        body: JSON.stringify({ event, metadata })
+    }).catch(() => {}); // Silently ignore failures
+}
+
 // ==================== Study Sessions ====================
 
 /**

@@ -24,12 +24,15 @@
     --warning: #f59e0b;
     --warning-light: #fbbf24;
 
-    /* Backgrounds - deeper, richer */
+    /* Backgrounds */
     --bg-primary: #07060e;
     --bg-secondary: rgba(12, 10, 24, 0.85);
     --bg-tertiary: rgba(22, 18, 42, 0.65);
     --bg-card: rgba(16, 14, 32, 0.75);
     --bg-hover: rgba(36, 30, 64, 0.5);
+    --bg-dark: #07060e;
+    --bg-elevated: rgba(22, 18, 42, 0.9);
+
 
     /* Text */
     --text-primary: #f0eef6;
