@@ -138,11 +138,11 @@ function renderMyQuizzesTab(state, quizzes, categories, inProgressQuizzes, progr
                         class="search-input"
                         id="library-search"
                         placeholder="Search your quizzes..."
-                        value="${escapeHtml(state.searchQuery || '')}"
+                        value="${escapeHtml(localSearchQuery || state.searchQuery || '')}"
                         oninput="window.app.handleSearchInput(this.value)"
                         onkeydown="if(event.key==='Enter') window.app.setSearchImmediate(this.value)"
                     >
-                    ${state.searchQuery ? `
+                    ${(localSearchQuery || state.searchQuery) ? `
                         <button class="search-clear" onclick="window.app.clearSearch()">×</button>
                     ` : ''}
                 </div>
@@ -557,8 +557,8 @@ function getFilteredQuizzes(state) {
     
     let q = quizzes.slice(); // Copy array
     
-    // Only filter if there's an actual search query
-    const searchQuery = (state.searchQuery || '').trim().toLowerCase();
+    // Only filter if there's an actual search query (use localSearchQuery for instant results)
+    const searchQuery = (localSearchQuery || state.searchQuery || '').trim().toLowerCase();
     if (searchQuery && searchQuery.length > 0) {
         q = q.filter(x => {
             const title = (x.title || '').toLowerCase();
@@ -617,27 +617,24 @@ export function setSearchImmediate(query) {
 
 export function handleSearchInput(query) {
     localSearchQuery = query;
-    
-    // Debounce: wait for user to stop typing
+
+    // Re-render immediately so the filtered list updates as you type
+    setState({});
+
+    // Restore focus + cursor right after the synchronous re-render
+    setTimeout(() => {
+        const input = document.getElementById('library-search');
+        if (input && document.activeElement !== input) {
+            input.focus();
+        }
+        if (input) input.setSelectionRange(query.length, query.length);
+    }, 0);
+
+    // Also commit to state.searchQuery after a short delay (for clear-button visibility etc.)
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
-        // Save cursor position
-        const input = document.getElementById('library-search');
-        const cursorPos = input?.selectionStart;
-        
         setState({ searchQuery: query });
-        
-        // Restore focus and cursor after re-render
-        setTimeout(() => {
-            const newInput = document.getElementById('library-search');
-            if (newInput) {
-                newInput.focus();
-                if (cursorPos !== undefined) {
-                    newInput.setSelectionRange(cursorPos, cursorPos);
-                }
-            }
-        }, 0);
-    }, 400);
+    }, 300);
 }
 
 export function clearSearch() {

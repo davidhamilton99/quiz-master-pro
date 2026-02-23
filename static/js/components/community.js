@@ -26,7 +26,17 @@ export async function loadCommunityQuizzes() {
         _communityQuizzes = [];
     }
     _communityLoading = false;
-    if (getState().view === 'community') setState({});
+    if (getState().view === 'community') {
+        setState({});
+        // Restore focus to search input if user was typing when results arrived
+        if (_communitySearch) {
+            setTimeout(() => {
+                const input = document.getElementById('comm-search');
+                if (input && document.activeElement !== input) input.focus();
+                if (input) input.setSelectionRange(_communitySearch.length, _communitySearch.length);
+            }, 0);
+        }
+    }
 }
 
 export function setCommunityFilter(certId) {
