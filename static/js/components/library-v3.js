@@ -567,12 +567,17 @@ export function closeStudyModal() {
 }
 
 export function toggleCardMenu(quizId, btnEl) {
-    // Remove any existing floating menu
+    // If the same menu is already open, close it and return
+    const existing = document.querySelector(`.card-menu-float[data-quiz-id="${quizId}"]`);
+    if (existing) { existing.remove(); return; }
+
+    // Remove any other open floating menus
     document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
 
     const rect = btnEl.getBoundingClientRect();
     const menu = document.createElement('div');
     menu.className = 'card-menu card-menu-float';
+    menu.dataset.quizId = quizId;
     menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;right:${window.innerWidth - rect.right}px;z-index:9999;`;
     menu.innerHTML = `
         <button onclick="window.app.editQuiz(${quizId})">${icon('edit')} Edit</button>
@@ -581,8 +586,6 @@ export function toggleCardMenu(quizId, btnEl) {
         <button class="text-danger" onclick="window.app.confirmDelete(${quizId})">${icon('trash')} Delete</button>
     `;
     document.body.appendChild(menu);
-    // Close on next click anywhere
-    setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
 }
 
 export async function confirmDelete(quizId) {
@@ -680,7 +683,8 @@ document.addEventListener('click', (e) => {
         const menu = document.getElementById('user-menu');
         if (menu) menu.classList.add('hidden');
     }
-    if (!e.target.closest('.quiz-card-menu') && !e.target.closest('.card-menu')) {
-        document.querySelectorAll('.card-menu').forEach(m => m.classList.add('hidden'));
+    // Close floating card menus when clicking outside the menu or the ⋮ button
+    if (!e.target.closest('.card-menu-float') && !e.target.closest('.quiz-card-menu')) {
+        document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
     }
 });
