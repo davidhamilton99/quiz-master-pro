@@ -92,32 +92,20 @@ export function renderLibrary() {
         <div class="container">
             <div class="stats-grid">
                 <div class="stat-item">
-                    <div class="stat-icon">${icon('flame', 'icon-lg')}</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${profile.dailyStreak || 0}</div>
-                        <div class="stat-label">Day Streak</div>
-                    </div>
+                    <div class="stat-value">${profile.dailyStreak || 0}</div>
+                    <div class="stat-label">Day Streak</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-icon">${icon('library', 'icon-lg')}</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${state.quizzes.length}</div>
-                        <div class="stat-label">Quiz Sets</div>
-                    </div>
+                    <div class="stat-value">${state.quizzes.length}</div>
+                    <div class="stat-label">Quiz Sets</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-icon">${icon('helpCircle', 'icon-lg')}</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${total.toLocaleString()}</div>
-                        <div class="stat-label">Questions</div>
-                    </div>
+                    <div class="stat-value">${total.toLocaleString()}</div>
+                    <div class="stat-label">Questions</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-icon">${icon('star', 'icon-lg')}</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${levelInfo.level || 1}</div>
-                        <div class="stat-label">Level</div>
-                    </div>
+                    <div class="stat-value">${levelInfo.level || 1}</div>
+                    <div class="stat-label">Level</div>
                 </div>
             </div>
         </div>
