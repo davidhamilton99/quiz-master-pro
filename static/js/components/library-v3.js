@@ -13,7 +13,7 @@ let studyTab = 'quizzes'; // 'quizzes' | 'certs'
 
 export function setStudyTab(tab) {
     studyTab = tab;
-    setState({}, true);
+    setState({});
 }
 
 export function renderLibrary() {
