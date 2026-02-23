@@ -295,15 +295,9 @@ function renderQuizCard(quiz, progressList) {
                 <h3 class="quiz-card-title">${escapeHtml(quiz.title)}</h3>
                 ${quiz.is_public && !quiz.is_owned ? `<span class="quiz-public-badge" title="Public quiz">${icon('globe')}</span>` : ''}
                 ${quiz.is_owned ? `
-                <button class="quiz-card-menu" onclick="event.stopPropagation(); window.app.toggleCardMenu(${quiz.id})">
+                <button class="quiz-card-menu" onclick="event.stopPropagation(); window.app.toggleCardMenu(${quiz.id}, this)">
                     ⋮
                 </button>
-                <div id="card-menu-${quiz.id}" class="card-menu hidden">
-                    <button onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">${icon('edit')} Edit</button>
-                    <button onclick="event.stopPropagation(); window.app.showShareSettings(${quiz.id})">${icon('globe')} Share</button>
-                    <button onclick="event.stopPropagation(); window.app.showExportModal(${quiz.id})">${icon('share')} Export</button>
-                    <button class="text-danger" onclick="event.stopPropagation(); window.app.confirmDelete(${quiz.id})">${icon('trash')} Delete</button>
-                </div>
                 ` : ''}
             </div>
             
@@ -572,11 +566,23 @@ export function closeStudyModal() {
     setState({ view: 'library' });
 }
 
-export function toggleCardMenu(quizId) {
-    // Close all other menus first
-    document.querySelectorAll('.card-menu').forEach(m => m.classList.add('hidden'));
-    const menu = document.getElementById(`card-menu-${quizId}`);
-    if (menu) menu.classList.toggle('hidden');
+export function toggleCardMenu(quizId, btnEl) {
+    // Remove any existing floating menu
+    document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
+
+    const rect = btnEl.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'card-menu card-menu-float';
+    menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;right:${window.innerWidth - rect.right}px;z-index:9999;`;
+    menu.innerHTML = `
+        <button onclick="window.app.editQuiz(${quizId})">${icon('edit')} Edit</button>
+        <button onclick="window.app.showShareSettings(${quizId})">${icon('globe')} Share</button>
+        <button onclick="window.app.showExportModal(${quizId})">${icon('share')} Export</button>
+        <button class="text-danger" onclick="window.app.confirmDelete(${quizId})">${icon('trash')} Delete</button>
+    `;
+    document.body.appendChild(menu);
+    // Close on next click anywhere
+    setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
 }
 
 export async function confirmDelete(quizId) {
