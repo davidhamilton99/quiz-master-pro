@@ -5288,3 +5288,48 @@ select:focus:not(:focus-visible) {
     margin-left: 0.25rem;
     flex-shrink: 0;
 }
+
+/* ==================== Phase 4: Profile Page ==================== */
+.profile-page { max-width: 600px; margin: 2rem auto; padding: 0 1.5rem; }
+.profile-hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+}
+.profile-avatar-lg {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.75rem; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.profile-username { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+.profile-meta { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; font-size: 0.82rem; }
+.profile-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+.profile-card-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.85rem; }
+.profile-level-row { display: flex; align-items: center; gap: 0; }
+.xp-bar-track { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+.xp-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #7c3aed); border-radius: 5px; transition: width 0.6s ease; }
+.profile-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; text-align: center; }
+.profile-stat-val { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+.profile-stat-lbl { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+/* ==================== Phase 4: Saved (Bookmarks) Tab ==================== */
+.saved-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.saved-card { padding: 1rem; }
+.saved-card-meta { font-size: 0.75rem; margin-bottom: 0.25rem; }
+.saved-card-q { font-size: 0.9rem; margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.saved-card-footer { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+
+/* Bookmark star — filled state (quiz header button) */
+.btn-icon.bookmarked { color: #fbbf24 !important; }

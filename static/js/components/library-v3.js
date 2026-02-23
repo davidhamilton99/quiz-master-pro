@@ -48,13 +48,21 @@ export function renderLibrary() {
                     ${icon('barChart')} My Certs
                     <span class="tab-badge">${certs.length}</span>
                 </button>
+                <button class="study-hub-tab ${studyTab === 'saved' ? 'active' : ''}" onclick="window.app.setStudyTab('saved')">
+                    ★ Saved
+                    <span class="tab-badge">${(state.bookmarks || []).length}</span>
+                </button>
             </div>
         </div>
     </div>
 
     <main class="library-main">
         <div class="container">
-            ${studyTab === 'quizzes' ? renderMyQuizzesTab(state, quizzes, categories, inProgressQuizzes, progressList, total) : renderMyCertsTab(state, certs)}
+            ${studyTab === 'saved'
+                ? renderSavedTab(state)
+                : studyTab === 'quizzes'
+                    ? renderMyQuizzesTab(state, quizzes, categories, inProgressQuizzes, progressList, total)
+                    : renderMyCertsTab(state, certs)}
         </div>
     </main>
 
@@ -171,6 +179,31 @@ function renderMyQuizzesTab(state, quizzes, categories, inProgressQuizzes, progr
         </section>
     `}
     `;
+}
+
+function renderSavedTab(state) {
+    const bookmarks = state.bookmarks || [];
+    if (bookmarks.length === 0) {
+        return `
+        <div class="certs-empty-state">
+            <div class="empty-icon" style="font-size:3rem">★</div>
+            <h3>No saved questions yet</h3>
+            <p class="text-muted">Star any question during a quiz to save it here for quick review.</p>
+        </div>`;
+    }
+    return `
+    <div class="saved-list">
+        ${bookmarks.map(b => `
+        <div class="saved-card card">
+            <div class="saved-card-meta text-muted">${escapeHtml(b.quiz_title || 'Unknown quiz')}</div>
+            <p class="saved-card-q">${escapeHtml(b.question_text || '')}</p>
+            <div class="saved-card-footer">
+                <button class="btn btn-sm btn-ghost text-danger" onclick="window.app.toggleBookmark(${b.question_id})">
+                    ✕ Remove
+                </button>
+            </div>
+        </div>`).join('')}
+    </div>`;
 }
 
 function renderMyCertsTab(state, certs) {

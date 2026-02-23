@@ -1,6 +1,6 @@
 /* Auth Component - v2.0 with landing page integration */
 import { getState, setState } from '../state.js';
-import { login, register } from '../services/api.js';
+import { login, register, getBookmarks } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
 import { showLoading, hideLoading } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
@@ -143,6 +143,10 @@ export async function handleAuth() {
 
         if (result.success) {
             setState({ authError: null });
+            // Load bookmarks after fresh login/register
+            getBookmarks().then(bms => {
+                setState({ bookmarks: bms, bookmarkedQuestions: new Set(bms.map(b => b.question_id)) });
+            }).catch(() => {});
         } else {
             setState({ authError: result.error || 'Authentication failed' });
         }

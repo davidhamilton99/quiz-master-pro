@@ -556,20 +556,29 @@ export async function getSrsStats() {
     return await apiCall('/srs/stats');
 }
 
-// ==================== Bookmarks (stubs) ====================
+// ==================== Bookmarks ====================
+
+/**
+ * Get all bookmarked questions
+ */
+export async function getBookmarks() {
+    const data = await apiCall('/bookmarks');
+    return data.bookmarks || [];
+}
 
 /**
  * Bookmark a question
  */
-export async function addBookmark(questionId) {
-    console.log('addBookmark:', questionId, '(pending implementation)');
-    return { success: true };
+export async function addBookmark(questionId, note = null) {
+    return await apiCall('/bookmarks', {
+        method: 'POST',
+        body: JSON.stringify({ question_id: questionId, note })
+    });
 }
 
 /**
  * Remove a bookmark
  */
 export async function removeBookmark(questionId) {
-    console.log('removeBookmark:', questionId, '(pending implementation)');
-    return { success: true };
+    return await apiCall(`/bookmarks/${questionId}`, { method: 'DELETE' });
 }

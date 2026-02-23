@@ -322,6 +322,19 @@ def init_db():
     )''')
     c.execute('CREATE INDEX IF NOT EXISTS idx_srs_user_next ON srs_cards(user_id, next_review_at)')
 
+    # Bookmarks
+    c.execute('''CREATE TABLE IF NOT EXISTS bookmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, question_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id)')
+
     # Phase 7.4 - Usage analytics event log
     c.execute('''CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2348,6 +2361,69 @@ def get_srs_stats():
         'graduated': status_counts.get('graduated', 0),
         'streak': streak
     })
+
+# ==================== Bookmarks ====================
+
+@app.route('/api/bookmarks', methods=['GET'])
+@token_required
+def get_bookmarks():
+    """Get all bookmarked questions for the current user."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''SELECT b.id, b.question_id, b.note, b.created_at,
+        q.question_text, q.type, q.options, q.correct, q.explanation,
+        qz.id as quiz_id, qz.title as quiz_title
+        FROM bookmarks b
+        JOIN questions q ON b.question_id = q.id
+        JOIN quizzes qz ON q.quiz_id = qz.id
+        WHERE b.user_id = ?
+        ORDER BY b.created_at DESC''', (request.user_id,))
+    rows = c.fetchall()
+    bookmarks = []
+    for row in rows:
+        bm = dict(row)
+        if bm.get('options'):
+            try:
+                bm['options'] = json.loads(bm['options'])
+            except Exception:
+                pass
+        bookmarks.append(bm)
+    conn.close()
+    return jsonify({'bookmarks': bookmarks})
+
+@app.route('/api/bookmarks', methods=['POST'])
+@token_required
+def add_bookmark():
+    """Bookmark a question."""
+    data = request.get_json() or {}
+    question_id = data.get('question_id')
+    note = data.get('note')
+    if not question_id:
+        return jsonify({'error': 'question_id is required'}), 400
+    conn = get_db()
+    c = conn.cursor()
+    try:
+        c.execute('INSERT OR IGNORE INTO bookmarks (user_id, question_id, note) VALUES (?, ?, ?)',
+                  (request.user_id, question_id, note))
+        conn.commit()
+        bookmark_id = c.lastrowid
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Question not found'}), 404
+    conn.close()
+    return jsonify({'success': True, 'id': bookmark_id})
+
+@app.route('/api/bookmarks/<int:question_id>', methods=['DELETE'])
+@token_required
+def remove_bookmark(question_id):
+    """Remove a bookmark."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM bookmarks WHERE user_id = ? AND question_id = ?',
+              (request.user_id, question_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 @app.route('/api/certifications/<int:cert_id>/readiness', methods=['GET'])
 @token_required
