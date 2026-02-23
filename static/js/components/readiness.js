@@ -21,7 +21,7 @@ let _dataLoaded = false;
 
 export function setReadinessTab(tab) {
     _tab = tab;
-    setState({}, true);
+    setState({});
 }
 
 export async function selectReadinessCert(certId) {
@@ -31,7 +31,7 @@ export async function selectReadinessCert(certId) {
     _domains = [];
     _trends = [];
     _weakQs = [];
-    setState({}, true);
+    setState({});
     await _loadReadinessData(certId);
 }
 
@@ -52,7 +52,7 @@ async function _loadReadinessData(certId) {
         console.warn('Readiness data load failed:', e);
     }
     _dataLoaded = true;
-    if (getState().view === 'readiness') setState({}, true);
+    if (getState().view === 'readiness') setState({});
 }
 
 export function renderReadiness() {
@@ -101,7 +101,7 @@ export function renderReadiness() {
                 ${certs.map(c => `
                     <button class="cert-pill ${c.certification_id === _activeCertId ? 'active' : ''}"
                             onclick="window.app.selectReadinessCert(${c.certification_id})">
-                        ${escapeHtml(c.certification_code || c.certification_name || 'Cert')}
+                        ${escapeHtml(c.code || c.name || 'Cert')}
                     </button>
                 `).join('')}
                 <button class="cert-pill cert-pill-add" onclick="window.app.showCertPicker()">
@@ -124,11 +124,11 @@ export function renderReadiness() {
                     </div>
                 </div>
                 <div class="readiness-hero-info">
-                    <h2>${escapeHtml(activeCert.certification_name || 'Certification')}</h2>
-                    <p class="text-muted">${escapeHtml(activeCert.certification_code || '')}</p>
+                    <h2>${escapeHtml(activeCert.name || 'Certification')}</h2>
+                    <p class="text-muted">${escapeHtml(activeCert.code || '')}</p>
                     ${activeCert.target_date ? `<p class="readiness-target-date">🎯 Target: ${new Date(activeCert.target_date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}</p>` : ''}
                     <button class="btn btn-ghost btn-sm readiness-remove-btn"
-                            onclick="window.app.unenrollCert(${activeCert.certification_id}, '${escapeHtml(activeCert.certification_name || '')}')">
+                            onclick="window.app.unenrollCert(${activeCert.certification_id}, '${escapeHtml(activeCert.name || '')}')">
                         Remove
                     </button>
                 </div>
@@ -227,7 +227,7 @@ function renderSimulateTab(cert) {
             <h3>Exam Simulation</h3>
             <p class="text-muted">
                 Practice under real exam conditions — timed, randomised questions from all domains of
-                <strong>${escapeHtml(cert.certification_name || 'this certification')}</strong>.
+                <strong>${escapeHtml(cert.name || 'this certification')}</strong>.
             </p>
             <ul class="simulate-features">
                 <li>${icon('clock')} Timed (mirrors real exam duration)</li>
