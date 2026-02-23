@@ -222,6 +222,7 @@ export function saveProfile() {
 // No-op stubs retained for call-site compatibility
 export function loadSettings() {}
 export function saveSettings() {}
+export function getProfile() { return getState().playerProfile || {}; }
 export function getLevelInfo() { return { level: 1, xp: 0, progress: 0 }; }
 export function getTierColor() { return '#9ca3af'; }
 export function checkAchievements() {}
