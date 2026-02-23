@@ -9,7 +9,7 @@ import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { 
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
     setSort, setCategory, clearFilters, toggleMenu, 
-    confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu 
+    confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu, showShareSettings
 } from './components/library-v3.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
@@ -375,6 +375,7 @@ window.app = {
     openStudyModal,
     closeStudyModal,
     toggleCardMenu,
+    showShareSettings,
     
     // Create options
     showCreateOptions,

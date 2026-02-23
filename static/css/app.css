@@ -4310,3 +4310,45 @@ select:focus:not(:focus-visible) {
         height: 400px;
     }
 }
+/* ── Share Settings Modal ────────────────────────────────────────── */
+.share-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    cursor: pointer;
+}
+.toggle-checkbox {
+    appearance: none;
+    width: 44px;
+    height: 24px;
+    background: var(--border);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+.toggle-checkbox::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: left 0.2s;
+}
+.toggle-checkbox:checked {
+    background: var(--primary);
+}
+.toggle-checkbox:checked::after {
+    left: 23px;
+}
+.quiz-public-badge {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: 0.25rem;
+    flex-shrink: 0;
+}

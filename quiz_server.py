@@ -724,15 +724,38 @@ def update_quiz(id):
     conn = get_db()
     c = conn.cursor()
     # Dual-write: update JSON blob AND normalized questions
-    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, certification_id=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
+    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, certification_id=?, is_public=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
         (data.get('title'), data.get('description', ''), json.dumps(questions_list),
-         data.get('color', '#6366f1'), data.get('certification_id'), datetime.now(), id, request.user_id))
+         data.get('color', '#6366f1'), data.get('certification_id'),
+         1 if data.get('is_public') else 0,
+         datetime.now(), id, request.user_id))
     # Replace normalized questions: delete old, insert new
     c.execute('DELETE FROM questions WHERE quiz_id = ?', (id,))
     _insert_questions_for_quiz(c, id, questions_list)
     conn.commit()
     conn.close()
     return jsonify({'message': 'Updated'})
+
+@app.route('/api/quizzes/<int:id>/settings', methods=['PATCH'])
+@token_required
+def update_quiz_settings(id):
+    """Lightweight endpoint: update only visibility and cert link (no question rewrite)."""
+    data = request.get_json()
+    conn = get_db()
+    c = conn.cursor()
+    with _db_write_lock:
+        c.execute('''UPDATE quizzes
+                     SET is_public=?, certification_id=?, last_modified=?
+                     WHERE id=? AND user_id=?''',
+                  (1 if data.get('is_public') else 0,
+                   data.get('certification_id') or None,
+                   datetime.now(), id, request.user_id))
+        if c.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Not found or not authorized'}), 404
+        conn.commit()
+    conn.close()
+    return jsonify({'message': 'Settings updated'})
 
 @app.route('/api/quizzes/<int:id>', methods=['DELETE'])
 @token_required

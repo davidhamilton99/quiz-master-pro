@@ -1,6 +1,6 @@
 /* Library Component - v3.0 Quizlet-Inspired Redesign */
 import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
-import { logout, deleteQuiz } from '../services/api.js';
+import { logout, deleteQuiz, updateQuizSettings } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 
@@ -293,14 +293,18 @@ function renderQuizCard(quiz, progressList) {
         <div class="quiz-card-body">
             <div class="quiz-card-header">
                 <h3 class="quiz-card-title">${escapeHtml(quiz.title)}</h3>
+                ${quiz.is_public && !quiz.is_owned ? `<span class="quiz-public-badge" title="Public quiz">${icon('globe')}</span>` : ''}
+                ${quiz.is_owned ? `
                 <button class="quiz-card-menu" onclick="event.stopPropagation(); window.app.toggleCardMenu(${quiz.id})">
                     ⋮
                 </button>
                 <div id="card-menu-${quiz.id}" class="card-menu hidden">
                     <button onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">${icon('edit')} Edit</button>
+                    <button onclick="event.stopPropagation(); window.app.showShareSettings(${quiz.id})">${icon('globe')} Share</button>
                     <button onclick="event.stopPropagation(); window.app.showExportModal(${quiz.id})">${icon('share')} Export</button>
                     <button class="text-danger" onclick="event.stopPropagation(); window.app.confirmDelete(${quiz.id})">${icon('trash')} Delete</button>
                 </div>
+                ` : ''}
             </div>
             
             ${quiz.description ? `<span class="quiz-card-category">${escapeHtml(quiz.description)}</span>` : ''}
@@ -597,6 +601,57 @@ export async function confirmDelete(quizId) {
     overlay.querySelector('#confirm-delete-btn').addEventListener('click', async () => {
         overlay.remove();
         await deleteQuiz(quizId);
+    });
+}
+
+export async function showShareSettings(quizId) {
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === quizId);
+    if (!quiz) return;
+
+    const certs = state.certifications || [];
+    const certOptions = certs.map(c =>
+        `<option value="${c.id}" ${quiz.certification_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <div class="modal-header">
+                <h2>${icon('globe')} Share Settings</h2>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:1.25rem;">
+                <label class="share-toggle-row">
+                    <div>
+                        <div style="font-weight:600">Make Public</div>
+                        <div style="font-size:0.85rem;color:var(--text-muted)">Anyone can find and study this quiz</div>
+                    </div>
+                    <input type="checkbox" id="share-public-toggle" class="toggle-checkbox" ${quiz.is_public ? 'checked' : ''}>
+                </label>
+                <label>
+                    <div style="font-weight:600;margin-bottom:0.4rem">Link to Certification <span style="font-weight:400;color:var(--text-muted)">(optional)</span></div>
+                    <select id="share-cert-select" class="form-control">
+                        <option value="">— None —</option>
+                        ${certOptions}
+                    </select>
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.3rem">Helps students find it in the right cert section</div>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                <button class="btn btn-primary" id="save-share-btn">${icon('check')} Save</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#save-share-btn').addEventListener('click', async () => {
+        const isPublic = overlay.querySelector('#share-public-toggle').checked;
+        const certId = parseInt(overlay.querySelector('#share-cert-select').value) || null;
+        overlay.remove();
+        await updateQuizSettings(quizId, { isPublic, certificationId: certId });
     });
 }
 
