@@ -81,6 +81,10 @@ let state = {
 
     // Cached in-progress quizzes (Bug #1 fix - for synchronous access)
     inProgressQuizzes: [],
+
+    // Bookmarks
+    bookmarkedQuestions: new Set(),  // Set<int> of question IDs (used by quiz header button)
+    bookmarks: [],                    // full bookmark records (used by Saved tab)
 };
 
 const listeners = [];

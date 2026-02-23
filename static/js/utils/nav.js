@@ -52,6 +52,10 @@ export function renderNav(activeView) {
                                 <div class="dropdown-user-level">Level ${levelInfo.level || 1}</div>
                             </div>
                             <div class="dropdown-divider"></div>
+                            <button class="dropdown-item" onclick="window.app.navigate('profile')">
+                                ${icon('user')} Profile
+                            </button>
+                            <div class="dropdown-divider"></div>
                             <button class="dropdown-item" onclick="window.app.showImportModal()">
                                 ${icon('download')} Import Quiz
                             </button>

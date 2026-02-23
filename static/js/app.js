@@ -1,11 +1,12 @@
 /* Quiz Master Pro - Main Entry Point */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings, loadInProgressQuizzes } from './state.js';
-import { loadQuizzes, logout, createQuiz, logEvent } from './services/api.js';
+import { loadQuizzes, logout, createQuiz, logEvent, getBookmarks, addBookmark, removeBookmark } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { icon } from './utils/icons.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
+import { renderProfile } from './components/profile.js';
 import {
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
     setSort, setCategory, clearFilters, toggleMenu,
@@ -270,6 +271,9 @@ function renderInternal() {
         case 'home':
             content = renderHome();
             break;
+        case 'profile':
+            content = renderProfile();
+            break;
         case 'library':
         case 'study':
             content = renderLibrary();
@@ -371,6 +375,27 @@ window.app = {
     setAuthMode,
     handleAuth,
     logout: () => { logout(); setState({ view: 'landing', isAuthenticated: false }); },
+
+    // Bookmarks
+    toggleBookmark: async (questionId) => {
+        const state = getState();
+        const set = new Set(state.bookmarkedQuestions);
+        if (set.has(questionId)) {
+            set.delete(questionId);
+            await removeBookmark(questionId).catch(() => {});
+            setState({
+                bookmarkedQuestions: set,
+                bookmarks: state.bookmarks.filter(b => b.question_id !== questionId),
+            });
+        } else {
+            set.add(questionId);
+            const result = await addBookmark(questionId).catch(() => ({}));
+            setState({
+                bookmarkedQuestions: set,
+                bookmarks: [...state.bookmarks, { question_id: questionId, id: result?.id }],
+            });
+        }
+    },
 
     // Password strength meter
     updatePwdStrength: (pw) => {
@@ -683,11 +708,17 @@ async function init() {
         logEvent('login');
         setState({ view: 'home' });
         try {
-            const [quizzes, userCerts] = await Promise.all([
+            const [quizzes, userCerts, bms] = await Promise.all([
                 loadQuizzes(),
                 getUserCertifications().catch(() => []),
+                getBookmarks().catch(() => []),
             ]);
-            setState({ quizzes, userCertifications: userCerts });
+            setState({
+                quizzes,
+                userCertifications: userCerts,
+                bookmarks: bms,
+                bookmarkedQuestions: new Set(bms.map(b => b.question_id)),
+            });
 
             // Bug #1 fix: Load and cache in-progress quizzes
             await loadInProgressQuizzes();
