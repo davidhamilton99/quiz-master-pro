@@ -739,8 +739,8 @@ def update_quiz(id):
 @app.route('/api/quizzes/<int:id>/settings', methods=['PATCH'])
 @token_required
 def update_quiz_settings(id):
-    """Lightweight endpoint: update only visibility and cert link (no question rewrite)."""
-    data = request.get_json()
+    """Lightweight update: is_public and certification_id only."""
+    data = request.get_json() or {}
     conn = get_db()
     c = conn.cursor()
     with _db_write_lock:
@@ -2410,6 +2410,53 @@ def get_cert_readiness(cert_id):
         'study_time': study_time,
         'prediction': prediction
     })
+
+@app.route('/api/community/quizzes', methods=['GET'])
+@token_required
+def community_quizzes():
+    """Return public quizzes, optionally filtered by cert_id and/or search query."""
+    cert_id = request.args.get('cert_id', type=int)
+    q_search = (request.args.get('q') or '').strip()
+    limit = min(int(request.args.get('limit', 50)), 100)
+
+    conn = get_db()
+    c = conn.cursor()
+
+    sql = '''
+        SELECT qz.id, qz.title, qz.description, qz.certification_id,
+               (SELECT COUNT(*) FROM questions WHERE quiz_id = qz.id) AS question_count,
+               u.username,
+               cert.code AS certification_code, cert.name AS certification_name
+        FROM quizzes qz
+        LEFT JOIN users u ON u.id = qz.user_id
+        LEFT JOIN certifications cert ON cert.id = qz.certification_id
+        WHERE qz.is_public = 1
+    '''
+    params = []
+    if cert_id:
+        sql += ' AND qz.certification_id = ?'
+        params.append(cert_id)
+    if q_search:
+        sql += ' AND (qz.title LIKE ? OR qz.description LIKE ?)'
+        params.extend([f'%{q_search}%', f'%{q_search}%'])
+    sql += ' ORDER BY qz.last_modified DESC LIMIT ?'
+    params.append(limit)
+
+    c.execute(sql, params)
+    rows = c.fetchall()
+    conn.close()
+
+    quizzes = [{
+        'id': r['id'],
+        'title': r['title'],
+        'description': r['description'],
+        'certification_id': r['certification_id'],
+        'certification_code': r['certification_code'],
+        'certification_name': r['certification_name'],
+        'question_count': r['question_count'],
+        'username': r['username'],
+    } for r in rows]
+    return jsonify({'quizzes': quizzes})
 
 @app.route('/api/health')
 def health():

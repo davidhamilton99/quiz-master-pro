@@ -6,11 +6,15 @@ import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { icon } from './utils/icons.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
-import { 
+import {
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
-    setSort, setCategory, clearFilters, toggleMenu, 
-    confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu, showShareSettings
+    setSort, setCategory, clearFilters, toggleMenu,
+    confirmDelete, setViewMode, openStudyModal, closeStudyModal, toggleCardMenu,
+    showShareSettings, setStudyTab
 } from './components/library-v3.js';
+import { renderHome, resetHomeCache } from './components/home.js';
+import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
+import { renderReadiness, setReadinessTab, selectReadinessCert } from './components/readiness.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
@@ -263,8 +267,18 @@ function renderInternal() {
         case 'register':
             content = renderAuth();
             break;
+        case 'home':
+            content = renderHome();
+            break;
         case 'library':
+        case 'study':
             content = renderLibrary();
+            break;
+        case 'readiness':
+            content = renderReadiness();
+            break;
+        case 'community':
+            content = renderCommunity();
             break;
         case 'wizard':
             content = renderWizard();
@@ -298,7 +312,7 @@ function renderInternal() {
             content = renderDashboard();
             break;
         default:
-            content = state.isAuthenticated ? renderLibrary() : renderLanding();
+            content = state.isAuthenticated ? renderHome() : renderLanding();
     }
 
     app.innerHTML = content;
@@ -352,16 +366,16 @@ document.addEventListener('keydown', (e) => {
 window.app = {
     // Navigation
     navigate: (view) => setState({ view }),
-    
+
     // Auth
     setAuthMode,
     handleAuth,
     logout: () => { logout(); setState({ view: 'landing', isAuthenticated: false }); },
-    
+
     // Landing page
     scrollToHowItWorks,
-    
-    // Library
+
+    // Study Hub (was Library)
     setSearch,
     setSearchImmediate,
     handleSearchInput,
@@ -376,7 +390,23 @@ window.app = {
     closeStudyModal,
     toggleCardMenu,
     showShareSettings,
-    
+    setStudyTab,
+
+    // Community
+    setCommunityFilter,
+    setCommunitySearch,
+    clearCommunitySearch: () => setCommunitySearch(''),
+    studyCommunityQuiz: async (quizId) => {
+        const { getQuiz } = await import('./services/api.js');
+        const quiz = await getQuiz(quizId).catch(() => null);
+        if (quiz) { openStudyModal(quiz.id); setState({ quizzes: [...(getState().quizzes || []), quiz] }); }
+        else { showToast('Could not load quiz', 'error'); }
+    },
+
+    // Readiness
+    setReadinessTab,
+    selectReadinessCert,
+
     // Create options
     showCreateOptions,
     startWizard,
@@ -540,10 +570,10 @@ window.app = {
     loadDashboard: async () => {
         try {
             const userCerts = await getUserCertifications();
-            setState({ userCertifications: userCerts, view: 'dashboard' });
+            setState({ userCertifications: userCerts, view: 'readiness' });
         } catch (e) {
             showToast('Failed to load certifications', 'error');
-            setState({ view: 'dashboard' });
+            setState({ view: 'readiness' });
         }
     },
     enrollCert: async (certId, targetDate) => {
@@ -551,6 +581,7 @@ window.app = {
             await enrollCertification(certId, targetDate);
             const userCerts = await getUserCertifications();
             setState({ userCertifications: userCerts });
+            resetHomeCache();
             showToast('Enrolled in certification!', 'success');
             const modal = document.getElementById('cert-picker-container');
             if (modal) modal.remove();
@@ -638,11 +669,14 @@ async function init() {
     if (loadAuth()) {
         loadProfile();
         logEvent('login');
-        setState({ view: 'library' });
+        setState({ view: 'home' });
         try {
-            const quizzes = await loadQuizzes();
-            setState({ quizzes });
-            
+            const [quizzes, userCerts] = await Promise.all([
+                loadQuizzes(),
+                getUserCertifications().catch(() => []),
+            ]);
+            setState({ quizzes, userCertifications: userCerts });
+
             // Bug #1 fix: Load and cache in-progress quizzes
             await loadInProgressQuizzes();
         } catch (e) {

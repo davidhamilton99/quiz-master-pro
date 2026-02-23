@@ -1,12 +1,20 @@
-/* Library Component - v3.0 Quizlet-Inspired Redesign */
+/* Study Hub (was Library) - v3.0 with My Certs + My Quizzes tabs (Phase 2.2) */
 import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
 import { logout, deleteQuiz, updateQuizSettings, getCertifications } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
+import { renderNav } from '../utils/nav.js';
+import { showToast } from '../utils/toast.js';
 
 // View mode
 let viewMode = 'grid'; // 'grid' or 'list'
 let showStudyModal = null; // quiz ID when modal is open
+let studyTab = 'quizzes'; // 'quizzes' | 'certs'
+
+export function setStudyTab(tab) {
+    studyTab = tab;
+    setState({}, true);
+}
 
 export function renderLibrary() {
     const state = getState();
@@ -14,9 +22,8 @@ export function renderLibrary() {
     const categories = [...new Set((state.quizzes || []).filter(q => q.description).map(q => q.description))].sort();
     const total = (state.quizzes || []).reduce((s, q) => s + (q.questions?.length || 0), 0);
     const progressList = getInProgressQuizzesCached();
-    const profile = getProfile();
-    const levelInfo = getLevelInfo();
-    
+    const certs = state.userCertifications || [];
+
     // Get in-progress quizzes for "Continue Studying" section
     const inProgressQuizzes = progressList
         .map(p => {
@@ -25,185 +32,248 @@ export function renderLibrary() {
         })
         .filter(Boolean)
         .slice(0, 3);
-    
-    // Get recent quizzes (excluding in-progress)
-    const inProgressIds = new Set(progressList.map(p => p.quizId));
-    const recentQuizzes = (state.quizzes || [])
-        .filter(q => !inProgressIds.has(q.id))
-        .slice(0, 6);
 
     return `
-    <!-- Redesigned Header -->
-    <header class="library-header-v3">
-        <div class="container">
-            <div class="header-top">
-                <div class="brand">
-                    <div class="brand-logo">${icon('graduationCap', 'icon-lg')}</div>
-                    <span class="brand-name">Quiz Master Pro</span>
-                </div>
+    ${renderNav('study')}
 
-                <nav class="header-nav">
-                    <button class="nav-link active" onclick="window.app.navigate('library')">
-                        <span class="nav-icon">${icon('library')}</span>
-                        <span class="nav-text">Library</span>
-                    </button>
-                    <button class="nav-link" onclick="window.app.loadDashboard()">
-                        <span class="nav-icon">${icon('barChart')}</span>
-                        <span class="nav-text">Dashboard</span>
-                    </button>
-                    <button class="nav-link" onclick="window.app.navigate('studyGuide')">
-                        <span class="nav-icon">${icon('bookOpen')}</span>
-                        <span class="nav-text">Study Guide</span>
-                    </button>
-                </nav>
-
-                <div class="header-actions">
-                    <button class="btn btn-primary" onclick="window.app.showCreateOptions()">
-                        ${icon('plus')}
-                        Create
-                    </button>
-                    <div class="user-menu">
-                        <button class="user-avatar" onclick="window.app.toggleMenu()">
-                            <span class="avatar-initial">${state.user?.username?.charAt(0).toUpperCase() || 'U'}</span>
-                            <span class="avatar-chevron">▾</span>
-                        </button>
-                        <div id="user-menu" class="dropdown-menu hidden">
-                            <div class="dropdown-header">
-                                <div class="dropdown-user-name">${escapeHtml(state.user?.username || 'User')}</div>
-                                <div class="dropdown-user-level">Level ${levelInfo.level || 1}</div>
-                            </div>
-                            <div class="dropdown-divider"></div>
-                            <button class="dropdown-item" onclick="window.app.showImportModal()">
-                                ${icon('download')} Import Quiz
-                            </button>
-                            <div class="dropdown-divider"></div>
-                            <button class="dropdown-item text-danger" onclick="window.app.logout()">
-                                ${icon('logOut')} Sign Out
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </header>
-    
-    <!-- Stats Banner -->
-    <div class="stats-banner">
+    <!-- Study Hub Tabs -->
+    <div class="study-hub-tabs-bar">
         <div class="container">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-value">${profile.dailyStreak || 0}</div>
-                    <div class="stat-label">Day Streak</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${state.quizzes.length}</div>
-                    <div class="stat-label">Quiz Sets</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${total.toLocaleString()}</div>
-                    <div class="stat-label">Questions</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${levelInfo.level || 1}</div>
-                    <div class="stat-label">Level</div>
-                </div>
+            <div class="study-hub-tabs">
+                <button class="study-hub-tab ${studyTab === 'quizzes' ? 'active' : ''}" onclick="window.app.setStudyTab('quizzes')">
+                    ${icon('library')} My Quizzes
+                    <span class="tab-badge">${(state.quizzes || []).length}</span>
+                </button>
+                <button class="study-hub-tab ${studyTab === 'certs' ? 'active' : ''}" onclick="window.app.setStudyTab('certs')">
+                    ${icon('barChart')} My Certs
+                    <span class="tab-badge">${certs.length}</span>
+                </button>
             </div>
         </div>
     </div>
-    
+
     <main class="library-main">
         <div class="container">
-            ${state.quizzes.length === 0 ? renderEmptyState() : `
-                
-                <!-- Continue Studying Section -->
-                ${inProgressQuizzes.length > 0 ? `
-                <section class="library-section">
-                    <div class="section-header">
-                        <h2>${icon('bookOpen')} Continue Studying</h2>
-                        <span class="section-badge">${inProgressQuizzes.length} in progress</span>
-                    </div>
-                    <div class="continue-cards">
-                        ${inProgressQuizzes.map(quiz => renderContinueCard(quiz)).join('')}
-                    </div>
-                </section>
-                ` : ''}
-                
-                <!-- Search and Filters -->
-                <section class="library-section">
-                    <div class="section-header">
-                        <h2>${icon('folder')} My Library</h2>
-                        <div class="view-toggles">
-                            <button class="view-toggle ${viewMode === 'grid' ? 'active' : ''}" onclick="window.app.setViewMode('grid')" title="Grid view">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <rect x="1" y="1" width="6" height="6" rx="1"/>
-                                    <rect x="9" y="1" width="6" height="6" rx="1"/>
-                                    <rect x="1" y="9" width="6" height="6" rx="1"/>
-                                    <rect x="9" y="9" width="6" height="6" rx="1"/>
-                                </svg>
-                            </button>
-                            <button class="view-toggle ${viewMode === 'list' ? 'active' : ''}" onclick="window.app.setViewMode('list')" title="List view">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <rect x="1" y="2" width="14" height="3" rx="1"/>
-                                    <rect x="1" y="7" width="14" height="3" rx="1"/>
-                                    <rect x="1" y="12" width="14" height="3" rx="1"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="filters-bar">
-                        <div class="search-wrapper">
-                            <span class="search-icon">${icon('search')}</span>
-                            <input 
-                                type="text" 
-                                class="search-input" 
-                                id="library-search"
-                                placeholder="Search your quizzes..."
-                                value="${escapeHtml(state.searchQuery || '')}"
-                                oninput="window.app.handleSearchInput(this.value)"
-                                onkeydown="if(event.key==='Enter') window.app.setSearchImmediate(this.value)"
-                            >
-                            ${state.searchQuery ? `
-                                <button class="search-clear" onclick="window.app.clearSearch()">×</button>
-                            ` : ''}
-                        </div>
-                        
-                        <div class="filter-group">
-                            <select class="filter-select" onchange="window.app.setSort(this.value)">
-                                <option value="recent" ${(state.sortBy || 'recent') === 'recent' ? 'selected' : ''}>Recent</option>
-                                <option value="name" ${state.sortBy === 'name' ? 'selected' : ''}>Name A-Z</option>
-                                <option value="questions" ${state.sortBy === 'questions' ? 'selected' : ''}>Most Questions</option>
-                            </select>
-                            
-                            <select class="filter-select" onchange="window.app.setCategory(this.value)">
-                                <option value="" ${!state.categoryFilter ? 'selected' : ''}>All Categories</option>
-                                ${categories.map(cat => `
-                                    <option value="${escapeHtml(cat)}" ${state.categoryFilter === cat ? 'selected' : ''}>
-                                        ${escapeHtml(cat)}
-                                    </option>
-                                `).join('')}
-                            </select>
-                        </div>
-                    </div>
-                    
-                    ${quizzes.length === 0 ? `
-                        <div class="no-results">
-                            <div class="no-results-icon">${icon('search', 'icon-2xl')}</div>
-                            <p>No quizzes match your search</p>
-                            <button class="btn btn-ghost" onclick="window.app.clearFilters()">Clear filters</button>
-                        </div>
-                    ` : `
-                        <div class="quiz-${viewMode}">
-                            ${quizzes.map(quiz => viewMode === 'grid' ? renderQuizCard(quiz, progressList) : renderQuizRow(quiz, progressList)).join('')}
-                        </div>
-                    `}
-                </section>
-            `}
+            ${studyTab === 'quizzes' ? renderMyQuizzesTab(state, quizzes, categories, inProgressQuizzes, progressList, total) : renderMyCertsTab(state, certs)}
         </div>
     </main>
-    
+
     <!-- Study Mode Modal -->
     ${showStudyModal ? renderStudyModal(state.quizzes.find(q => q.id === showStudyModal)) : ''}
+
+    <div class="mobile-tab-spacer"></div>
+    `;
+}
+
+function renderMyQuizzesTab(state, quizzes, categories, inProgressQuizzes, progressList, total) {
+    return `
+    <!-- Stats Banner -->
+    <div class="study-stats-strip">
+        <div class="stat-item">
+            <div class="stat-value">${(state.quizzes || []).length}</div>
+            <div class="stat-label">Quiz Sets</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${total.toLocaleString()}</div>
+            <div class="stat-label">Questions</div>
+        </div>
+        <div class="stat-item">
+            <button class="btn btn-primary btn-sm" onclick="window.app.showCreateOptions()">
+                ${icon('plus')} Create
+            </button>
+        </div>
+    </div>
+
+    ${state.quizzes.length === 0 ? renderEmptyState() : `
+
+        <!-- Continue Studying Section -->
+        ${inProgressQuizzes.length > 0 ? `
+        <section class="library-section">
+            <div class="section-header">
+                <h2>${icon('bookOpen')} Continue Studying</h2>
+                <span class="section-badge">${inProgressQuizzes.length} in progress</span>
+            </div>
+            <div class="continue-cards">
+                ${inProgressQuizzes.map(quiz => renderContinueCard(quiz)).join('')}
+            </div>
+        </section>
+        ` : ''}
+
+        <!-- Search and Filters -->
+        <section class="library-section">
+            <div class="section-header">
+                <h2>${icon('folder')} My Library</h2>
+                <div class="view-toggles">
+                    <button class="view-toggle ${viewMode === 'grid' ? 'active' : ''}" onclick="window.app.setViewMode('grid')" title="Grid view">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <rect x="1" y="1" width="6" height="6" rx="1"/>
+                            <rect x="9" y="1" width="6" height="6" rx="1"/>
+                            <rect x="1" y="9" width="6" height="6" rx="1"/>
+                            <rect x="9" y="9" width="6" height="6" rx="1"/>
+                        </svg>
+                    </button>
+                    <button class="view-toggle ${viewMode === 'list' ? 'active' : ''}" onclick="window.app.setViewMode('list')" title="List view">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <rect x="1" y="2" width="14" height="3" rx="1"/>
+                            <rect x="1" y="7" width="14" height="3" rx="1"/>
+                            <rect x="1" y="12" width="14" height="3" rx="1"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="filters-bar">
+                <div class="search-wrapper">
+                    <span class="search-icon">${icon('search')}</span>
+                    <input
+                        type="text"
+                        class="search-input"
+                        id="library-search"
+                        placeholder="Search your quizzes..."
+                        value="${escapeHtml(state.searchQuery || '')}"
+                        oninput="window.app.handleSearchInput(this.value)"
+                        onkeydown="if(event.key==='Enter') window.app.setSearchImmediate(this.value)"
+                    >
+                    ${state.searchQuery ? `
+                        <button class="search-clear" onclick="window.app.clearSearch()">×</button>
+                    ` : ''}
+                </div>
+
+                <div class="filter-group">
+                    <select class="filter-select" onchange="window.app.setSort(this.value)">
+                        <option value="recent" ${(state.sortBy || 'recent') === 'recent' ? 'selected' : ''}>Recent</option>
+                        <option value="name" ${state.sortBy === 'name' ? 'selected' : ''}>Name A-Z</option>
+                        <option value="questions" ${state.sortBy === 'questions' ? 'selected' : ''}>Most Questions</option>
+                    </select>
+
+                    <select class="filter-select" onchange="window.app.setCategory(this.value)">
+                        <option value="" ${!state.categoryFilter ? 'selected' : ''}>All Categories</option>
+                        ${categories.map(cat => `
+                            <option value="${escapeHtml(cat)}" ${state.categoryFilter === cat ? 'selected' : ''}>
+                                ${escapeHtml(cat)}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            </div>
+
+            ${quizzes.length === 0 ? `
+                <div class="no-results">
+                    <div class="no-results-icon">${icon('search', 'icon-2xl')}</div>
+                    <p>No quizzes match your search</p>
+                    <button class="btn btn-ghost" onclick="window.app.clearFilters()">Clear filters</button>
+                </div>
+            ` : `
+                <div class="quiz-${viewMode}">
+                    ${quizzes.map(quiz => viewMode === 'grid' ? renderQuizCard(quiz, progressList) : renderQuizRow(quiz, progressList)).join('')}
+                </div>
+            `}
+        </section>
+    `}
+    `;
+}
+
+function renderMyCertsTab(state, certs) {
+    if (certs.length === 0) {
+        return `
+        <div class="certs-empty-state">
+            <div class="empty-icon">${icon('barChart', 'icon-2xl')}</div>
+            <h3>No certifications enrolled</h3>
+            <p class="text-muted">Track your progress toward industry certifications</p>
+            <button class="btn btn-primary" onclick="window.app.showCertPicker()">
+                ${icon('plus')} Add Certification
+            </button>
+        </div>
+        `;
+    }
+
+    const activeCert = state.activeCertification;
+    const domains = state.domainPerformance || [];
+
+    return `
+    <div class="my-certs-layout">
+
+        <!-- Cert list sidebar -->
+        <div class="my-certs-list">
+            ${certs.map(cert => {
+                const isActive = activeCert?.certification_id === cert.certification_id;
+                return `
+                <div class="my-cert-item ${isActive ? 'active' : ''}"
+                     onclick="window.app.selectCert(${cert.certification_id})">
+                    <div class="my-cert-code">${escapeHtml(cert.certification_code || '')}</div>
+                    <div class="my-cert-name">${escapeHtml(cert.certification_name || '')}</div>
+                    ${cert.target_date ? `<div class="my-cert-target text-muted">Target: ${new Date(cert.target_date).toLocaleDateString(undefined, { month:'short', year:'numeric' })}</div>` : ''}
+                </div>
+                `;
+            }).join('')}
+            <button class="my-cert-add" onclick="window.app.showCertPicker()">
+                ${icon('plus')} Add Certification
+            </button>
+        </div>
+
+        <!-- Cert detail -->
+        <div class="my-cert-detail" id="dash-detail">
+            ${activeCert ? renderCertDetail(activeCert, domains, state) : `
+            <div class="cert-detail-empty">
+                <p class="text-muted">Select a certification to view your performance</p>
+            </div>
+            `}
+        </div>
+
+    </div>
+    `;
+}
+
+function renderCertDetail(cert, domains, state) {
+    const weakQs = state.weakQuestions || [];
+    return `
+    <div class="cert-detail-header">
+        <div>
+            <h2>${escapeHtml(cert.certification_name || '')}</h2>
+            <p class="text-muted">${escapeHtml(cert.certification_code || '')}</p>
+        </div>
+        <div class="cert-detail-actions">
+            <button class="btn btn-primary" onclick="window.app.navigate('readiness')">
+                ${icon('barChart')} Full Readiness
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="window.app.unenrollCert(${cert.certification_id}, '${escapeHtml(cert.certification_name || '')}')">
+                Remove
+            </button>
+        </div>
+    </div>
+
+    ${domains.length > 0 ? `
+    <div class="cert-domains">
+        <h3>Domain Performance</h3>
+        ${domains.map(d => {
+            const pct = Math.round(d.accuracy || 0);
+            return `
+            <div class="domain-bar-row">
+                <div class="domain-bar-label">${escapeHtml(d.domain_name || d.name || 'Domain')}</div>
+                <div class="domain-bar-track">
+                    <div class="domain-bar-fill ${pct >= 70 ? 'bar-good' : pct >= 40 ? 'bar-ok' : 'bar-low'}" style="width:${pct}%"></div>
+                </div>
+                <div class="domain-bar-pct">${pct}%</div>
+            </div>
+            `;
+        }).join('')}
+    </div>
+    ` : `<p class="text-muted" style="margin-top:1rem">Take some quizzes linked to this certification to see domain performance.</p>`}
+
+    ${weakQs.length > 0 ? `
+    <div class="cert-weak-preview">
+        <h3>Top Weak Areas</h3>
+        ${weakQs.slice(0, 5).map(q => `
+        <div class="weak-item">
+            <div class="weak-body">
+                <div class="weak-domain text-muted">${escapeHtml(q.domain_name || q.topic || 'Topic')}</div>
+                <div class="weak-question">${escapeHtml((q.question_text || '').slice(0, 100))}…</div>
+            </div>
+            <div class="weak-acc ${(q.accuracy || 0) < 40 ? 'acc-danger' : 'acc-warn'}">${Math.round(q.accuracy || 0)}%</div>
+        </div>
+        `).join('')}
+    </div>
+    ` : ''}
     `;
 }
 
@@ -216,7 +286,7 @@ function renderEmptyState() {
         </div>
         <h2>Create your first quiz</h2>
         <p>Turn your notes into interactive quizzes with AI assistance</p>
-        
+
         <div class="empty-steps">
             <div class="empty-step">
                 <div class="step-num">1</div>
@@ -240,12 +310,12 @@ function renderEmptyState() {
                 </div>
             </div>
         </div>
-        
+
         <button class="btn btn-primary btn-lg" onclick="window.app.showCreateOptions()">
             ${icon('sparkles')}
             Create Your First Quiz
         </button>
-        
+
         <p class="empty-alt">
             Or <button class="btn-link" onclick="window.app.showImportModal()">import an existing quiz</button>
         </p>
@@ -253,12 +323,15 @@ function renderEmptyState() {
     `;
 }
 
+// Keep the original renderMyQuizzesTab name for this section
+// (old header was inside renderLibrary, now handled by renderNav)
+
 function renderContinueCard(quiz) {
     const progress = quiz.progress;
     const total = quiz.questions?.length || 0;
     const answered = progress.answeredCount || 0;
     const percent = total > 0 ? Math.round((progress.questionIndex / total) * 100) : 0;
-    
+
     return `
     <div class="continue-card" onclick="window.app.startQuiz(${quiz.id})">
         <div class="continue-progress-ring">
@@ -284,25 +357,26 @@ function renderContinueCard(quiz) {
 function renderQuizCard(quiz, progressList) {
     const progress = progressList.find(p => p.quizId === quiz.id);
     const count = quiz.questions?.length || 0;
-    const mastery = quiz.mastery || 0;
-    
+    const isOwned = quiz.is_owned !== 0 && quiz.is_owned !== false;
+
     return `
     <div class="quiz-card-v3" onclick="window.app.openStudyModal(${quiz.id})">
         <div class="quiz-card-accent" style="background: ${quiz.color || getStableGradient(quiz.id)}"></div>
-        
+
         <div class="quiz-card-body">
             <div class="quiz-card-header">
                 <h3 class="quiz-card-title">${escapeHtml(quiz.title)}</h3>
-                ${quiz.is_public && !quiz.is_owned ? `<span class="quiz-public-badge" title="Public quiz">${icon('globe')}</span>` : ''}
-                ${quiz.is_owned ? `
+                ${isOwned ? `
                 <button class="quiz-card-menu" onclick="event.stopPropagation(); window.app.toggleCardMenu(${quiz.id}, this)">
                     ⋮
                 </button>
-                ` : ''}
+                ` : `
+                <span class="quiz-public-badge" title="Shared publicly">${icon('globe')}</span>
+                `}
             </div>
-            
+
             ${quiz.description ? `<span class="quiz-card-category">${escapeHtml(quiz.description)}</span>` : ''}
-            
+
             <div class="quiz-card-stats">
                 <span class="quiz-stat">
                     ${icon('layers')} ${count} terms
@@ -314,7 +388,7 @@ function renderQuizCard(quiz, progressList) {
                 ` : ''}
             </div>
         </div>
-        
+
         <div class="quiz-card-footer">
             <div class="study-modes">
                 <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startFlashcards(${quiz.id})" title="Flashcards">
@@ -338,7 +412,7 @@ function renderQuizCard(quiz, progressList) {
 function renderQuizRow(quiz, progressList) {
     const progress = progressList.find(p => p.quizId === quiz.id);
     const count = quiz.questions?.length || 0;
-    
+
     return `
     <div class="quiz-row" onclick="window.app.openStudyModal(${quiz.id})">
         <div class="quiz-row-color" style="background: ${quiz.color || '#6366f1'}"></div>
@@ -363,17 +437,18 @@ function renderQuizRow(quiz, progressList) {
 function renderStudyModal(quiz) {
     if (!quiz) return '';
     const count = quiz.questions?.length || 0;
-    
+    const isOwned = quiz.is_owned !== 0 && quiz.is_owned !== false;
+
     return `
     <div class="modal-overlay" onclick="window.app.closeStudyModal()">
         <div class="study-modal" onclick="event.stopPropagation()">
             <button class="modal-close" onclick="window.app.closeStudyModal()">×</button>
-            
+
             <div class="study-modal-header">
                 <h2>${escapeHtml(quiz.title)}</h2>
                 <p>${count} terms ${quiz.description ? `• ${escapeHtml(quiz.description)}` : ''}</p>
             </div>
-            
+
             <div class="study-modes-grid">
                 <button class="study-mode-card" onclick="window.app.startFlashcards(${quiz.id})">
                     <div class="mode-icon">${icon('layers', 'icon-2xl')}</div>
@@ -412,6 +487,11 @@ function renderStudyModal(quiz) {
                 <button class="btn btn-ghost" onclick="window.app.showExportModal(${quiz.id})">
                     ${icon('share')} Export
                 </button>
+                ${isOwned ? `
+                <button class="btn btn-ghost" onclick="window.app.closeStudyModal(); window.app.showShareSettings(${quiz.id})">
+                    ${icon('globe')} Share
+                </button>
+                ` : ''}
             </div>
         </div>
     </div>
@@ -429,7 +509,6 @@ function getStableGradient(quizId) {
     ];
     return gradients[(quizId || 0) % gradients.length];
 }
-
 function getFilteredQuizzes(state) {
     // If state not passed, get it
     if (!state) {
@@ -553,25 +632,23 @@ export function toggleMenu() {
 
 export function setViewMode(mode) {
     viewMode = mode;
-    setState({ view: 'library' });
+    setState({ view: 'study' });
 }
 
 export function openStudyModal(quizId) {
     showStudyModal = quizId;
-    setState({ view: 'library' });
+    setState({ view: 'study' });
 }
 
 export function closeStudyModal() {
     showStudyModal = null;
-    setState({ view: 'library' });
+    setState({ view: 'study' });
 }
 
 export function toggleCardMenu(quizId, btnEl) {
-    // If the same menu is already open, close it and return
+    // Toggle floating fixed-position menu (escapes overflow:hidden)
     const existing = document.querySelector(`.card-menu-float[data-quiz-id="${quizId}"]`);
     if (existing) { existing.remove(); return; }
-
-    // Remove any other open floating menus
     document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
 
     const rect = btnEl.getBoundingClientRect();
@@ -586,6 +663,77 @@ export function toggleCardMenu(quizId, btnEl) {
         <button class="text-danger" onclick="window.app.confirmDelete(${quizId})">${icon('trash')} Delete</button>
     `;
     document.body.appendChild(menu);
+}
+
+export async function showShareSettings(quizId) {
+    document.querySelectorAll('.card-menu-float').forEach(m => m.remove());
+    const state = getState();
+    const quiz = state.quizzes.find(q => q.id === quizId);
+    if (!quiz) return;
+
+    // Lazy-load certifications
+    let certs = state.certifications || [];
+    if (!certs.length) {
+        try { certs = await getCertifications(); setState({ certifications: certs }); } catch {}
+    }
+
+    const existing = document.getElementById('share-settings-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'share-settings-modal';
+    overlay.className = 'modal-overlay share-modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal share-settings-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>${icon('globe')} Share Settings</h2>
+                <button class="btn btn-ghost btn-icon" onclick="document.getElementById('share-settings-modal').remove()">${icon('x')}</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-4" style="font-size:0.875rem">${escapeHtml(quiz.title)}</p>
+
+                <div class="share-toggle-row">
+                    <div>
+                        <div style="font-weight:600">Make Public</div>
+                        <div class="text-muted" style="font-size:0.8rem">Allow community to find and study this quiz</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="share-public-toggle" class="toggle-checkbox" ${quiz.is_public ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="share-cert-row" id="share-cert-row" style="${quiz.is_public ? '' : 'display:none'}">
+                    <label style="font-weight:600;display:block;margin-bottom:0.5rem">Link to Certification <span class="text-muted" style="font-weight:400">(optional)</span></label>
+                    <select class="share-cert-select" id="share-cert-select">
+                        <option value="">— No certification —</option>
+                        ${certs.map(c => `<option value="${c.id}" ${quiz.certification_id == c.id ? 'selected' : ''}>${escapeHtml(c.code || c.name)}: ${escapeHtml(c.name)}</option>`).join('')}
+                    </select>
+                    <div class="share-cert-hint text-muted">Linking helps others discover this quiz when studying for that cert.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="document.getElementById('share-settings-modal').remove()">Cancel</button>
+                <button class="btn btn-primary" id="share-save-btn">${icon('save')} Save</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Toggle cert row visibility
+    overlay.querySelector('#share-public-toggle').addEventListener('change', (e) => {
+        overlay.querySelector('#share-cert-row').style.display = e.target.checked ? '' : 'none';
+    });
+
+    // Save
+    overlay.querySelector('#share-save-btn').addEventListener('click', async () => {
+        const isPublic = overlay.querySelector('#share-public-toggle').checked;
+        const certId = overlay.querySelector('#share-cert-select')?.value || null;
+        overlay.remove();
+        await updateQuizSettings(quizId, { isPublic, certificationId: certId || null });
+    });
+
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
 export async function confirmDelete(quizId) {
