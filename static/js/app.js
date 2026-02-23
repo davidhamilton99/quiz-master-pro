@@ -6,7 +6,6 @@ import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { icon } from './utils/icons.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
-import { dismissVerifyBanner } from './utils/nav.js';
 import {
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
     setSort, setCategory, clearFilters, toggleMenu,
@@ -372,18 +371,6 @@ window.app = {
     setAuthMode,
     handleAuth,
     logout: () => { logout(); setState({ view: 'landing', isAuthenticated: false }); },
-
-    // Email verification
-    dismissVerifyBanner,
-    resendVerification: async () => {
-        try {
-            const { apiCall } = await import('./services/api.js');
-            await apiCall('/auth/resend-verification', { method: 'POST' });
-            showToast('Verification token generated — check server log (dev mode)', 'success');
-        } catch (e) {
-            showToast('Could not send verification', 'error');
-        }
-    },
 
     // Password strength meter
     updatePwdStrength: (pw) => {
