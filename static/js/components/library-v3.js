@@ -233,8 +233,8 @@ function renderMyCertsTab(state, certs) {
                 return `
                 <div class="my-cert-item ${isActive ? 'active' : ''}"
                      onclick="window.app.selectCert(${cert.certification_id})">
-                    <div class="my-cert-code">${escapeHtml(cert.certification_code || '')}</div>
-                    <div class="my-cert-name">${escapeHtml(cert.certification_name || '')}</div>
+                    <div class="my-cert-code">${escapeHtml(cert.code || cert.certification_code || '')}</div>
+                    <div class="my-cert-name">${escapeHtml(cert.name || cert.certification_name || '')}</div>
                     ${cert.target_date ? `<div class="my-cert-target text-muted">Target: ${new Date(cert.target_date).toLocaleDateString(undefined, { month:'short', year:'numeric' })}</div>` : ''}
                 </div>
                 `;
@@ -262,14 +262,14 @@ function renderCertDetail(cert, domains, state) {
     return `
     <div class="cert-detail-header">
         <div>
-            <h2>${escapeHtml(cert.certification_name || '')}</h2>
-            <p class="text-muted">${escapeHtml(cert.certification_code || '')}</p>
+            <h2>${escapeHtml(cert.name || cert.certification_name || '')}</h2>
+            <p class="text-muted">${escapeHtml(cert.code || cert.certification_code || '')}</p>
         </div>
         <div class="cert-detail-actions">
             <button class="btn btn-primary" onclick="window.app.navigate('readiness')">
                 ${icon('barChart')} Full Readiness
             </button>
-            <button class="btn btn-ghost btn-sm" onclick="window.app.unenrollCert(${cert.certification_id}, '${escapeHtml(cert.certification_name || '')}')">
+            <button class="btn btn-ghost btn-sm" onclick="window.app.unenrollCert(${cert.certification_id}, '${escapeHtml(cert.name || cert.certification_name || '')}')">
                 Remove
             </button>
         </div>
