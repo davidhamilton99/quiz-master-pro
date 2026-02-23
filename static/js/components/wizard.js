@@ -4,6 +4,7 @@ import { createQuiz } from '../services/api.js';
 import { parseQuizData } from '../utils/parser.js';
 import { showToast } from '../utils/toast.js';
 import { escapeHtml } from '../utils/dom.js';
+import { icon } from '../utils/icons.js';
 
 // Wizard state
 let wizardState = {
@@ -41,7 +42,7 @@ export function renderWizard() {
     <div class="wizard-page">
         <header class="wizard-header">
             <button class="btn btn-ghost" onclick="window.app.exitWizard()">
-                ← Back to Library
+                ${icon('arrowLeft')} Back to Library
             </button>
             <div class="wizard-progress">
                 <div class="progress-step ${s.step >= 1 ? 'active' : ''} ${s.step > 1 ? 'completed' : ''}">
@@ -117,55 +118,55 @@ function renderStep1() {
                             onchange="window.app.wizardToggleType('choice')"
                         >
                         <span class="checkbox-text">
-                            <span class="checkbox-icon">✓</span>
+                            <span class="checkbox-icon">${icon('circleCheck')}</span>
                             <span>Multiple Choice</span>
                         </span>
                         <span class="checkbox-desc">One correct answer from 4 options</span>
                     </label>
                     <label class="checkbox-label">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             ${s.questionTypes.includes('multiselect') ? 'checked' : ''}
                             onchange="window.app.wizardToggleType('multiselect')"
                         >
                         <span class="checkbox-text">
-                            <span class="checkbox-icon">☑️</span>
+                            <span class="checkbox-icon">${icon('check')}</span>
                             <span>Multi-Select</span>
                         </span>
                         <span class="checkbox-desc">Multiple correct answers possible</span>
                     </label>
                     <label class="checkbox-label">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             ${s.questionTypes.includes('truefalse') ? 'checked' : ''}
                             onchange="window.app.wizardToggleType('truefalse')"
                         >
                         <span class="checkbox-text">
-                            <span class="checkbox-icon">⚡</span>
+                            <span class="checkbox-icon">${icon('toggleLeft')}</span>
                             <span>True/False</span>
                         </span>
                         <span class="checkbox-desc">Simple binary questions</span>
                     </label>
                     <label class="checkbox-label">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             ${s.questionTypes.includes('matching') ? 'checked' : ''}
                             onchange="window.app.wizardToggleType('matching')"
                         >
                         <span class="checkbox-text">
-                            <span class="checkbox-icon">🔗</span>
+                            <span class="checkbox-icon">${icon('link')}</span>
                             <span>Matching</span>
                         </span>
                         <span class="checkbox-desc">Connect terms with definitions</span>
                     </label>
                     <label class="checkbox-label">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             ${s.questionTypes.includes('ordering') ? 'checked' : ''}
                             onchange="window.app.wizardToggleType('ordering')"
                         >
                         <span class="checkbox-text">
-                            <span class="checkbox-icon">↕️</span>
+                            <span class="checkbox-icon">${icon('listOrdered')}</span>
                             <span>Ordering</span>
                         </span>
                         <span class="checkbox-desc">Arrange items in correct sequence</span>
@@ -182,7 +183,7 @@ function renderStep1() {
                         onchange="window.app.wizardToggleCode()"
                     >
                     <span class="checkbox-text">
-                        <span class="checkbox-icon">💻</span>
+                        <span class="checkbox-icon">${icon('terminal')}</span>
                         <span>Yes, include code snippets</span>
                     </span>
                     <span class="checkbox-desc">Great for programming, scripting, or technical subjects</span>
@@ -236,7 +237,7 @@ function renderStep2() {
         <div class="wizard-card-body">
             <div class="prompt-section">
                 <div class="prompt-header">
-                    <span class="prompt-label">📋 Your AI Prompt</span>
+                    <span class="prompt-label">${icon('copy')} Your AI Prompt</span>
                     <button class="btn btn-sm btn-primary" onclick="window.app.wizardCopyPrompt()">
                         Copy Prompt
                     </button>
@@ -247,7 +248,7 @@ function renderStep2() {
             </div>
             
             <div class="instructions-section">
-                <h3>📝 Instructions</h3>
+                <h3>${icon('notepadText')} Instructions</h3>
                 <ol class="instruction-list">
                     <li>
                         <strong>Copy the prompt above</strong>
@@ -273,7 +274,7 @@ function renderStep2() {
             </div>
             
             <div class="ai-tip">
-                <span class="tip-icon">💡</span>
+                <span class="tip-icon">${icon('lightbulb')}</span>
                 <div class="tip-content">
                     <strong>Pro Tip:</strong> The more detailed your study material, the better the questions! 
                     Include definitions, key concepts, and important facts.
@@ -328,7 +329,7 @@ False"
             ${s.parsedQuestions.length > 0 ? `
             <div class="parse-preview success">
                 <div class="preview-header">
-                    <span class="preview-icon">✅</span>
+                    <span class="preview-icon">${icon('circleCheck')}</span>
                     <span class="preview-title">Found ${s.parsedQuestions.length} questions!</span>
                 </div>
                 <div class="preview-breakdown">
@@ -340,7 +341,7 @@ False"
             ${s.parseError ? `
             <div class="parse-preview error">
                 <div class="preview-header">
-                    <span class="preview-icon">⚠️</span>
+                    <span class="preview-icon">${icon('alertTriangle')}</span>
                     <span class="preview-title">Couldn't parse questions</span>
                 </div>
                 <p class="preview-message">${escapeHtml(s.parseError)}</p>
@@ -351,7 +352,7 @@ False"
             ${!s.pastedContent && !s.parseError ? `
             <div class="parse-preview waiting">
                 <div class="preview-header">
-                    <span class="preview-icon">📋</span>
+                    <span class="preview-icon">${icon('fileText')}</span>
                     <span class="preview-title">Waiting for questions...</span>
                 </div>
                 <p class="preview-message">Paste the AI's response above</p>
@@ -368,7 +369,7 @@ False"
                 onclick="window.app.wizardFinish()"
                 ${s.parsedQuestions.length === 0 ? 'disabled' : ''}
             >
-                🎉 Create Quiz
+                ${icon('sparkles')} Create Quiz
             </button>
         </div>
     </div>
@@ -641,7 +642,7 @@ export async function wizardFinish() {
         };
         
         await createQuiz(quizData);
-        showToast(`Quiz created with ${s.parsedQuestions.length} questions! 🎉`, 'success');
+        showToast(`Quiz created with ${s.parsedQuestions.length} questions!`, 'success');
         resetWizard();
         setState({ view: 'library' });
     } catch (e) {

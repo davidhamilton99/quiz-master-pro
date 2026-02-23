@@ -1,6 +1,7 @@
 /* Study Guide Builder Component */
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
+import { icon } from '../utils/icons.js';
 
 // Component state
 let studyGuideState = {
@@ -23,7 +24,7 @@ export function renderStudyGuide() {
                     <span class="hide-mobile">Quiz Master Pro</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button class="btn btn-ghost" onclick="window.app.navigate('library')">← Back to Library</button>
+                    <button class="btn btn-ghost" onclick="window.app.navigate('library')">${icon('arrowLeft')} Back to Library</button>
                 </div>
             </div>
         </div>
@@ -31,7 +32,7 @@ export function renderStudyGuide() {
     
     <main class="container" style="padding: 2rem; max-width: 800px;">
         <div class="sg-header">
-            <div class="sg-icon">📚</div>
+            <div class="sg-icon">${icon('bookOpen', 'icon-2xl')}</div>
             <div>
                 <h1 class="sg-title">Study Guide Builder</h1>
                 <p class="text-muted">Upload lecture notes and get a beautiful interactive study guide</p>
@@ -56,7 +57,7 @@ function renderUploadMode() {
             
             ${sg.uploadedFile ? `
                 <div class="sg-uploaded-file">
-                    <div class="sg-file-icon">${sg.uploadedFile.name.endsWith('.pdf') ? '📄' : '📝'}</div>
+                    <div class="sg-file-icon">${icon('fileText', 'icon-lg')}</div>
                     <div class="sg-file-info">
                         <div class="sg-file-name">${escapeHtml(sg.uploadedFile.name)}</div>
                         <div class="sg-file-size">${formatFileSize(sg.uploadedFile.size)}</div>
@@ -65,7 +66,7 @@ function renderUploadMode() {
                 </div>
             ` : `
                 <div class="sg-upload-prompt">
-                    <div class="sg-upload-icon">📤</div>
+                    <div class="sg-upload-icon">${icon('upload', 'icon-2xl')}</div>
                     <div class="sg-upload-text">
                         <strong>Drop your file here</strong>
                         <span class="text-muted">or click to browse</span>
@@ -87,7 +88,7 @@ function renderUploadMode() {
     ${sg.uploadedFile && !sg.isProcessing ? `
         <div class="sg-actions">
             <button class="btn btn-primary btn-lg btn-block" onclick="window.app.sgGenerate()">
-                ✨ Generate Study Guide
+                ${icon('sparkles')} Generate Study Guide
             </button>
         </div>
     ` : ''}
@@ -108,7 +109,7 @@ function renderPreview() {
     return `
     <div class="sg-preview-card">
         <div class="sg-preview-header">
-            <h3>📋 Document Preview</h3>
+            <h3>${icon('fileText')} Document Preview</h3>
         </div>
         <div class="sg-preview-content">
             <div class="sg-preview-title">${escapeHtml(sg.previewData.title)}</div>
@@ -158,16 +159,16 @@ function renderPreview() {
 function renderViewMode() {
     return `
     <div class="sg-success-header">
-        <h2>✅ Study Guide Generated!</h2>
+        <h2>${icon('circleCheck')} Study Guide Generated!</h2>
         <div class="sg-success-actions">
             <button class="btn btn-primary" onclick="window.app.sgOpen()">
-                🔗 Open in New Tab
+                ${icon('share')} Open in New Tab
             </button>
             <button class="btn btn-secondary" onclick="window.app.sgDownload()">
-                💾 Download HTML
+                ${icon('download')} Download HTML
             </button>
             <button class="btn btn-ghost" onclick="window.app.sgReset()">
-                🔄 Create Another
+                ${icon('rotateCcw')} Create Another
             </button>
         </div>
     </div>

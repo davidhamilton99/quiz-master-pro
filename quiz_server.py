@@ -2,7 +2,9 @@
 """Quiz Master Pro - Backend Server"""
 
 import sys
-sys.path.insert(0, '/home/davidhamilton/.local/lib/python3.13/site-packages')
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -15,10 +17,10 @@ import threading
 from datetime import datetime, timedelta
 from functools import wraps
 
-app = Flask(__name__, static_folder='/home/davidhamilton/quiz-master-pro/static')
+app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'static'))
 CORS(app)
 
-DATABASE = '/home/davidhamilton/quiz-master-pro/quiz_master.db'
+DATABASE = os.path.join(BASE_DIR, 'quiz_master.db')
 
 # Admin token for protected admin endpoints (set this to a secret value in production)
 ADMIN_TOKEN = os.environ.get('QUIZ_ADMIN_TOKEN', 'change-me-in-production')
@@ -45,15 +47,15 @@ except ImportError:
 
 @app.route('/')
 def index():
-    return send_from_directory('/home/davidhamilton/quiz-master-pro', 'index.html')
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/app')
 def app_page():
-    return send_from_directory('/home/davidhamilton/quiz-master-pro', 'index.html')
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    return send_from_directory('/home/davidhamilton/quiz-master-pro/static', filename)
+    return send_from_directory(os.path.join(BASE_DIR, 'static'), filename)
 
 # === Database ===
 
@@ -273,6 +275,42 @@ def init_db():
 
     c.execute('CREATE INDEX IF NOT EXISTS idx_sim_user_cert ON exam_simulations(user_id, certification_id)')
 
+    # Study sessions for analytics
+    c.execute('''CREATE TABLE IF NOT EXISTS study_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        session_type TEXT NOT NULL DEFAULT 'quiz',
+        quiz_id INTEGER,
+        certification_id INTEGER,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP,
+        questions_reviewed INTEGER DEFAULT 0,
+        questions_correct INTEGER DEFAULT 0,
+        duration_seconds INTEGER DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE SET NULL
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_ss_user ON study_sessions(user_id, started_at)')
+
+    # Spaced Repetition System (SRS)
+    c.execute('''CREATE TABLE IF NOT EXISTS srs_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        ease_factor REAL DEFAULT 2.5,
+        interval_days INTEGER DEFAULT 0,
+        repetitions INTEGER DEFAULT 0,
+        next_review_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_reviewed_at TIMESTAMP,
+        status TEXT DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, question_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_srs_user_next ON srs_cards(user_id, next_review_at)')
+
     # Phase 7.4 - Usage analytics event log
     c.execute('''CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -302,6 +340,10 @@ def init_db():
         c.execute('ALTER TABLE quizzes ADD COLUMN is_migrated BOOLEAN DEFAULT 0')
     except sqlite3.OperationalError:
         pass  # Column already exists
+    try:
+        c.execute('ALTER TABLE questions ADD COLUMN option_explanations TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     conn.commit()
     conn.close()
@@ -313,8 +355,8 @@ def _insert_questions_for_quiz(c, quiz_id, questions_list):
     for idx, q in enumerate(questions_list):
         c.execute('''INSERT INTO questions
             (quiz_id, question_index, question_text, type, options, correct, pairs,
-             code, code_language, image, image_alt, explanation, difficulty)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+             code, code_language, image, image_alt, explanation, difficulty, option_explanations)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (quiz_id, idx,
              q.get('question', ''),
              q.get('type', 'choice'),
@@ -326,7 +368,8 @@ def _insert_questions_for_quiz(c, quiz_id, questions_list):
              q.get('image'),
              q.get('imageAlt') or q.get('image_alt'),
              q.get('explanation'),
-             q.get('difficulty', 0)))
+             q.get('difficulty', 0),
+             json.dumps(q.get('optionExplanations')) if q.get('optionExplanations') else None))
 
 def _read_questions_for_quiz(c, quiz_id):
     """Read questions from normalized table and return as list of dicts matching frontend format."""
@@ -355,6 +398,11 @@ def _read_questions_for_quiz(c, quiz_id):
             q['imageAlt'] = row['image_alt']
         if row['explanation']:
             q['explanation'] = row['explanation']
+        if row['option_explanations']:
+            q['optionExplanations'] = json.loads(row['option_explanations'])
+        # Include assigned domain IDs
+        c.execute('SELECT domain_id FROM question_domains WHERE question_id = ?', (row['id'],))
+        q['domainIds'] = [r['domain_id'] for r in c.fetchall()]
         questions.append(q)
     return questions
 
@@ -1222,7 +1270,7 @@ def start_exam_simulation(cert_id):
 
     total_questions = cert.get('total_questions') or 60
     data = request.get_json() or {}
-    requested_count = data.get('question_count', total_questions)
+    requested_count = data.get('question_count') or total_questions
 
     import random
     selected_questions = []
@@ -1351,6 +1399,84 @@ def record_exam_simulation():
     conn.commit()
     conn.close()
     return jsonify({'message': 'Simulation recorded'}), 201
+
+# === Study Sessions ===
+
+@app.route('/api/study-sessions', methods=['POST'])
+@token_required
+def create_study_session():
+    """Start a new study session."""
+    data = request.get_json() or {}
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''INSERT INTO study_sessions (user_id, session_type, quiz_id, certification_id)
+        VALUES (?, ?, ?, ?)''',
+        (request.user_id, data.get('session_type', 'quiz'),
+         data.get('quiz_id'), data.get('certification_id')))
+    session_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'session_id': session_id}), 201
+
+@app.route('/api/study-sessions/<int:session_id>', methods=['PUT'])
+@token_required
+def end_study_session(session_id):
+    """End a study session with stats."""
+    data = request.get_json() or {}
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''UPDATE study_sessions SET ended_at = ?, questions_reviewed = ?,
+        questions_correct = ?, duration_seconds = ? WHERE id = ? AND user_id = ?''',
+        (datetime.now(), data.get('questions_reviewed', 0),
+         data.get('questions_correct', 0), data.get('duration_seconds', 0),
+         session_id, request.user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Session ended'})
+
+@app.route('/api/study-sessions/stats', methods=['GET'])
+@token_required
+def get_study_stats():
+    """Get aggregated study statistics."""
+    period = request.args.get('period', 'week')
+    conn = get_db()
+    c = conn.cursor()
+
+    if period == 'week':
+        cutoff = datetime.now() - timedelta(days=7)
+    elif period == 'month':
+        cutoff = datetime.now() - timedelta(days=30)
+    else:
+        cutoff = datetime(2000, 1, 1)
+
+    # Aggregate stats
+    c.execute('''SELECT
+        COUNT(*) as total_sessions,
+        COALESCE(SUM(duration_seconds), 0) as total_seconds,
+        COALESCE(SUM(questions_reviewed), 0) as total_questions,
+        COALESCE(SUM(questions_correct), 0) as total_correct
+        FROM study_sessions
+        WHERE user_id = ? AND started_at >= ?''',
+        (request.user_id, cutoff))
+    agg = dict(c.fetchone())
+
+    # Daily breakdown for the period
+    c.execute('''SELECT
+        DATE(started_at) as day,
+        SUM(duration_seconds) as seconds,
+        SUM(questions_reviewed) as questions
+        FROM study_sessions
+        WHERE user_id = ? AND started_at >= ?
+        GROUP BY DATE(started_at)
+        ORDER BY day''',
+        (request.user_id, cutoff))
+    daily = [dict(r) for r in c.fetchall()]
+
+    conn.close()
+    return jsonify({
+        'stats': agg,
+        'daily': daily
+    })
 
 # === Study Guide Builder ===
 
@@ -1911,6 +2037,357 @@ def preview_study_guide():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# === Spaced Repetition System (SRS) Routes ===
+
+@app.route('/api/srs/due', methods=['GET'])
+@token_required
+def get_due_cards():
+    """Get SRS cards due for review."""
+    limit = request.args.get('limit', 20, type=int)
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''SELECT sc.*, q.question_text, q.type, q.options, q.correct, q.pairs,
+        q.code, q.code_language, q.image, q.image_alt, q.explanation, q.quiz_id
+        FROM srs_cards sc
+        JOIN questions q ON sc.question_id = q.id
+        WHERE sc.user_id = ? AND sc.next_review_at <= datetime('now')
+        AND sc.status != 'graduated'
+        ORDER BY sc.next_review_at ASC LIMIT ?''',
+        (request.user_id, limit))
+    rows = c.fetchall()
+    cards = []
+    for row in rows:
+        card = dict(row)
+        # Parse JSON fields
+        if card.get('options'):
+            card['options'] = json.loads(card['options'])
+        if card.get('correct'):
+            card['correct'] = json.loads(card['correct'])
+        if card.get('pairs'):
+            card['pairs'] = json.loads(card['pairs'])
+        cards.append(card)
+    conn.close()
+    return jsonify({'cards': cards})
+
+@app.route('/api/srs/cards', methods=['POST'])
+@token_required
+def add_srs_cards():
+    """Add questions to the SRS deck."""
+    data = request.get_json() or {}
+    question_ids = data.get('questionIds', [])
+    if not question_ids:
+        return jsonify({'error': 'No question IDs provided'}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+    added = 0
+    for qid in question_ids:
+        try:
+            c.execute('''INSERT OR IGNORE INTO srs_cards (user_id, question_id)
+                VALUES (?, ?)''', (request.user_id, qid))
+            if c.rowcount > 0:
+                added += 1
+        except sqlite3.IntegrityError:
+            pass  # Question doesn't exist or already added
+    conn.commit()
+    conn.close()
+    return jsonify({'added': added, 'total_requested': len(question_ids)})
+
+@app.route('/api/srs/review', methods=['POST'])
+@token_required
+def submit_srs_review():
+    """Submit a review result using the SM-2 algorithm."""
+    data = request.get_json() or {}
+    card_id = data.get('cardId')
+    quality = data.get('quality')
+
+    if card_id is None or quality is None:
+        return jsonify({'error': 'cardId and quality are required'}), 400
+    if not isinstance(quality, int) or quality < 0 or quality > 5:
+        return jsonify({'error': 'quality must be an integer 0-5'}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Fetch the card
+    c.execute('SELECT * FROM srs_cards WHERE id = ? AND user_id = ?', (card_id, request.user_id))
+    card = c.fetchone()
+    if not card:
+        conn.close()
+        return jsonify({'error': 'Card not found'}), 404
+
+    repetitions = card['repetitions']
+    interval = card['interval_days']
+    ease_factor = card['ease_factor']
+
+    # SM-2 algorithm
+    if quality >= 3:  # correct response
+        if repetitions == 0:
+            interval = 1
+        elif repetitions == 1:
+            interval = 6
+        else:
+            interval = round(interval * ease_factor)
+        repetitions += 1
+    else:  # incorrect response
+        repetitions = 0
+        interval = 1
+
+    # Update ease factor
+    ease_factor = max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
+
+    # Determine status
+    now = datetime.now()
+    next_review = now + timedelta(days=interval)
+    status = 'review' if repetitions > 0 else 'learning'
+    if interval >= 21:
+        status = 'graduated'
+
+    c.execute('''UPDATE srs_cards SET
+        ease_factor = ?, interval_days = ?, repetitions = ?,
+        next_review_at = ?, last_reviewed_at = ?, status = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?''',
+        (ease_factor, interval, repetitions, next_review, now, status, now,
+         card_id, request.user_id))
+
+    # Also update question_performance
+    is_correct = quality >= 3
+    c.execute('''INSERT INTO question_performance
+        (user_id, question_id, times_seen, times_correct, times_incorrect, last_seen_at, last_correct_at)
+        VALUES (?, ?, 1, ?, ?, ?, ?)
+        ON CONFLICT(user_id, question_id) DO UPDATE SET
+        times_seen = times_seen + 1,
+        times_correct = times_correct + ?,
+        times_incorrect = times_incorrect + ?,
+        last_seen_at = ?,
+        last_correct_at = CASE WHEN ? = 1 THEN ? ELSE last_correct_at END,
+        updated_at = ?''',
+        (request.user_id, card['question_id'],
+         1 if is_correct else 0,
+         0 if is_correct else 1,
+         now,
+         now if is_correct else None,
+         # ON CONFLICT params
+         1 if is_correct else 0,
+         0 if is_correct else 1,
+         now,
+         1 if is_correct else 0, now,
+         now))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'card_id': card_id,
+        'new_interval': interval,
+        'new_ease_factor': round(ease_factor, 2),
+        'new_status': status,
+        'next_review_at': next_review.isoformat()
+    })
+
+@app.route('/api/srs/stats', methods=['GET'])
+@token_required
+def get_srs_stats():
+    """Get SRS statistics for the current user."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Total cards
+    c.execute('SELECT COUNT(*) as cnt FROM srs_cards WHERE user_id = ?', (request.user_id,))
+    total_cards = c.fetchone()['cnt']
+
+    # Due today
+    c.execute('''SELECT COUNT(*) as cnt FROM srs_cards
+        WHERE user_id = ? AND next_review_at <= datetime('now') AND status != 'graduated' ''',
+        (request.user_id,))
+    due_today = c.fetchone()['cnt']
+
+    # Status counts
+    c.execute('''SELECT status, COUNT(*) as cnt FROM srs_cards
+        WHERE user_id = ? GROUP BY status''', (request.user_id,))
+    status_counts = {row['status']: row['cnt'] for row in c.fetchall()}
+
+    # Streak: consecutive days with at least one review
+    c.execute('''SELECT DISTINCT DATE(last_reviewed_at) as review_date
+        FROM srs_cards WHERE user_id = ? AND last_reviewed_at IS NOT NULL
+        ORDER BY review_date DESC''', (request.user_id,))
+    review_dates = [row['review_date'] for row in c.fetchall()]
+    streak = 0
+    if review_dates:
+        from datetime import date
+        today = date.today()
+        expected = today
+        for rd in review_dates:
+            if rd is None:
+                break
+            review_d = datetime.strptime(rd, '%Y-%m-%d').date() if isinstance(rd, str) else rd
+            if review_d == expected:
+                streak += 1
+                expected = expected - timedelta(days=1)
+            elif review_d < expected:
+                break
+
+    conn.close()
+    return jsonify({
+        'total_cards': total_cards,
+        'due_today': due_today,
+        'new_cards': status_counts.get('new', 0),
+        'learning': status_counts.get('learning', 0),
+        'review': status_counts.get('review', 0),
+        'graduated': status_counts.get('graduated', 0),
+        'streak': streak
+    })
+
+@app.route('/api/certifications/<int:cert_id>/readiness', methods=['GET'])
+@token_required
+def get_cert_readiness(cert_id):
+    """Get certification readiness dashboard data aggregating domains, simulations, study time, and prediction."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Get certification info
+    c.execute('SELECT * FROM certifications WHERE id = ?', (cert_id,))
+    cert_row = c.fetchone()
+    if not cert_row:
+        conn.close()
+        return jsonify({'error': 'Certification not found'}), 404
+    cert = dict(cert_row)
+
+    # Domain performance
+    c.execute('''SELECT d.id, d.name, d.code, d.weight,
+        COALESCE(SUM(qp.times_correct), 0) as correct,
+        COALESCE(SUM(qp.times_seen), 0) as seen
+    FROM domains d
+    LEFT JOIN question_domains qd ON qd.domain_id = d.id
+    LEFT JOIN question_performance qp ON qp.question_id = qd.question_id AND qp.user_id = ?
+    WHERE d.certification_id = ? AND d.parent_domain_id IS NULL
+    GROUP BY d.id
+    ORDER BY d.sort_order''', (request.user_id, cert_id))
+    domain_rows = c.fetchall()
+
+    domains = []
+    weighted_score_sum = 0
+    total_weight = 0
+    for row in domain_rows:
+        d = dict(row)
+        seen = d['seen']
+        correct = d['correct']
+        score = round(correct / seen * 100, 1) if seen > 0 else 0
+        if seen == 0:
+            status = 'unseen'
+        elif score >= 80:
+            status = 'strong'
+        elif score >= 60:
+            status = 'moderate'
+        else:
+            status = 'weak'
+        weight = d['weight'] or 0
+        if seen > 0:
+            weighted_score_sum += score * weight
+            total_weight += weight
+        domains.append({
+            'name': d['name'],
+            'code': d['code'],
+            'weight': weight,
+            'score': score,
+            'seen': seen,
+            'correct': correct,
+            'status': status
+        })
+
+    overall_score = round(weighted_score_sum / total_weight, 1) if total_weight > 0 else 0
+
+    # Recent simulations (last 5)
+    c.execute('''SELECT score, total, percentage, passed, time_taken, created_at
+        FROM exam_simulations
+        WHERE user_id = ? AND certification_id = ?
+        ORDER BY created_at DESC LIMIT 5''', (request.user_id, cert_id))
+    sim_rows = c.fetchall()
+    simulations = []
+    for row in sim_rows:
+        s = dict(row)
+        simulations.append({
+            'score': s['score'],
+            'total': s['total'],
+            'percentage': round(s['percentage'], 1) if s['percentage'] else 0,
+            'passed': bool(s['passed']),
+            'date': s['created_at']
+        })
+
+    # Study time (last 30 days)
+    c.execute('''SELECT COALESCE(SUM(duration_seconds), 0) as total_seconds,
+        COUNT(*) as session_count
+    FROM study_sessions
+    WHERE user_id = ? AND certification_id = ?
+    AND started_at >= datetime('now', '-30 days')''', (request.user_id, cert_id))
+    study_row = dict(c.fetchone())
+    total_seconds = study_row['total_seconds']
+    study_time = {
+        'total_hours': round(total_seconds / 3600, 1) if total_seconds else 0,
+        'sessions': study_row['session_count']
+    }
+
+    # Prediction logic
+    passing_score = cert.get('passing_score', 70)
+    passing_scale = cert.get('passing_scale', 'percentage')
+
+    sim_percentages = [s['percentage'] for s in simulations if s['percentage'] is not None]
+    sim_avg = sum(sim_percentages) / len(sim_percentages) if sim_percentages else 0
+
+    # Domain coverage: % of domains with >= 10 questions answered
+    domains_with_coverage = sum(1 for d in domains if d['seen'] >= 10)
+    domain_coverage = domains_with_coverage / len(domains) if domains else 0
+
+    # Trend based on last 3 sims (list is ordered DESC, index 0 = most recent)
+    trend = 'stable'
+    if len(sim_percentages) >= 3:
+        recent_3 = sim_percentages[:3]
+        if recent_3[0] > recent_3[2] + 3:
+            trend = 'improving'
+        elif recent_3[0] < recent_3[2] - 3:
+            trend = 'declining'
+
+    # Determine pass likelihood using percentage-based comparison
+    passing_pct = passing_score
+    if passing_scale == 'scaled':
+        passing_pct = 75
+
+    likely_pass = False
+    confidence = 'low'
+    if len(sim_percentages) >= 2:
+        if sim_avg >= passing_pct + 5 and domain_coverage >= 0.7:
+            likely_pass = True
+            confidence = 'high' if sim_avg >= passing_pct + 15 and domain_coverage >= 0.9 else 'moderate'
+        elif sim_avg >= passing_pct and domain_coverage >= 0.5:
+            likely_pass = True
+            confidence = 'low'
+        else:
+            likely_pass = False
+            confidence = 'moderate' if sim_avg >= passing_pct - 10 else 'high'
+    elif len(sim_percentages) == 1:
+        likely_pass = sim_avg >= passing_pct
+        confidence = 'low'
+
+    prediction = {
+        'likely_pass': likely_pass,
+        'confidence': confidence,
+        'trend': trend
+    }
+
+    conn.close()
+    return jsonify({
+        'certification': {
+            'name': cert['name'],
+            'passing_score': passing_score,
+            'passing_scale': passing_scale
+        },
+        'overall_score': overall_score,
+        'domains': domains,
+        'simulations': simulations,
+        'study_time': study_time,
+        'prediction': prediction
+    })
+
 @app.route('/api/health')
 def health():
     return jsonify({'status': 'ok'})
@@ -2271,9 +2748,547 @@ def seed_certifications():
     conn.commit()
     conn.close()
 
+
+def seed_sub_objectives():
+    """Seed sub-objectives (child domains) for each certification's top-level domains."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Check if sub-objectives already exist
+    c.execute('SELECT COUNT(*) as cnt FROM domains WHERE parent_domain_id IS NOT NULL')
+    if c.fetchone()['cnt'] > 0:
+        conn.close()
+        return
+
+    # Sub-objectives keyed by certification code, then parent domain code
+    sub_objectives = {
+        # ── CompTIA Security+ (SY0-701) ──
+        'comptia-sec-sy0-701': {
+            '1.0': [
+                ('1.1', 'Security controls'),
+                ('1.2', 'Fundamental security concepts'),
+                ('1.3', 'Change management'),
+                ('1.4', 'Cryptography'),
+            ],
+            '2.0': [
+                ('2.1', 'Threat actors'),
+                ('2.2', 'Attack surfaces'),
+                ('2.3', 'Vulnerability types'),
+                ('2.4', 'Indicators of malicious activity'),
+                ('2.5', 'Mitigation techniques'),
+            ],
+            '3.0': [
+                ('3.1', 'Architecture models'),
+                ('3.2', 'Infrastructure considerations'),
+                ('3.3', 'Secure data'),
+                ('3.4', 'Resiliency and recovery'),
+            ],
+            '4.0': [
+                ('4.1', 'Apply security techniques'),
+                ('4.2', 'Asset management'),
+                ('4.3', 'Vulnerability management'),
+                ('4.4', 'Security alerting and monitoring'),
+                ('4.5', 'Modify enterprise capabilities'),
+                ('4.6', 'Automation and orchestration'),
+                ('4.7', 'Incident response'),
+                ('4.8', 'Digital forensics'),
+                ('4.9', 'Data sources'),
+            ],
+            '5.0': [
+                ('5.1', 'Security governance'),
+                ('5.2', 'Risk management'),
+                ('5.3', 'Third-party risk'),
+                ('5.4', 'Compliance'),
+            ],
+        },
+
+        # ── CompTIA Network+ (N10-009) ──
+        'comptia-net-n10-009': {
+            '1.0': [
+                ('1.1', 'OSI model'),
+                ('1.2', 'Network topologies'),
+                ('1.3', 'Connectors and cabling'),
+                ('1.4', 'IP subnetting'),
+                ('1.5', 'Ports and protocols'),
+                ('1.6', 'Network services'),
+                ('1.7', 'Corporate network architecture'),
+                ('1.8', 'Cloud concepts'),
+            ],
+            '2.0': [
+                ('2.1', 'Routing technologies'),
+                ('2.2', 'Switch features'),
+                ('2.3', 'Wireless standards'),
+                ('2.4', 'Configuration concepts'),
+            ],
+            '3.0': [
+                ('3.1', 'Network monitoring'),
+                ('3.2', 'Documentation and diagrams'),
+                ('3.3', 'High availability and disaster recovery'),
+                ('3.4', 'Network hardening'),
+            ],
+            '4.0': [
+                ('4.1', 'Security concepts'),
+                ('4.2', 'Attacks'),
+                ('4.3', 'Security technologies'),
+                ('4.4', 'Remote access methods'),
+            ],
+            '5.0': [
+                ('5.1', 'Methodology'),
+                ('5.2', 'Cable connectivity'),
+                ('5.3', 'Network issues'),
+                ('5.4', 'Wireless issues'),
+                ('5.5', 'General networking issues'),
+            ],
+        },
+
+        # ── CompTIA A+ Core 1 (220-1101) ──
+        'comptia-a-core1-221-1101': {
+            '1.0': [
+                ('1.1', 'Laptop hardware'),
+                ('1.2', 'Display components'),
+                ('1.3', 'Mobile device accessories'),
+                ('1.4', 'Cellular standards'),
+            ],
+            '2.0': [
+                ('2.1', 'TCP/IP'),
+                ('2.2', 'Network hardware'),
+                ('2.3', 'Wireless protocols'),
+                ('2.4', 'DNS configuration'),
+                ('2.5', 'Network types'),
+                ('2.6', 'Cable types'),
+                ('2.7', 'Networking tools'),
+                ('2.8', 'Copper and fiber'),
+            ],
+            '3.0': [
+                ('3.1', 'Cable types'),
+                ('3.2', 'RAM types'),
+                ('3.3', 'Storage devices'),
+                ('3.4', 'Motherboard components'),
+                ('3.5', 'Power supplies'),
+                ('3.6', 'Multifunction devices'),
+                ('3.7', 'Print technologies'),
+            ],
+            '4.0': [
+                ('4.1', 'Cloud computing concepts'),
+                ('4.2', 'Client-side virtualization'),
+            ],
+            '5.0': [
+                ('5.1', 'Methodology'),
+                ('5.2', 'Troubleshoot hardware'),
+                ('5.3', 'Troubleshoot storage'),
+                ('5.4', 'Troubleshoot video/display'),
+                ('5.5', 'Troubleshoot mobile'),
+                ('5.6', 'Troubleshoot printers'),
+                ('5.7', 'Troubleshoot networking'),
+            ],
+        },
+
+        # ── CompTIA A+ Core 2 (220-1102) ──
+        'comptia-a-core2-221-1102': {
+            '1.0': [
+                ('1.1', 'Windows editions'),
+                ('1.2', 'Command-line tools'),
+                ('1.3', 'OS features and tools'),
+                ('1.4', 'OS management'),
+                ('1.5', 'Install Windows'),
+                ('1.6', 'macOS features'),
+                ('1.7', 'Linux features'),
+                ('1.8', 'OS installations'),
+            ],
+            '2.0': [
+                ('2.1', 'Physical security'),
+                ('2.2', 'Wireless security'),
+                ('2.3', 'Malware detection'),
+                ('2.4', 'Social engineering'),
+                ('2.5', 'Windows security'),
+                ('2.6', 'Security settings'),
+                ('2.7', 'Workstation security'),
+                ('2.8', 'Mobile device security'),
+                ('2.9', 'Data destruction'),
+                ('2.10', 'SOHO network security'),
+            ],
+            '3.0': [
+                ('3.1', 'Troubleshoot Windows'),
+                ('3.2', 'PC security issues'),
+                ('3.3', 'Malware removal'),
+                ('3.4', 'Mobile OS issues'),
+                ('3.5', 'Mobile security issues'),
+            ],
+            '4.0': [
+                ('4.1', 'Documentation'),
+                ('4.2', 'Change management'),
+                ('4.3', 'Disaster recovery'),
+                ('4.4', 'Safety procedures'),
+                ('4.5', 'Environmental impacts'),
+                ('4.6', 'Privacy and licensing'),
+                ('4.7', 'Communication and professionalism'),
+                ('4.8', 'Scripting basics'),
+                ('4.9', 'Remote access technologies'),
+            ],
+        },
+
+        # ── Cisco CCNA (200-301) ──
+        'cisco-ccna-200-301': {
+            '1.0': [
+                ('1.1', 'Network components'),
+                ('1.2', 'Network topology'),
+                ('1.3', 'Physical interfaces'),
+                ('1.4', 'TCP vs UDP'),
+                ('1.5', 'IPv4 addressing'),
+                ('1.6', 'IPv6 addressing'),
+                ('1.7', 'Wireless principles'),
+                ('1.8', 'Switching concepts'),
+            ],
+            '2.0': [
+                ('2.1', 'VLANs'),
+                ('2.2', 'Interswitch connectivity'),
+                ('2.3', 'Layer 2 discovery protocols'),
+                ('2.4', 'EtherChannel'),
+                ('2.5', 'Spanning tree'),
+                ('2.6', 'Wireless architectures'),
+                ('2.7', 'WLAN components'),
+                ('2.8', 'AP modes'),
+                ('2.9', 'Physical access connections'),
+            ],
+            '3.0': [
+                ('3.1', 'Routing concepts'),
+                ('3.2', 'Static routing'),
+                ('3.3', 'OSPF'),
+                ('3.4', 'First hop redundancy'),
+            ],
+            '4.0': [
+                ('4.1', 'NAT'),
+                ('4.2', 'NTP'),
+                ('4.3', 'DHCP/DNS'),
+                ('4.4', 'SNMP'),
+                ('4.5', 'Syslog'),
+                ('4.6', 'SSH/TFTP/FTP'),
+            ],
+            '5.0': [
+                ('5.1', 'Security concepts'),
+                ('5.2', 'Device access security'),
+                ('5.3', 'Security program elements'),
+                ('5.4', 'Access control lists'),
+                ('5.5', 'Wireless security'),
+                ('5.6', 'Layer 2 security'),
+            ],
+            '6.0': [
+                ('6.1', 'APIs'),
+                ('6.2', 'Configuration management'),
+                ('6.3', 'JSON data'),
+            ],
+        },
+
+        # ── AWS Solutions Architect Associate (SAA-C03) ──
+        'aws-saa-c03': {
+            '1.0': [
+                ('1.1', 'Secure access'),
+                ('1.2', 'Secure workloads'),
+                ('1.3', 'Encryption strategies'),
+            ],
+            '2.0': [
+                ('2.1', 'Scalable architectures'),
+                ('2.2', 'Highly available architectures'),
+                ('2.3', 'Decoupling mechanisms'),
+            ],
+            '3.0': [
+                ('3.1', 'Storage solutions'),
+                ('3.2', 'Compute solutions'),
+                ('3.3', 'Database solutions'),
+                ('3.4', 'Network architectures'),
+            ],
+            '4.0': [
+                ('4.1', 'Cost-effective storage'),
+                ('4.2', 'Cost-effective compute'),
+                ('4.3', 'Cost-effective databases'),
+            ],
+        },
+
+        # ── CompTIA CySA+ (CS0-003) ──
+        'comptia-cysa-cs0-003': {
+            '1.0': [
+                ('1.1', 'Security monitoring tools'),
+                ('1.2', 'Log analysis and SIEM'),
+                ('1.3', 'Threat intelligence'),
+            ],
+            '2.0': [
+                ('2.1', 'Vulnerability scanning'),
+                ('2.2', 'Vulnerability assessment tools'),
+                ('2.3', 'Remediation and mitigation'),
+            ],
+            '3.0': [
+                ('3.1', 'Incident response procedures'),
+                ('3.2', 'Forensic analysis'),
+                ('3.3', 'Incident recovery'),
+            ],
+            '4.0': [
+                ('4.1', 'Reporting metrics and KPIs'),
+                ('4.2', 'Stakeholder communication'),
+            ],
+        },
+
+        # ── CompTIA PenTest+ (PT0-003) ──
+        'comptia-pentest-pt0-003': {
+            '1.0': [
+                ('1.1', 'Engagement planning'),
+                ('1.2', 'Scoping and authorization'),
+                ('1.3', 'Compliance requirements'),
+            ],
+            '2.0': [
+                ('2.1', 'Reconnaissance techniques'),
+                ('2.2', 'Vulnerability scanning tools'),
+                ('2.3', 'Enumeration methods'),
+            ],
+            '3.0': [
+                ('3.1', 'Network attacks'),
+                ('3.2', 'Application attacks'),
+                ('3.3', 'Wireless and social engineering attacks'),
+                ('3.4', 'Post-exploitation techniques'),
+            ],
+            '4.0': [
+                ('4.1', 'Written reports'),
+                ('4.2', 'Findings and remediation'),
+            ],
+            '5.0': [
+                ('5.1', 'Penetration testing tools'),
+                ('5.2', 'Scripting and code analysis'),
+            ],
+        },
+
+        # ── CompTIA CASP+ (CAS-004) ──
+        'comptia-casp-cas-004': {
+            '1.0': [
+                ('1.1', 'Security requirements analysis'),
+                ('1.2', 'Enterprise architecture design'),
+                ('1.3', 'Secure integration techniques'),
+            ],
+            '2.0': [
+                ('2.1', 'Security monitoring activities'),
+                ('2.2', 'Incident response management'),
+                ('2.3', 'Vulnerability management programs'),
+            ],
+            '3.0': [
+                ('3.1', 'Cryptographic techniques'),
+                ('3.2', 'PKI and certificate management'),
+                ('3.3', 'Secure protocols and services'),
+            ],
+            '4.0': [
+                ('4.1', 'Risk management frameworks'),
+                ('4.2', 'Compliance and policy development'),
+            ],
+        },
+
+        # ── AWS Developer Associate (DVA-C02) ──
+        'aws-dva-c02': {
+            '1.0': [
+                ('1.1', 'Lambda and serverless'),
+                ('1.2', 'API Gateway'),
+                ('1.3', 'DynamoDB and data stores'),
+            ],
+            '2.0': [
+                ('2.1', 'IAM policies and roles'),
+                ('2.2', 'Encryption and secrets management'),
+            ],
+            '3.0': [
+                ('3.1', 'CI/CD pipelines'),
+                ('3.2', 'Elastic Beanstalk and containers'),
+                ('3.3', 'CloudFormation and SAM'),
+            ],
+            '4.0': [
+                ('4.1', 'CloudWatch monitoring'),
+                ('4.2', 'X-Ray tracing and debugging'),
+            ],
+        },
+
+        # ── AWS SysOps Administrator Associate (SOA-C02) ──
+        'aws-soa-c02': {
+            '1.0': [
+                ('1.1', 'CloudWatch metrics and alarms'),
+                ('1.2', 'Log aggregation and analysis'),
+                ('1.3', 'Automated remediation'),
+            ],
+            '2.0': [
+                ('2.1', 'Backup and restore strategies'),
+                ('2.2', 'High availability configurations'),
+            ],
+            '3.0': [
+                ('3.1', 'AMI and instance provisioning'),
+                ('3.2', 'Infrastructure as code'),
+                ('3.3', 'Auto Scaling and load balancing'),
+            ],
+            '4.0': [
+                ('4.1', 'IAM and access management'),
+                ('4.2', 'Security groups and NACLs'),
+                ('4.3', 'Compliance auditing'),
+            ],
+            '5.0': [
+                ('5.1', 'VPC design and peering'),
+                ('5.2', 'Route 53 and DNS'),
+                ('5.3', 'CloudFront distributions'),
+            ],
+            '6.0': [
+                ('6.1', 'Cost Explorer and budgets'),
+                ('6.2', 'Performance optimization tools'),
+            ],
+        },
+
+        # ── AWS Cloud Practitioner (CLF-C02) ──
+        'aws-clf-c02': {
+            '1.0': [
+                ('1.1', 'Cloud value proposition'),
+                ('1.2', 'Cloud architecture principles'),
+                ('1.3', 'Cloud migration strategies'),
+            ],
+            '2.0': [
+                ('2.1', 'Shared responsibility model'),
+                ('2.2', 'IAM fundamentals'),
+                ('2.3', 'Security services overview'),
+            ],
+            '3.0': [
+                ('3.1', 'Compute services'),
+                ('3.2', 'Storage services'),
+                ('3.3', 'Database services'),
+                ('3.4', 'Networking services'),
+            ],
+            '4.0': [
+                ('4.1', 'Pricing models'),
+                ('4.2', 'Support plans'),
+            ],
+        },
+
+        # ── Microsoft Azure Fundamentals (AZ-900) ──
+        'az-900': {
+            '1.0': [
+                ('1.1', 'Benefits of cloud computing'),
+                ('1.2', 'Cloud service types'),
+                ('1.3', 'Cloud deployment models'),
+            ],
+            '2.0': [
+                ('2.1', 'Core Azure services'),
+                ('2.2', 'Compute and networking'),
+                ('2.3', 'Storage services'),
+            ],
+            '3.0': [
+                ('3.1', 'Cost management tools'),
+                ('3.2', 'Governance and compliance'),
+                ('3.3', 'Resource management tools'),
+            ],
+        },
+
+        # ── Microsoft Azure Administrator (AZ-104) ──
+        'az-104': {
+            '1.0': [
+                ('1.1', 'Azure Active Directory'),
+                ('1.2', 'Role-based access control'),
+                ('1.3', 'Subscriptions and governance'),
+            ],
+            '2.0': [
+                ('2.1', 'Storage accounts'),
+                ('2.2', 'Blob and file storage'),
+                ('2.3', 'Storage security'),
+            ],
+            '3.0': [
+                ('3.1', 'Virtual machines'),
+                ('3.2', 'App services'),
+                ('3.3', 'Container instances'),
+            ],
+            '4.0': [
+                ('4.1', 'Virtual networks'),
+                ('4.2', 'Network security groups'),
+                ('4.3', 'Load balancers and DNS'),
+            ],
+            '5.0': [
+                ('5.1', 'Azure Monitor'),
+                ('5.2', 'Backup and recovery'),
+            ],
+        },
+
+        # ── Google Cloud Associate Cloud Engineer ──
+        'gcp-ace': {
+            '1.0': [
+                ('1.1', 'Projects and accounts'),
+                ('1.2', 'Billing management'),
+                ('1.3', 'CLI and SDK installation'),
+            ],
+            '2.0': [
+                ('2.1', 'Resource planning'),
+                ('2.2', 'Pricing calculator'),
+                ('2.3', 'Compute resource configuration'),
+            ],
+            '3.0': [
+                ('3.1', 'Compute Engine deployment'),
+                ('3.2', 'Kubernetes Engine'),
+                ('3.3', 'Cloud Functions and App Engine'),
+                ('3.4', 'Data solutions deployment'),
+            ],
+            '4.0': [
+                ('4.1', 'Compute resource management'),
+                ('4.2', 'Monitoring and logging'),
+                ('4.3', 'Networking resources'),
+            ],
+            '5.0': [
+                ('5.1', 'IAM configuration'),
+                ('5.2', 'Service accounts'),
+                ('5.3', 'Audit and security tools'),
+            ],
+        },
+    }
+
+    for cert_code, domains_map in sub_objectives.items():
+        # Look up the certification ID
+        c.execute('SELECT id FROM certifications WHERE code = ?', (cert_code,))
+        cert_row = c.fetchone()
+        if not cert_row:
+            continue
+        cert_id = cert_row['id']
+
+        for parent_domain_code, children in domains_map.items():
+            # Look up the parent domain ID
+            c.execute(
+                'SELECT id FROM domains WHERE certification_id = ? AND code = ? AND parent_domain_id IS NULL',
+                (cert_id, parent_domain_code)
+            )
+            parent_row = c.fetchone()
+            if not parent_row:
+                continue
+            parent_id = parent_row['id']
+
+            for sort_idx, (child_code, child_name) in enumerate(children):
+                c.execute(
+                    '''INSERT INTO domains (certification_id, name, code, weight, parent_domain_id, sort_order)
+                       VALUES (?, ?, ?, NULL, ?, ?)''',
+                    (cert_id, child_name, child_code, parent_id, sort_idx)
+                )
+
+    conn.commit()
+    conn.close()
+
+
+# Admin endpoint to manually trigger seeding (useful for PythonAnywhere)
+@app.route('/api/admin/seed', methods=['POST'])
+def admin_seed():
+    try:
+        init_db()
+        seed_certifications()
+        seed_sub_objectives()
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT COUNT(*) as cnt FROM certifications')
+        cert_count = c.fetchone()['cnt']
+        c.execute('SELECT COUNT(*) as cnt FROM domains')
+        domain_count = c.fetchone()['cnt']
+        conn.close()
+        return jsonify({'message': 'Seeded', 'certifications': cert_count, 'domains': domain_count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Initialize database tables on module load (for WSGI)
-init_db()
-seed_certifications()
+try:
+    init_db()
+    seed_certifications()
+    seed_sub_objectives()
+except Exception as e:
+    print(f"[STARTUP] DB init error: {e}", flush=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

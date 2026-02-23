@@ -1,9 +1,53 @@
-/* Create/Edit Component - PHASE 2: Image & Code Language Support */
+/* Create/Edit Component */
 import { getState, setState } from '../state.js';
-import { getQuiz, createQuiz, updateQuiz } from '../services/api.js';
+import { getQuiz, createQuiz, updateQuiz, getCertifications, getCertification, assignQuestionDomains } from '../services/api.js';
 import { escapeHtml, getRandomColor, showLoading, hideLoading } from '../utils/dom.js';
 import { parseQuizData, questionsToText } from '../utils/parser.js';
+import { icon } from '../utils/icons.js';
 import { showToast } from '../utils/toast.js';
+
+// Cached certs list for dropdown
+let certsCache = null;
+async function ensureCertsLoaded() {
+    if (!certsCache) certsCache = await getCertifications();
+    return certsCache;
+}
+
+/** Load domains for a certification and store in state */
+export async function linkCertification(certId) {
+    if (!certId) {
+        setState({ editingQuizCertId: null, certDomains: [] });
+        return;
+    }
+    try {
+        const cert = await getCertification(certId);
+        setState({ editingQuizCertId: certId, certDomains: cert.domains || [] });
+    } catch (e) {
+        showToast('Failed to load certification domains', 'error');
+    }
+}
+
+/** Save domain assignments after quiz save */
+async function saveDomainAssignments(quizId) {
+    const state = getState();
+    if (!state.editingQuizCertId || !state.parsedQuestions) return;
+
+    const questionDomainMap = {};
+    state.parsedQuestions.forEach((q, i) => {
+        if (q.domainIds && q.domainIds.length > 0) {
+            // Map question index to domain IDs — backend will resolve by question_index
+            questionDomainMap[i] = q.domainIds;
+        }
+    });
+
+    if (Object.keys(questionDomainMap).length > 0) {
+        try {
+            await assignQuestionDomains(quizId, questionDomainMap);
+        } catch (e) {
+            console.error('Failed to save domain assignments:', e);
+        }
+    }
+}
 
 // Code language options for the dropdown
 const CODE_LANGUAGES = [
@@ -54,7 +98,7 @@ True
 4. [match] Match terms:
 A. HTTP => 80
 B. SSH => 22</pre></div>` : ''}
-        <div class="flex gap-3 mt-6"><button class="btn btn-secondary flex-1" onclick="window.app.openVisual()">🎨 Visual Editor</button><button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">💾 Save Quiz</button></div>
+        <div class="flex gap-3 mt-6"><button class="btn btn-secondary flex-1" onclick="window.app.openVisual()">${icon('edit')} Visual Editor</button><button class="btn btn-primary flex-1" onclick="window.app.saveQuiz()">${icon('check')} Save Quiz</button></div>
     </main></div>`;
 }
 
@@ -64,10 +108,20 @@ function renderVisual() {
     const q = questions[state.currentEditQuestion] || {};
     const qIdx = state.currentEditQuestion;
     
+    // Trigger cert list load for dropdown
+    ensureCertsLoaded().then(() => { if (getState().view === 'create') setState({}); });
+
     return `<div class="create-page"><header class="create-header"><div class="create-header-inner">
         <button class="btn btn-ghost" onclick="window.app.closeVisual()">← Text Mode</button>
         <h2>Visual Editor</h2>
-        <button class="btn btn-primary" onclick="window.app.saveVisual()">Save Quiz</button>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+            <select class="input" style="width:auto;min-width:180px;font-size:0.8rem;padding:0.4rem 0.6rem"
+                onchange="window.app.linkCertification(this.value ? parseInt(this.value) : null)">
+                <option value="">No Certification</option>
+                ${(certsCache || []).map(c => `<option value="${c.id}" ${state.editingQuizCertId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+            </select>
+            <button class="btn btn-primary" onclick="window.app.saveVisual()">Save Quiz</button>
+        </div>
     </div></header>
     <div class="editor-layout">
         <aside class="editor-sidebar">
@@ -89,7 +143,7 @@ function renderVisual() {
             <div class="editor-card">
                 <div class="editor-card-header">
                     <h3>Question ${qIdx + 1}</h3>
-                    ${questions.length > 1 ? `<button class="btn btn-sm btn-ghost danger" onclick="window.app.deleteQ(${qIdx})">🗑️ Delete</button>` : ''}
+                    ${questions.length > 1 ? `<button class="btn btn-sm btn-ghost danger" onclick="window.app.deleteQ(${qIdx})">${icon('trash')} Delete</button>` : ''}
                 </div>
                 
                 <div class="form-group">
@@ -135,26 +189,36 @@ function renderVisual() {
                     <label class="label">Question Type</label>
                     <div class="type-selector">
                         <button class="type-btn${q.type === 'choice' ? ' active' : ''}" onclick="window.app.changeType('choice')">
-                            <span class="type-btn-icon">✓</span>
+                            <span class="type-btn-icon">${icon('circleCheck')}</span>
                             <span class="type-btn-label">Multiple Choice</span>
                         </button>
                         <button class="type-btn${q.type === 'ordering' ? ' active' : ''}" onclick="window.app.changeType('ordering')">
-                            <span class="type-btn-icon">↕️</span>
+                            <span class="type-btn-icon">${icon('listOrdered')}</span>
                             <span class="type-btn-label">Ordering</span>
                         </button>
                         <button class="type-btn${q.type === 'truefalse' ? ' active' : ''}" onclick="window.app.changeType('truefalse')">
-                            <span class="type-btn-icon">⚡</span>
+                            <span class="type-btn-icon">${icon('toggleLeft')}</span>
                             <span class="type-btn-label">True/False</span>
                         </button>
                         <button class="type-btn${q.type === 'matching' ? ' active' : ''}" onclick="window.app.changeType('matching')">
-                            <span class="type-btn-icon">🔗</span>
+                            <span class="type-btn-icon">${icon('link')}</span>
                             <span class="type-btn-label">Matching</span>
                         </button>
                     </div>
                 </div>
                 
+                ${state.certDomains.length > 0 ? `
+                <div class="form-group">
+                    <label class="label">Exam Domain <span class="text-muted">(optional)</span></label>
+                    <select class="input" onchange="window.app.setQuestionDomain(this.value ? [parseInt(this.value)] : [])">
+                        <option value="">No domain</option>
+                        ${state.certDomains.map(d => `<option value="${d.id}" ${(q.domainIds || []).includes(d.id) ? 'selected' : ''}>${escapeHtml(d.code || '')} ${escapeHtml(d.name)}</option>`).join('')}
+                    </select>
+                    <p class="helper-text">Tag this question with an exam objective for analytics</p>
+                </div>` : ''}
+
                 ${renderTypeEditor(q, qIdx)}
-                
+
                 <div class="form-group">
                     <label class="label">Explanation <span class="text-muted">(optional)</span></label>
                     <textarea id="ve-explanation-${qIdx}" class="textarea" rows="2" placeholder="Why is this correct?"
@@ -166,7 +230,7 @@ function renderVisual() {
 }
 
 function getTypeIcon(type) {
-    return { choice: '✓', ordering: '↕️', truefalse: '⚡', matching: '🔗' }[type] || '✓';
+    return { choice: '&#10003;', ordering: '&#8597;', truefalse: '&#9889;', matching: '&#8596;' }[type] || '&#10003;';
 }
 
 function renderTypeEditor(q, qIdx) {
@@ -237,6 +301,8 @@ function renderTypeEditor(q, qIdx) {
     // Multiple choice
     const options = q.options || [];
     const correct = q.correct || [];
+    const optExps = q.optionExplanations || {};
+    const showOptExp = q._showOptionExplanations || Object.keys(optExps).length > 0;
     return `<div class="form-group">
         <label class="label">Answer Options</label>
         <p class="helper-text">Click the circle to mark correct answer(s)</p>
@@ -246,15 +312,27 @@ function renderTypeEditor(q, qIdx) {
                     <button class="correct-toggle${correct.includes(i) ? ' active' : ''}" onclick="window.app.toggleCorrect(${i})">
                         ${correct.includes(i) ? '✓' : ''}
                     </button>
-                    <input type="text" class="input" placeholder="Option ${String.fromCharCode(65 + i)}" 
+                    <input type="text" class="input" placeholder="Option ${String.fromCharCode(65 + i)}"
                         id="opt-${qIdx}-${i}"
                         value="${escapeHtml(opt)}"
                         onblur="window.app.saveOption(${i}, this.value)">
                     ${options.length > 2 ? `<button class="btn btn-icon btn-ghost" onclick="window.app.removeOpt(${i})">✕</button>` : '<div style="width:36px"></div>'}
                 </div>
+                ${showOptExp ? `
+                <div class="option-exp-row">
+                    <input type="text" class="input input-sm opt-exp-input"
+                        placeholder="Why is ${String.fromCharCode(65 + i)} ${correct.includes(i) ? 'correct' : 'incorrect'}? (optional)"
+                        id="optexp-${qIdx}-${i}"
+                        value="${escapeHtml(optExps[i] || optExps[String(i)] || '')}"
+                        onblur="window.app.saveOptionExplanation(${i}, this.value)">
+                </div>
+                ` : ''}
             `).join('')}
         </div>
-        <button class="btn btn-sm btn-secondary mt-3" onclick="window.app.addOpt()">+ Add Option</button>
+        <div class="flex gap-2 mt-3">
+            <button class="btn btn-sm btn-secondary" onclick="window.app.addOpt()">+ Add Option</button>
+            ${!showOptExp ? `<button class="btn btn-sm btn-ghost" onclick="window.app.toggleOptionExplanations()">+ Add Option Explanations</button>` : ''}
+        </div>
     </div>`;
 }
 
@@ -287,10 +365,14 @@ export async function saveQuiz() {
 
 export async function editQuiz(id) {
     showLoading();
-    try { 
-        const quiz = await getQuiz(id); 
-        setState({ view: 'create', quizTitle: quiz.title, quizData: questionsToText(quiz.questions), quizCategory: quiz.description || '', editingQuizId: id, visualEditorMode: false }); 
-        hideLoading(); 
+    try {
+        const quiz = await getQuiz(id);
+        setState({ view: 'create', quizTitle: quiz.title, quizData: questionsToText(quiz.questions), quizCategory: quiz.description || '', editingQuizId: id, visualEditorMode: false, editingQuizCertId: quiz.certification_id || null });
+        // Load cert domains if quiz is linked to a certification
+        if (quiz.certification_id) {
+            linkCertification(quiz.certification_id);
+        }
+        hideLoading();
     } catch { hideLoading(); showToast('Failed to load', 'error'); }
 }
 
@@ -306,18 +388,21 @@ export function openVisual() {
 }
 
 function createEmpty(type) {
-    const base = { 
-        question: '', 
-        type, 
-        explanation: null, 
-        pairs: [], 
-        options: [], 
+    const base = {
+        question: '',
+        type,
+        explanation: null,
+        optionExplanations: null,
+        pairs: [],
+        options: [],
         correct: [],
         // PHASE 2: New fields
         image: null,
         imageAlt: null,
         code: null,
         codeLanguage: null,
+        // Domain tagging
+        domainIds: [],
     };
     if (type === 'truefalse') return { ...base, options: ['True', 'False'], correct: [0] };
     if (type === 'matching') return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }] };
@@ -378,6 +463,7 @@ export function changeType(newType) {
     // Preserve existing fields
     newQ.question = current.question;
     newQ.explanation = current.explanation;
+    newQ.optionExplanations = current.optionExplanations;
     newQ.image = current.image;
     newQ.imageAlt = current.imageAlt;
     newQ.code = current.code;
@@ -469,6 +555,10 @@ export function toggleCorrect(i) {
     setState({ parsedQuestions: q }); 
 }
 
+export function setQuestionDomain(domainIds) {
+    saveField('domainIds', domainIds);
+}
+
 // Compatibility
 export function updateQ(f, v) { saveField(f, v); }
 export function updateOpt(i, v) { saveOption(i, v); }
@@ -486,11 +576,26 @@ export async function saveVisual() {
     if (invalid.length) return showToast('Some questions incomplete', 'error');
     
     showLoading();
-    try { 
-        const payload = { title: state.quizTitle, questions: state.parsedQuestions, description: state.quizCategory, color: getRandomColor() }; 
-        if (state.editingQuizId) await updateQuiz(state.editingQuizId, payload); 
-        else await createQuiz(payload); 
-        setState({ view: 'library', quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null, visualEditorMode: false, parsedQuestions: null }); 
-        hideLoading(); 
+    try {
+        const payload = {
+            title: state.quizTitle,
+            questions: state.parsedQuestions,
+            description: state.quizCategory,
+            color: getRandomColor(),
+            certification_id: state.editingQuizCertId || null,
+        };
+        let quizId = state.editingQuizId;
+        if (quizId) {
+            await updateQuiz(quizId, payload);
+        } else {
+            const result = await createQuiz(payload);
+            quizId = result.quizId;
+        }
+        // Save domain assignments if quiz is linked to a certification
+        if (quizId && state.editingQuizCertId) {
+            await saveDomainAssignments(quizId);
+        }
+        setState({ view: 'library', quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null, visualEditorMode: false, parsedQuestions: null, editingQuizCertId: null, certDomains: [] });
+        hideLoading();
     } catch (e) { hideLoading(); showToast(e.message || 'Failed', 'error'); }
 }

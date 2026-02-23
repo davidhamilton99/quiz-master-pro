@@ -1,9 +1,10 @@
-/* Quiz Master Pro - Main Entry Point - v2.0 with Landing Page & Wizard */
+/* Quiz Master Pro - Main Entry Point */
 import { getState, setState, subscribe, loadAuth, loadProfile, loadSettings, loadInProgressQuizzes } from './state.js';
 import { loadQuizzes, logout, createQuiz, logEvent } from './services/api.js';
 import { ExportService, ImportService, showExportModal, showImportModal } from './services/export.js';
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
+import { icon } from './utils/icons.js';
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { 
     renderLibrary, setSearch, setSearchImmediate, handleSearchInput, clearSearch,
@@ -21,7 +22,7 @@ import {
     renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz,
     openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt,
     toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
-    saveField, changeType, savePair, saveOption
+    saveField, changeType, savePair, saveOption, linkCertification, setQuestionDomain
 } from './components/create.js';
 import {
     renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
@@ -34,6 +35,16 @@ import {
     fcToggleMenu, fcToggleShortcuts, exitFlashcards,
     fcTouchStart, fcTouchMove, fcTouchEnd
 } from './components/flashcards.js';
+
+// Dashboard
+import { renderDashboard, loadStudyStats } from './components/dashboard.js';
+import { renderCertPicker } from './components/certPicker.js';
+import {
+    getUserCertifications, enrollCertification, unenrollCertification,
+    getCertPerformance, getCertTrends, getWeakQuestions, getCertification,
+    getCertifications,
+    startSimulation as apiStartSimulation
+} from './services/api.js';
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
@@ -64,7 +75,6 @@ async function exportAs(quizId, format) {
         const modal = document.getElementById('export-modal');
         if (modal) modal.remove();
     } catch (error) {
-        console.error('Export failed:', error);
         showToast('Export failed', 'error');
     }
 }
@@ -84,7 +94,6 @@ async function handleImport(file) {
         showToast('Quiz imported successfully!', 'success');
     } catch (error) {
         hideLoading();
-        console.error('Import failed:', error);
         showToast('Import failed: ' + error.message, 'error');
     }
 }
@@ -102,7 +111,7 @@ function showQuizOptions(quizId) {
         <div class="modal">
             <div class="modal-header">
                 <h2>Start Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
             </div>
             <div class="modal-body">
                 <h3 style="margin-bottom: 1rem;">${quiz.title}</h3>
@@ -176,23 +185,23 @@ function showCreateOptions() {
         <div class="modal">
             <div class="modal-header">
                 <h2>Create New Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
             </div>
             <div class="modal-body">
                 <p class="text-muted mb-4">How would you like to create your quiz?</p>
-                
+
                 <div class="create-options">
                     <button class="create-option" onclick="window.app.startWizard()">
-                        <div class="create-option-icon">🤖</div>
+                        <div class="create-option-icon">${icon('bot', 'icon-2xl')}</div>
                         <div class="create-option-content">
                             <h3>AI-Assisted</h3>
                             <p>Get step-by-step help using ChatGPT or Claude to generate questions from your notes</p>
                         </div>
                         <span class="create-option-badge">Recommended</span>
                     </button>
-                    
+
                     <button class="create-option" onclick="window.app.startManualCreate()">
-                        <div class="create-option-icon">✍️</div>
+                        <div class="create-option-icon">${icon('penLine', 'icon-2xl')}</div>
                         <div class="create-option-content">
                             <h3>Manual Entry</h3>
                             <p>Type or paste questions directly using our text format or visual editor</p>
@@ -284,6 +293,9 @@ function renderInternal() {
             break;
         case 'flashcards':
             content = renderFlashcards();
+            break;
+        case 'dashboard':
+            content = renderDashboard();
             break;
         default:
             content = state.isAuthenticated ? renderLibrary() : renderLanding();
@@ -449,6 +461,8 @@ window.app = {
     changeType,
     savePair,
     saveOption,
+    linkCertification,
+    setQuestionDomain,
     
     // Study Guide Builder
     sgHandleFile,
@@ -479,6 +493,138 @@ window.app = {
     fcTouchMove,
     fcTouchEnd,
     
+
+    // Dashboard & Certifications
+    showCertPicker: async () => {
+        try {
+            const certs = await getCertifications();
+            setState({ certifications: certs });
+        } catch (e) {
+            showToast('Failed to load certifications', 'error');
+            return;
+        }
+        const existing = document.getElementById('cert-picker-container');
+        if (existing) existing.remove();
+        const container = document.createElement('div');
+        container.id = 'cert-picker-container';
+        container.innerHTML = renderCertPicker();
+        document.body.appendChild(container);
+    },
+    closeCertPicker: () => {
+        const container = document.getElementById('cert-picker-container');
+        if (container) container.remove();
+    },
+    filterCerts: (query) => {
+        setState({ certFilterQuery: query }, true);
+        const container = document.getElementById('cert-picker-container');
+        if (container) container.innerHTML = renderCertPicker();
+    },
+    selectCert: async (certId) => {
+        try {
+            showLoading();
+            const [domains, trends, weakQs] = await Promise.all([
+                getCertPerformance(certId),
+                getCertTrends(certId),
+                getWeakQuestions(certId, 10),
+            ]);
+            const userCerts = getState().userCertifications || [];
+            const activeCert = userCerts.find(c => c.certification_id === certId);
+            setState({ activeCertification: activeCert, domainPerformance: domains, certTrends: trends, weakQuestions: weakQs });
+            hideLoading();
+        } catch (e) {
+            hideLoading();
+            showToast('Failed to load certification data', 'error');
+        }
+    },
+    loadDashboard: async () => {
+        try {
+            const userCerts = await getUserCertifications();
+            setState({ userCertifications: userCerts, view: 'dashboard' });
+        } catch (e) {
+            showToast('Failed to load certifications', 'error');
+            setState({ view: 'dashboard' });
+        }
+    },
+    enrollCert: async (certId, targetDate) => {
+        try {
+            await enrollCertification(certId, targetDate);
+            const userCerts = await getUserCertifications();
+            setState({ userCertifications: userCerts });
+            showToast('Enrolled in certification!', 'success');
+            const modal = document.getElementById('cert-picker-container');
+            if (modal) modal.remove();
+        } catch (e) {
+            showToast('Failed to enroll', 'error');
+        }
+    },
+    selectCertAndScroll: async (certId) => {
+        await window.app.selectCert(certId);
+        requestAnimationFrame(() => {
+            const detail = document.getElementById('dash-detail');
+            if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    },
+    unenrollCert: async (certId, certName) => {
+        const confirmed = await new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML = `
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2>Remove Certification</h2>
+                        <button class="btn btn-ghost btn-icon" data-action="cancel">${icon('x')}</button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Remove <strong>${certName}</strong> from your dashboard? Your quiz history won't be affected.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                        <button class="btn btn-primary danger" data-action="confirm">Remove</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.closest('[data-action="cancel"]')) { overlay.remove(); resolve(false); }
+                if (e.target.closest('[data-action="confirm"]')) { overlay.remove(); resolve(true); }
+            });
+        });
+        if (!confirmed) return;
+        try {
+            await unenrollCertification(certId);
+            const userCerts = await getUserCertifications();
+            const state = getState();
+            const stillActive = state.activeCertification?.certification_id === certId;
+            setState({
+                userCertifications: userCerts,
+                ...(stillActive ? { activeCertification: null, domainPerformance: [], certTrends: [], weakQuestions: [] } : {}),
+            });
+            showToast(`Removed ${certName}`, 'success');
+        } catch (e) {
+            showToast('Failed to remove certification', 'error');
+        }
+    },
+    startSimulation: async (certId) => {
+        try {
+            showLoading();
+            const sim = await apiStartSimulation(certId);
+            if (!sim || !sim.questions || sim.questions.length === 0) {
+                hideLoading();
+                showToast('No questions available for simulation. Add questions tagged with this certification first.', 'warning');
+                return;
+            }
+            startQuiz(null, {
+                studyMode: false,
+                timed: true,
+                minutes: Math.ceil(sim.time_limit / 60),
+                simulation: sim,
+            });
+            hideLoading();
+        } catch (e) {
+            hideLoading();
+            showToast('Failed to start simulation: ' + e.message, 'error');
+        }
+    },
 };
 
 // ==================== INITIALIZE ====================
@@ -499,7 +645,7 @@ async function init() {
             // Bug #1 fix: Load and cache in-progress quizzes
             await loadInProgressQuizzes();
         } catch (e) {
-            console.error('Failed to load quizzes:', e);
+            showToast('Failed to load quizzes', 'error');
         }
     } else {
         // Not logged in - show landing page

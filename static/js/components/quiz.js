@@ -1,5 +1,5 @@
-/* Quiz Component - COMPLETE FIX: Mobile Support + Randomization + All Improvements */
-import { 
+/* Quiz Component */
+import {
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
     getLevelInfo
@@ -8,6 +8,7 @@ import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, remov
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 import { TIME, STREAK, QUIZ } from '../utils/constants.js';
+import { icon } from '../utils/icons.js';
 
 let timerInterval = null;
 
@@ -206,7 +207,7 @@ export function renderQuiz() {
             <div class="flex items-center gap-2">
                 ${state.timerEnabled ? `<div id="timer" class="quiz-timer ${state.timeRemaining <= TIME.TIMER_WARNING_SECONDS ? 'urgent' : ''}">${formatTime(state.timeRemaining)}</div>` : ''}
                 ${q.id ? `<button class="btn btn-icon btn-ghost ${(state.bookmarkedQuestions || new Set()).has(q.id) ? 'bookmarked' : ''}" onclick="window.app.toggleBookmark(${q.id})" title="Bookmark question" style="${(state.bookmarkedQuestions || new Set()).has(q.id) ? 'color:#fbbf24' : ''}">&#9733;</button>` : ''}
-                <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">🚩</button>
+                <button class="btn btn-icon btn-ghost ${state.flaggedQuestions.has(state.currentQuestionIndex) ? 'flagged' : ''}" onclick="window.app.toggleFlag()" title="Flag for review">${icon('flag')}</button>
             </div>
         </header>
         <main class="quiz-main"><div class="quiz-content">
@@ -286,9 +287,39 @@ function renderStudyModeFeedback(q, state) {
     if (q.explanation) {
         feedbackHtml += `<div class="explanation"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>`;
     }
-    
+
+    // Show per-option explanations summary
+    if (q.optionExplanations && (q.type === 'choice' || !q.type)) {
+        let displayOptions = q.options;
+        let displayCorrect = q.correct;
+        let displayToOriginal = null;
+
+        if (state.randomizeOptions && state.optionShuffles[state.currentQuestionIndex]) {
+            const shuffle = state.optionShuffles[state.currentQuestionIndex];
+            displayOptions = shuffle.shuffledOptions;
+            displayCorrect = shuffle.newCorrect;
+            displayToOriginal = shuffle.mapping;
+        }
+
+        let hasAnyExp = false;
+        let expHtml = '<div class="option-explanations-summary"><strong>Option Breakdown:</strong><ul>';
+        displayOptions.forEach((opt, i) => {
+            const origIdx = displayToOriginal ? displayToOriginal[i] : i;
+            const expText = q.optionExplanations[origIdx] || q.optionExplanations[String(origIdx)];
+            if (expText) {
+                hasAnyExp = true;
+                const isCorrectOpt = Array.isArray(displayCorrect) ? displayCorrect.includes(i) : displayCorrect === i;
+                const letter = String.fromCharCode(65 + i);
+                const colorClass = isCorrectOpt ? 'opt-exp-correct' : 'opt-exp-incorrect';
+                expHtml += `<li class="${colorClass}"><strong>${letter}.</strong> ${escapeHtml(expText)}</li>`;
+            }
+        });
+        expHtml += '</ul></div>';
+        if (hasAnyExp) feedbackHtml += expHtml;
+    }
+
     feedbackHtml += `</div>`;
-    
+
     return feedbackHtml;
 }
 
@@ -444,16 +475,22 @@ function renderMultipleChoice(q, questionIndex) {
     const isMulti = Array.isArray(displayCorrect) && displayCorrect.length > 1;
     const disabled = showingAnswer ? 'disabled' : '';
     
+    // Build mapping from display index to original index for option explanations
+    let displayToOriginal = null;
+    if (state.randomizeOptions && state.optionShuffles[questionIndex]) {
+        displayToOriginal = state.optionShuffles[questionIndex].mapping;
+    }
+
     let html = '<div class="options-grid">';
     displayOptions.forEach((opt, i) => {
         const letter = String.fromCharCode(65 + i);
-        const isSelected = isMulti 
-            ? (userAnswer || []).includes(i) 
+        const isSelected = isMulti
+            ? (userAnswer || []).includes(i)
             : userAnswer === i;
-        const isCorrectOpt = isMulti 
-            ? displayCorrect.includes(i) 
+        const isCorrectOpt = isMulti
+            ? displayCorrect.includes(i)
             : displayCorrect === i;
-        
+
         let cls = 'option';
         // Always show selected state
         if (isSelected) {
@@ -464,20 +501,31 @@ function renderMultipleChoice(q, questionIndex) {
             if (isCorrectOpt) cls += ' correct';
             if (isSelected && !isCorrectOpt) cls += ' incorrect';
         }
-        
+
         const checkType = isMulti ? 'checkbox' : 'radio';
         const checked = isSelected ? 'checked' : '';
-        
+
+        // Get per-option explanation if available
+        let optExpHtml = '';
+        if (showingAnswer && q.optionExplanations) {
+            const origIdx = displayToOriginal ? displayToOriginal[i] : i;
+            const expText = q.optionExplanations[origIdx] || q.optionExplanations[String(origIdx)];
+            if (expText) {
+                const expClass = isCorrectOpt ? 'option-explanation correct' : 'option-explanation incorrect';
+                optExpHtml = `<div class="${expClass}">${escapeHtml(expText)}</div>`;
+            }
+        }
+
         html += `
             <label class="${cls}">
-                <input type="${checkType}" 
-                    name="q${questionIndex}" 
-                    value="${i}" 
-                    ${checked} 
+                <input type="${checkType}"
+                    name="q${questionIndex}"
+                    value="${i}"
+                    ${checked}
                     ${disabled}
                     onchange="window.app.${isMulti ? 'toggleMultiSelect' : 'selectOption'}(${i})">
                 <span class="option-letter">${letter}</span>
-                <span class="option-text">${escapeHtml(opt)}</span>
+                <span class="option-text">${escapeHtml(opt)}${optExpHtml}</span>
             </label>
         `;
     });
@@ -1168,15 +1216,28 @@ export async function toggleBookmark(questionId) {
 
 export async function startQuiz(quizId, options = {}) {
     showLoading();
-    
+
     try {
-        const quiz = await getQuiz(quizId);
-        
+        const isSimulation = !!options.simulation;
+        let quiz;
+
+        if (isSimulation) {
+            // Build a synthetic quiz object from simulation data
+            const sim = options.simulation;
+            quiz = {
+                id: null,
+                title: sim.certification.name + ' Practice Exam',
+                questions: sim.questions,
+            };
+        } else {
+            quiz = await getQuiz(quizId);
+        }
+
         let savedProgress = null;
-        if (!options.restart) {
+        if (!options.restart && !isSimulation) {
             savedProgress = await loadQuizProgress(quizId);
         }
-        
+
         if (savedProgress && !options.restart) {
             // Restore saved progress
             setState({
@@ -1199,7 +1260,7 @@ export async function startQuiz(quizId, options = {}) {
                 questionStartTime: Date.now(),
                 questionTimes: savedProgress.questionTimes || {}
             });
-            
+
             showToast('Resuming quiz...', 'info');
         } else {
             // Fresh start
@@ -1221,12 +1282,14 @@ export async function startQuiz(quizId, options = {}) {
                 timeRemaining: (options.minutes || 15) * 60,
                 quizStartTime: Date.now(),
                 questionStartTime: Date.now(),
-                questionTimes: {}
+                questionTimes: {},
+                simulationMode: isSimulation,
+                simulationConfig: isSimulation ? options.simulation : null,
             });
-            
+
             if (window.sounds) window.sounds.playQuizStart();
         }
-        
+
         if (options.timed) {
             startTimer();
         }
@@ -1236,7 +1299,7 @@ export async function startQuiz(quizId, options = {}) {
 
         // Start study session tracking
         try {
-            const sessionType = getState().simulationMode ? 'simulation' : 'quiz';
+            const sessionType = isSimulation ? 'simulation' : 'quiz';
             const sessionId = await startStudySession(sessionType, quiz.id);
             setState({ activeStudySessionId: sessionId }, true);
         } catch (e) {

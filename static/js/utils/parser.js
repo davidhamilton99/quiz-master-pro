@@ -52,7 +52,8 @@ function parseQuestion(lines, startIndex) {
         image: null,
         imageAlt: null,
         optionImages: [],
-        explanation: null
+        explanation: null,
+        optionExplanations: null
     };
     
     let i = startIndex + 1;
@@ -97,12 +98,29 @@ function parseQuestion(lines, startIndex) {
             i = parseMultipleChoice(lines, i, question);
     }
     
+    // Parse per-option explanations (EXPLAIN_A: ..., EXPLAIN_B: ..., etc.)
+    // Try before general explanation
+    const optExpResult = parseOptionExplanations(lines, i);
+    if (optExpResult) {
+        question.optionExplanations = optExpResult.explanations;
+        i = optExpResult.nextIndex;
+    }
+
     const explanationResult = parseExplanation(lines, i);
     if (explanationResult) {
         question.explanation = explanationResult.text;
         i = explanationResult.nextIndex;
     }
-    
+
+    // Try per-option explanations again after general explanation
+    if (!question.optionExplanations) {
+        const optExpResult2 = parseOptionExplanations(lines, i);
+        if (optExpResult2) {
+            question.optionExplanations = optExpResult2.explanations;
+            i = optExpResult2.nextIndex;
+        }
+    }
+
     return { question, nextIndex: i };
 }
 
@@ -147,32 +165,70 @@ function parseExplanation(lines, startIndex) {
     return { text: expMatch[1].trim(), nextIndex: startIndex + 1 };
 }
 
+function parseOptionExplanations(lines, startIndex) {
+    if (startIndex >= lines.length) return null;
+
+    const explanations = {};
+    let i = startIndex;
+    let found = false;
+
+    while (i < lines.length) {
+        const line = lines[i].trim();
+        const expMatch = line.match(/^\[?explain[_-]?([A-Z])\]?:\s*(.+)$/i);
+        if (expMatch) {
+            const letter = expMatch[1].toUpperCase();
+            const idx = letter.charCodeAt(0) - 65;
+            explanations[idx] = expMatch[2].trim();
+            found = true;
+            i++;
+        } else {
+            break;
+        }
+    }
+
+    if (!found) return null;
+    return { explanations, nextIndex: i };
+}
+
 function parseMultipleChoice(lines, startIndex, question) {
     let i = startIndex;
-    
+    const inlineExplanations = {};
+
     while (i < lines.length && lines[i].match(/^[A-Z]\./i)) {
         const line = lines[i].trim();
         let optionText = line.substring(2).trim();
         let optionImage = null;
-        
+
         const imgMatch = optionText.match(/^\[(?:image|img):\s*([^\]]+)\]\s*(.*)$/i);
         if (imgMatch) {
             optionImage = imgMatch[1].trim();
             optionText = imgMatch[2].trim();
         }
-        
+
+        // Check for inline explanation with //
+        const inlineExpMatch = optionText.match(/^(.+?)\s*\/\/\s*(.+)$/);
+        if (inlineExpMatch) {
+            optionText = inlineExpMatch[1].trim();
+            inlineExplanations[question.options.length] = inlineExpMatch[2].trim();
+        }
+
         const isCorrect = optionText.endsWith('*');
         if (isCorrect) {
             optionText = optionText.slice(0, -1).trim();
             question.correct.push(question.options.length);
         }
-        
+
         question.options.push(optionText);
         if (optionImage) question.optionImages[question.options.length - 1] = optionImage;
-        
+
         i++;
     }
-    
+
+    // If inline explanations were found, set them on the question
+    if (Object.keys(inlineExplanations).length > 0) {
+        question.optionExplanations = inlineExplanations;
+    }
+
     if (question.correct.length === 0 && question.options.length > 0) {
         question.correct = [0];
     }
@@ -280,7 +336,18 @@ export function questionsToText(questions) {
                 text += `${String.fromCharCode(65 + j)}. ${imgPart}${opt}${q.correct.includes(j) ? ' *' : ''}\n`;
             });
         }
-        
+
+        // Output per-option explanations using EXPLAIN_X: format
+        if (q.optionExplanations && q.type !== 'truefalse' && q.type !== 'matching' && q.type !== 'ordering') {
+            const expKeys = Object.keys(q.optionExplanations).map(Number).sort((a, b) => a - b);
+            expKeys.forEach(idx => {
+                if (q.optionExplanations[idx]) {
+                    const letter = String.fromCharCode(65 + idx);
+                    text += `EXPLAIN_${letter}: ${q.optionExplanations[idx]}\n`;
+                }
+            });
+        }
+
         if (q.explanation) text += `[explanation: ${q.explanation}]\n`;
         
         return text;

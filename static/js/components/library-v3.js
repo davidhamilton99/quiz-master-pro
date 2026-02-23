@@ -2,6 +2,7 @@
 import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
 import { logout, deleteQuiz } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
+import { icon } from '../utils/icons.js';
 
 // View mode
 let viewMode = 'grid'; // 'grid' or 'list'
@@ -37,21 +38,34 @@ export function renderLibrary() {
         <div class="container">
             <div class="header-top">
                 <div class="brand">
-                    <div class="brand-logo">🎓</div>
+                    <div class="brand-logo">${icon('graduationCap', 'icon-lg')}</div>
                     <span class="brand-name">Quiz Master Pro</span>
                 </div>
-                
-                <div class="header-actions">
-                    <button class="btn btn-ghost btn-icon" onclick="window.app.navigate('studyGuide')" title="Study Guide Builder">
-                        📚
+
+                <nav class="header-nav">
+                    <button class="nav-link active" onclick="window.app.navigate('library')">
+                        <span class="nav-icon">${icon('library')}</span>
+                        <span class="nav-text">Library</span>
                     </button>
+                    <button class="nav-link" onclick="window.app.loadDashboard()">
+                        <span class="nav-icon">${icon('barChart')}</span>
+                        <span class="nav-text">Dashboard</span>
+                    </button>
+                    <button class="nav-link" onclick="window.app.navigate('studyGuide')">
+                        <span class="nav-icon">${icon('bookOpen')}</span>
+                        <span class="nav-text">Study Guide</span>
+                    </button>
+                </nav>
+
+                <div class="header-actions">
                     <button class="btn btn-primary" onclick="window.app.showCreateOptions()">
-                        <span class="btn-icon-left">+</span>
+                        ${icon('plus')}
                         Create
                     </button>
                     <div class="user-menu">
                         <button class="user-avatar" onclick="window.app.toggleMenu()">
-                            ${state.user?.username?.charAt(0).toUpperCase() || 'U'}
+                            <span class="avatar-initial">${state.user?.username?.charAt(0).toUpperCase() || 'U'}</span>
+                            <span class="avatar-chevron">▾</span>
                         </button>
                         <div id="user-menu" class="dropdown-menu hidden">
                             <div class="dropdown-header">
@@ -60,11 +74,11 @@ export function renderLibrary() {
                             </div>
                             <div class="dropdown-divider"></div>
                             <button class="dropdown-item" onclick="window.app.showImportModal()">
-                                📥 Import Quiz
+                                ${icon('download')} Import Quiz
                             </button>
                             <div class="dropdown-divider"></div>
                             <button class="dropdown-item text-danger" onclick="window.app.logout()">
-                                🚪 Sign Out
+                                ${icon('logOut')} Sign Out
                             </button>
                         </div>
                     </div>
@@ -78,32 +92,20 @@ export function renderLibrary() {
         <div class="container">
             <div class="stats-grid">
                 <div class="stat-item">
-                    <div class="stat-icon">🔥</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${profile.dailyStreak || 0}</div>
-                        <div class="stat-label">Day Streak</div>
-                    </div>
+                    <div class="stat-value">${profile.dailyStreak || 0}</div>
+                    <div class="stat-label">Day Streak</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-icon">📚</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${state.quizzes.length}</div>
-                        <div class="stat-label">Quiz Sets</div>
-                    </div>
+                    <div class="stat-value">${state.quizzes.length}</div>
+                    <div class="stat-label">Quiz Sets</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-icon">❓</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${total.toLocaleString()}</div>
-                        <div class="stat-label">Questions</div>
-                    </div>
+                    <div class="stat-value">${total.toLocaleString()}</div>
+                    <div class="stat-label">Questions</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-icon">⭐</div>
-                    <div class="stat-content">
-                        <div class="stat-value">${levelInfo.level || 1}</div>
-                        <div class="stat-label">Level</div>
-                    </div>
+                    <div class="stat-value">${levelInfo.level || 1}</div>
+                    <div class="stat-label">Level</div>
                 </div>
             </div>
         </div>
@@ -117,7 +119,7 @@ export function renderLibrary() {
                 ${inProgressQuizzes.length > 0 ? `
                 <section class="library-section">
                     <div class="section-header">
-                        <h2>📖 Continue Studying</h2>
+                        <h2>${icon('bookOpen')} Continue Studying</h2>
                         <span class="section-badge">${inProgressQuizzes.length} in progress</span>
                     </div>
                     <div class="continue-cards">
@@ -129,7 +131,7 @@ export function renderLibrary() {
                 <!-- Search and Filters -->
                 <section class="library-section">
                     <div class="section-header">
-                        <h2>📁 My Library</h2>
+                        <h2>${icon('folder')} My Library</h2>
                         <div class="view-toggles">
                             <button class="view-toggle ${viewMode === 'grid' ? 'active' : ''}" onclick="window.app.setViewMode('grid')" title="Grid view">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -151,7 +153,7 @@ export function renderLibrary() {
                     
                     <div class="filters-bar">
                         <div class="search-wrapper">
-                            <span class="search-icon">🔍</span>
+                            <span class="search-icon">${icon('search')}</span>
                             <input 
                                 type="text" 
                                 class="search-input" 
@@ -186,7 +188,7 @@ export function renderLibrary() {
                     
                     ${quizzes.length === 0 ? `
                         <div class="no-results">
-                            <div class="no-results-icon">🔍</div>
+                            <div class="no-results-icon">${icon('search', 'icon-2xl')}</div>
                             <p>No quizzes match your search</p>
                             <button class="btn btn-ghost" onclick="window.app.clearFilters()">Clear filters</button>
                         </div>
@@ -209,8 +211,8 @@ function renderEmptyState() {
     return `
     <div class="empty-state">
         <div class="empty-illustration">
-            <div class="empty-icon">📚</div>
-            <div class="empty-sparkles">✨</div>
+            <div class="empty-icon">${icon('library', 'icon-3xl')}</div>
+            <div class="empty-sparkles">${icon('sparkles', 'icon-xl')}</div>
         </div>
         <h2>Create your first quiz</h2>
         <p>Turn your notes into interactive quizzes with AI assistance</p>
@@ -240,7 +242,7 @@ function renderEmptyState() {
         </div>
         
         <button class="btn btn-primary btn-lg" onclick="window.app.showCreateOptions()">
-            <span class="btn-icon-left">✨</span>
+            ${icon('sparkles')}
             Create Your First Quiz
         </button>
         
@@ -282,7 +284,7 @@ function renderContinueCard(quiz) {
 function renderQuizCard(quiz, progressList) {
     const progress = progressList.find(p => p.quizId === quiz.id);
     const count = quiz.questions?.length || 0;
-    const mastery = quiz.mastery || 0; // TODO: Calculate from attempts
+    const mastery = quiz.mastery || 0;
     
     return `
     <div class="quiz-card-v3" onclick="window.app.openStudyModal(${quiz.id})">
@@ -295,9 +297,9 @@ function renderQuizCard(quiz, progressList) {
                     ⋮
                 </button>
                 <div id="card-menu-${quiz.id}" class="card-menu hidden">
-                    <button onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">✏️ Edit</button>
-                    <button onclick="event.stopPropagation(); window.app.showExportModal(${quiz.id})">📤 Export</button>
-                    <button class="text-danger" onclick="event.stopPropagation(); window.app.confirmDelete(${quiz.id})">🗑️ Delete</button>
+                    <button onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">${icon('edit')} Edit</button>
+                    <button onclick="event.stopPropagation(); window.app.showExportModal(${quiz.id})">${icon('share')} Export</button>
+                    <button class="text-danger" onclick="event.stopPropagation(); window.app.confirmDelete(${quiz.id})">${icon('trash')} Delete</button>
                 </div>
             </div>
             
@@ -305,13 +307,11 @@ function renderQuizCard(quiz, progressList) {
             
             <div class="quiz-card-stats">
                 <span class="quiz-stat">
-                    <span class="stat-icon">📝</span>
-                    ${count} terms
+                    ${icon('layers')} ${count} terms
                 </span>
                 ${progress ? `
                     <span class="quiz-stat in-progress">
-                        <span class="stat-icon">⏸</span>
-                        ${Math.round((progress.questionIndex / count) * 100)}% done
+                        ${icon('clock')} ${Math.round((progress.questionIndex / count) * 100)}% done
                     </span>
                 ` : ''}
             </div>
@@ -320,13 +320,13 @@ function renderQuizCard(quiz, progressList) {
         <div class="quiz-card-footer">
             <div class="study-modes">
                 <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startFlashcards(${quiz.id})" title="Flashcards">
-                    🃏
+                    ${icon('layers')}
                 </button>
                 <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startQuiz(${quiz.id}, {studyMode: true})" title="Learn">
-                    📖
+                    ${icon('bookOpen')}
                 </button>
                 <button class="study-mode-btn" onclick="event.stopPropagation(); window.app.startQuiz(${quiz.id}, {studyMode: false})" title="Test">
-                    ✍️
+                    ${icon('penLine')}
                 </button>
             </div>
             <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.app.openStudyModal(${quiz.id})">
@@ -354,8 +354,8 @@ function renderQuizRow(quiz, progressList) {
             </div>
         </div>
         <div class="quiz-row-actions">
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.app.startFlashcards(${quiz.id})">🃏</button>
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">✏️</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.app.startFlashcards(${quiz.id})">${icon('layers')}</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window.app.editQuiz(${quiz.id})">${icon('edit')}</button>
             <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.app.openStudyModal(${quiz.id})">Study</button>
         </div>
     </div>
@@ -378,36 +378,36 @@ function renderStudyModal(quiz) {
             
             <div class="study-modes-grid">
                 <button class="study-mode-card" onclick="window.app.startFlashcards(${quiz.id})">
-                    <div class="mode-icon">🃏</div>
+                    <div class="mode-icon">${icon('layers', 'icon-2xl')}</div>
                     <div class="mode-name">Flashcards</div>
                     <div class="mode-desc">Review terms one by one</div>
                 </button>
-                
+
                 <button class="study-mode-card" onclick="window.app.startQuiz(${quiz.id}, {studyMode: true})">
-                    <div class="mode-icon">📖</div>
+                    <div class="mode-icon">${icon('bookOpen', 'icon-2xl')}</div>
                     <div class="mode-name">Learn</div>
                     <div class="mode-desc">Study with instant feedback</div>
                 </button>
-                
+
                 <button class="study-mode-card" onclick="window.app.startQuiz(${quiz.id}, {studyMode: false})">
-                    <div class="mode-icon">✍️</div>
+                    <div class="mode-icon">${icon('penLine', 'icon-2xl')}</div>
                     <div class="mode-name">Test</div>
                     <div class="mode-desc">Challenge yourself</div>
                 </button>
-                
+
                 <button class="study-mode-card" onclick="window.app.startQuiz(${quiz.id}, {studyMode: false, timed: true, minutes: 10})">
-                    <div class="mode-icon">⏱️</div>
+                    <div class="mode-icon">${icon('clock', 'icon-2xl')}</div>
                     <div class="mode-name">Timed Test</div>
                     <div class="mode-desc">Race against the clock</div>
                 </button>
             </div>
-            
+
             <div class="study-modal-footer">
                 <button class="btn btn-ghost" onclick="window.app.editQuiz(${quiz.id})">
-                    ✏️ Edit Quiz
+                    ${icon('edit')} Edit Quiz
                 </button>
                 <button class="btn btn-ghost" onclick="window.app.showExportModal(${quiz.id})">
-                    📤 Export
+                    ${icon('share')} Export
                 </button>
             </div>
         </div>
@@ -573,9 +573,31 @@ export function toggleCardMenu(quizId) {
 export async function confirmDelete(quizId) {
     const state = getState();
     const quiz = state.quizzes.find(q => q.id === quizId);
-    if (quiz && confirm(`Delete "${quiz.title}"? This cannot be undone.`)) {
+    if (!quiz) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Delete Quiz</h2>
+                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>${escapeHtml(quiz.title)}</strong>? This cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+                <button class="btn btn-primary danger" id="confirm-delete-btn">${icon('trash')} Delete</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#confirm-delete-btn').addEventListener('click', async () => {
+        overlay.remove();
         await deleteQuiz(quizId);
-    }
+    });
 }
 
 // Close menus when clicking outside

@@ -1,6 +1,7 @@
-/* Results Component - SPECTACULAR Edition */
+/* Results Component */
 import { getState, setState, getLevelInfo, getUnlockedAchievements } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
+import { icon } from '../utils/icons.js';
 
 export function renderResults() {
     const state = getState();
@@ -28,7 +29,7 @@ export function renderResults() {
         <div class="results-page">
             <div class="container">
                 <div class="results-hero">
-                    ${isPerfect ? '<div class="perfect-banner">🏆 PERFECT SCORE! 🏆</div>' : ''}
+                    ${isPerfect ? `<div class="perfect-banner">${icon('trophy')} PERFECT SCORE ${icon('trophy')}</div>` : ''}
                     
                     <div class="results-score ${isPerfect ? 'perfect' : ''}" style="--score-color: ${getScoreColor(percentage)}">
                         <span class="results-score-pct" id="score-counter">0</span>
@@ -67,7 +68,7 @@ export function renderResults() {
                             </div>
                             <div class="streak-info">
                                 ${profile.dailyStreak > 0 ? `
-                                    <span class="streak-badge">🔥 ${profile.dailyStreak} day streak</span>
+                                    <span class="streak-badge">${icon('flame')} ${profile.dailyStreak} day streak</span>
                                 ` : ''}
                             </div>
                         </div>
@@ -79,13 +80,13 @@ export function renderResults() {
                     
                     <div class="results-actions">
                         <button class="btn btn-primary btn-lg" onclick="window.app.retryQuiz()">
-                            🔄 Try Again
+                            ${icon('rotateCcw')} Try Again
                         </button>
                         <button class="btn btn-secondary" onclick="window.app.reviewQuiz()">
-                            📝 Review Answers
+                            ${icon('fileText')} Review Answers
                         </button>
                         <button class="btn btn-ghost" onclick="window.app.navigate('library')">
-                            ← Back to Library
+                            ${icon('arrowLeft')} Back to Library
                         </button>
                     </div>
                 </div>
@@ -104,7 +105,7 @@ export function renderReview() {
     return `
         <div class="review-page">
             <header class="quiz-header">
-                <button class="btn btn-ghost" onclick="window.app.navigate('results')">← Back to Results</button>
+                <button class="btn btn-ghost" onclick="window.app.navigate('results')">${icon('arrowLeft')} Back to Results</button>
                 <h2>${escapeHtml(quiz.title)} - Review</h2>
                 <div></div>
             </header>
@@ -114,9 +115,9 @@ export function renderReview() {
                         <button class="btn btn-sm ${state.reviewFilter === 'all' ? 'btn-primary' : 'btn-secondary'}" 
                             onclick="window.app.setReviewFilter('all')">All</button>
                         <button class="btn btn-sm ${state.reviewFilter === 'incorrect' ? 'btn-primary' : 'btn-secondary'}" 
-                            onclick="window.app.setReviewFilter('incorrect')">❌ Incorrect Only</button>
+                            onclick="window.app.setReviewFilter('incorrect')">Incorrect Only</button>
                         <button class="btn btn-sm ${state.reviewFilter === 'correct' ? 'btn-primary' : 'btn-secondary'}" 
-                            onclick="window.app.setReviewFilter('correct')">✓ Correct Only</button>
+                            onclick="window.app.setReviewFilter('correct')">Correct Only</button>
                     </div>
                     
                     ${quiz.questions.map((q, i) => {
@@ -135,7 +136,7 @@ export function renderReview() {
                                 </div>
                                 ${q.code ? `<pre class="code-block"><code>${escapeHtml(q.code)}</code></pre>` : ''}
                                 ${renderReviewAnswer(q, userAnswer, isCorrect)}
-                                ${q.explanation ? `<div class="explanation mt-3"><strong>💡</strong> ${escapeHtml(q.explanation)}</div>` : ''}
+                                ${q.explanation ? `<div class="explanation mt-3"><strong>${icon('lightbulb')}</strong> ${escapeHtml(q.explanation)}</div>` : ''}
                             </div>
                         `;
                     }).join('')}
@@ -256,13 +257,13 @@ function checkIfCorrect(answer, question) {
 }
 
 function getMessage(percentage) {
-    if (percentage === 100) return { emoji: '🏆', text: 'PERFECT!' };
-    if (percentage >= 90) return { emoji: '🌟', text: 'Outstanding!' };
-    if (percentage >= 80) return { emoji: '🎉', text: 'Great job!' };
-    if (percentage >= 70) return { emoji: '👍', text: 'Good work!' };
-    if (percentage >= 60) return { emoji: '📚', text: 'Keep practicing!' };
-    if (percentage >= 50) return { emoji: '💪', text: 'You can do better!' };
-    return { emoji: '📖', text: 'Time to study more!' };
+    if (percentage === 100) return { emoji: '', text: 'Perfect!' };
+    if (percentage >= 90) return { emoji: '', text: 'Outstanding!' };
+    if (percentage >= 80) return { emoji: '', text: 'Great job!' };
+    if (percentage >= 70) return { emoji: '', text: 'Good work!' };
+    if (percentage >= 60) return { emoji: '', text: 'Keep practicing!' };
+    if (percentage >= 50) return { emoji: '', text: 'You can do better!' };
+    return { emoji: '', text: 'Time to study more!' };
 }
 
 function getScoreColor(percentage) {
