@@ -689,11 +689,12 @@ export function toggleCardMenu(quizId, btnEl) {
     menu.className = 'card-menu card-menu-float';
     menu.dataset.quizId = quizId;
     menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;right:${window.innerWidth - rect.right}px;z-index:9999;`;
+    const close = `document.querySelectorAll('.card-menu-float').forEach(m=>m.remove());`;
     menu.innerHTML = `
-        <button onclick="window.app.editQuiz(${quizId})">${icon('edit')} Edit</button>
-        <button onclick="window.app.showShareSettings(${quizId})">${icon('globe')} Share</button>
-        <button onclick="window.app.showExportModal(${quizId})">${icon('share')} Export</button>
-        <button class="text-danger" onclick="window.app.confirmDelete(${quizId})">${icon('trash')} Delete</button>
+        <button onclick="${close} window.app.editQuiz(${quizId})">${icon('edit')} Edit</button>
+        <button onclick="${close} window.app.showShareSettings(${quizId})">${icon('globe')} Share</button>
+        <button onclick="${close} window.app.showExportModal(${quizId})">${icon('share')} Export</button>
+        <button class="text-danger" onclick="${close} window.app.confirmDelete(${quizId})">${icon('trash')} Delete</button>
     `;
     document.body.appendChild(menu);
 }
