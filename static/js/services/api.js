@@ -542,6 +542,26 @@ export async function getSrsStats() {
     return await apiCall('/srs/stats');
 }
 
+// ==================== Quiz Settings (Phase 2 - Share/Public) ====================
+
+/**
+ * PATCH /api/quizzes/:id/settings — update is_public and certification_id
+ */
+export async function updateQuizSettings(id, { isPublic, certificationId }) {
+    try {
+        await apiCall(`/quizzes/${id}/settings`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_public: isPublic, certification_id: certificationId || null }),
+        });
+        await loadQuizzes();
+        showToast(isPublic ? 'Quiz is now public!' : 'Quiz set to private', 'success');
+        return { success: true };
+    } catch (err) {
+        showToast(err.message || 'Failed to update settings', 'error');
+        return { success: false };
+    }
+}
+
 // ==================== Bookmarks (stubs) ====================
 
 /**
