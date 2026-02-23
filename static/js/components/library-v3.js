@@ -1,6 +1,6 @@
 /* Library Component - v3.0 Quizlet-Inspired Redesign */
 import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
-import { logout, deleteQuiz, updateQuizSettings } from '../services/api.js';
+import { logout, deleteQuiz, updateQuizSettings, getCertifications } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 
@@ -620,7 +620,15 @@ export async function showShareSettings(quizId) {
     const quiz = state.quizzes.find(q => q.id === quizId);
     if (!quiz) return;
 
-    const certs = state.certifications || [];
+    // Fetch certs lazily — they may not be loaded yet on the library page
+    let certs = state.certifications || [];
+    if (!certs.length) {
+        try {
+            certs = await getCertifications();
+            setState({ certifications: certs });
+        } catch (e) { /* proceed with empty list */ }
+    }
+
     const certOptions = certs.map(c =>
         `<option value="${c.id}" ${quiz.certification_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
     ).join('');
@@ -628,27 +636,27 @@ export async function showShareSettings(quizId) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
-        <div class="modal">
+        <div class="modal share-settings-modal">
             <div class="modal-header">
                 <h2>${icon('globe')} Share Settings</h2>
                 <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
             </div>
-            <div class="modal-body" style="display:flex;flex-direction:column;gap:1.25rem;">
-                <label class="share-toggle-row">
-                    <div>
-                        <div style="font-weight:600">Make Public</div>
-                        <div style="font-size:0.85rem;color:var(--text-muted)">Anyone can find and study this quiz</div>
+            <div class="modal-body">
+                <div class="share-toggle-row">
+                    <div class="share-toggle-info">
+                        <div class="share-toggle-label">Make Public</div>
+                        <div class="share-toggle-desc">Anyone can find and study this quiz</div>
                     </div>
                     <input type="checkbox" id="share-public-toggle" class="toggle-checkbox" ${quiz.is_public ? 'checked' : ''}>
-                </label>
-                <label>
-                    <div style="font-weight:600;margin-bottom:0.4rem">Link to Certification <span style="font-weight:400;color:var(--text-muted)">(optional)</span></div>
-                    <select id="share-cert-select" class="form-control">
+                </div>
+                <div class="share-cert-section">
+                    <div class="share-cert-label">Link to Certification <span class="share-cert-optional">(optional)</span></div>
+                    <select id="share-cert-select" class="share-cert-select">
                         <option value="">— None —</option>
                         ${certOptions}
                     </select>
-                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.3rem">Helps students find it in the right cert section</div>
-                </label>
+                    <div class="share-cert-hint">Helps students find it under the right certification</div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
