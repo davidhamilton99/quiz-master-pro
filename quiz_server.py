@@ -908,7 +908,9 @@ def create_quiz():
 def get_quiz(id):
     conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', (id, request.user_id))
+    # Allow fetching owned quizzes OR public quizzes (for community study)
+    c.execute('SELECT *, (user_id = ?) as is_owned FROM quizzes WHERE id = ? AND (user_id = ? OR is_public = 1)',
+              (request.user_id, id, request.user_id))
     quiz = c.fetchone()
 
     if not quiz:

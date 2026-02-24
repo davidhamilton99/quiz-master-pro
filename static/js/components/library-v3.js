@@ -509,22 +509,17 @@ function renderStudyModal(quiz) {
             </div>
 
             <div class="study-modal-footer">
-                ${quiz.is_owned ? `
+                ${isOwned ? `
                 <button class="btn btn-ghost" onclick="window.app.editQuiz(${quiz.id})">
                     ${icon('edit')} Edit Quiz
                 </button>
-                <button class="btn btn-ghost" onclick="window.app.showShareSettings(${quiz.id})">
+                <button class="btn btn-ghost" onclick="window.app.closeStudyModal(); window.app.showShareSettings(${quiz.id})">
                     ${icon('globe')} Share
                 </button>
                 ` : ''}
                 <button class="btn btn-ghost" onclick="window.app.showExportModal(${quiz.id})">
                     ${icon('share')} Export
                 </button>
-                ${isOwned ? `
-                <button class="btn btn-ghost" onclick="window.app.closeStudyModal(); window.app.showShareSettings(${quiz.id})">
-                    ${icon('globe')} Share
-                </button>
-                ` : ''}
             </div>
         </div>
     </div>
