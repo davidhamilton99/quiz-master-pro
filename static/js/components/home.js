@@ -3,22 +3,25 @@ import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInf
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { renderNav } from '../utils/nav.js';
-import { getWeakQuestions, getCertReadiness } from '../services/api.js';
+import { getWeakQuestions, getCertReadiness, getSrsStats } from '../services/api.js';
 
 // Per-session cache
 let _homeReadiness = null;   // { overall_score, ... } for primary cert
 let _homeWeakQs = [];        // array of weak question records
+let _homeSrsStats = null;    // SRS stats cache
 let _homeDataLoaded = false;
 
 /** Fetch home data asynchronously (runs once per session, re-fetches if cert changes) */
 export async function loadHomeData(certId) {
     try {
-        const [readiness, weakQs] = await Promise.all([
+        const [readiness, weakQs, srsStats] = await Promise.all([
             getCertReadiness(certId),
             getWeakQuestions(certId, 3),
+            getSrsStats().catch(() => null),
         ]);
         _homeReadiness = readiness;
         _homeWeakQs = weakQs || [];
+        _homeSrsStats = srsStats;
     } catch (e) {
         console.warn('Home data load failed:', e);
     }
@@ -29,6 +32,7 @@ export async function loadHomeData(certId) {
 export function resetHomeCache() {
     _homeReadiness = null;
     _homeWeakQs = [];
+    _homeSrsStats = null;
     _homeDataLoaded = false;
 }
 
@@ -41,10 +45,19 @@ export function renderHome() {
     const primaryCert = certs[0] || null;
 
     // Trigger async load if needed
-    if (primaryCert && !_homeDataLoaded) {
-        loadHomeData(primaryCert.certification_id).then(() => {
-            if (getState().view === 'home') setState({}, true);
-        });
+    if (!_homeDataLoaded) {
+        if (primaryCert) {
+            loadHomeData(primaryCert.certification_id).then(() => {
+                if (getState().view === 'home') setState({}, true);
+            });
+        } else {
+            // Load SRS stats even without a cert
+            getSrsStats().catch(() => null).then(stats => {
+                _homeSrsStats = stats;
+                _homeDataLoaded = true;
+                if (getState().view === 'home') setState({}, true);
+            });
+        }
     }
 
     // Resume card - most recent in-progress quiz
@@ -101,6 +114,28 @@ export function renderHome() {
                         <div class="resume-meta text-muted">Question ${resumeProgress.questionIndex + 1} of ${resumeQuiz.questions?.length || 0}</div>
                     </div>
                     <button class="btn btn-primary btn-sm">Continue →</button>
+                </div>
+            </section>
+            ` : ''}
+
+            <!-- SRS Review Card -->
+            ${_homeSrsStats && _homeSrsStats.due_today > 0 ? `
+            <section class="home-section">
+                <h2 class="home-section-title">${icon('brain')} Spaced Repetition</h2>
+                <div class="home-resume-card" onclick="window.app.startSrsReview()" style="cursor:pointer">
+                    <div class="resume-ring">
+                        <svg viewBox="0 0 36 36" class="ring-svg">
+                            <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                            <path class="ring-fill" stroke-dasharray="${_homeSrsStats.total_cards > 0 ? Math.round((_homeSrsStats.graduated / _homeSrsStats.total_cards) * 100) : 0}, 100"
+                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        </svg>
+                        <div class="ring-pct">${_homeSrsStats.due_today}</div>
+                    </div>
+                    <div class="resume-info">
+                        <div class="resume-title">${_homeSrsStats.due_today} card${_homeSrsStats.due_today !== 1 ? 's' : ''} due for review</div>
+                        <div class="resume-meta text-muted">${_homeSrsStats.total_cards} total &middot; ${_homeSrsStats.graduated || 0} mastered</div>
+                    </div>
+                    <button class="btn btn-primary btn-sm">Review</button>
                 </div>
             </section>
             ` : ''}

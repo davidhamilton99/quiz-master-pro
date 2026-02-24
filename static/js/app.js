@@ -41,6 +41,9 @@ import {
     fcTouchStart, fcTouchMove, fcTouchEnd
 } from './components/flashcards.js';
 
+// SRS Review
+import { renderSrsReview, initSrsReview, srsFlip, srsRate, exitSrsReview } from './components/srsReview.js';
+
 // Dashboard
 import { renderDashboard, loadStudyStats } from './components/dashboard.js';
 import { renderCertPicker } from './components/certPicker.js';
@@ -312,6 +315,9 @@ function renderInternal() {
         case 'flashcards':
             content = renderFlashcards();
             break;
+        case 'srsReview':
+            content = renderSrsReview();
+            break;
         case 'dashboard':
             content = renderDashboard();
             break;
@@ -433,6 +439,16 @@ window.app = {
     setCommunityFilter,
     setCommunitySearch,
     clearCommunitySearch: () => setCommunitySearch(''),
+    copyQuizToLibrary: async (quizId) => {
+        const { copyQuizToLibrary, loadQuizzes } = await import('./services/api.js');
+        try {
+            await copyQuizToLibrary(quizId);
+            await loadQuizzes();
+            showToast('Quiz copied to your library!', 'success');
+        } catch (e) {
+            showToast(e.message || 'Failed to copy quiz', 'error');
+        }
+    },
     studyCommunityQuiz: async (quizId) => {
         const { getQuiz } = await import('./services/api.js');
         try {
@@ -572,6 +588,12 @@ window.app = {
     fcTouchMove,
     fcTouchEnd,
     
+
+    // SRS Review
+    startSrsReview: () => initSrsReview(),
+    srsFlip,
+    srsRate,
+    exitSrsReview,
 
     // Dashboard & Certifications
     showCertPicker: async () => {

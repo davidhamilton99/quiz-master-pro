@@ -1152,3 +1152,260 @@
         padding-bottom: calc(0.625rem + env(safe-area-inset-bottom));
     }
 }
+
+/* ==================== SRS Review Component ==================== */
+.srs-container {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 50%, #0f0f2a 100%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1000;
+    user-select: none;
+}
+
+.srs-loading, .srs-empty, .srs-complete {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    color: #fff;
+}
+
+.srs-empty-icon, .srs-complete-icon { font-size: 4rem; margin-bottom: 1rem; }
+.srs-empty h2, .srs-complete h2 { font-size: 1.75rem; margin: 0 0 0.5rem; color: #fff; }
+
+.srs-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    flex-shrink: 0;
+}
+
+.srs-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.srs-counter {
+    font-size: 0.875rem;
+    color: rgba(255,255,255,0.6);
+}
+
+.srs-progress-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    margin: 0 1.25rem;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.srs-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #8b5cf6, #ec4899);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.srs-stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 0.75rem 1rem;
+    flex-shrink: 0;
+}
+
+.srs-stat { display: flex; flex-direction: column; align-items: center; }
+.srs-stat-num { font-size: 1.25rem; font-weight: 700; color: #fff; }
+.srs-stat-label { font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.125rem; }
+
+.srs-card-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    perspective: 2000px;
+    min-height: 0;
+}
+
+.srs-card {
+    width: 100%;
+    max-width: 450px;
+    min-height: 280px;
+    height: 320px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.srs-card.flipped { transform: rotateY(180deg); }
+
+.srs-card-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 24px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1);
+    overflow-y: auto;
+}
+
+.srs-card-front { background: linear-gradient(145deg, #1e1e4a, #2a2a5a); }
+.srs-card-back { background: linear-gradient(145deg, #1a4a3a, #0d5a3a); transform: rotateY(180deg); }
+
+.srs-card-type {
+    font-size: 0.75rem;
+    color: #c4b5fd;
+    padding: 0.375rem 0.75rem;
+    background: rgba(139,92,246,0.2);
+    border-radius: 8px;
+    align-self: flex-start;
+    flex-shrink: 0;
+}
+
+.srs-card-label {
+    font-size: 0.75rem;
+    color: #86efac;
+    padding: 0.375rem 0.75rem;
+    background: rgba(34,197,94,0.2);
+    border-radius: 8px;
+    align-self: flex-start;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.srs-card-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.125rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.srs-card-content p { margin: 0.25rem 0; }
+.srs-answer { color: #86efac; font-weight: 500; }
+.srs-answer p { color: #86efac; }
+
+.srs-explanation {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.4;
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.srs-tap-hint {
+    text-align: center;
+    margin-top: auto;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.35);
+}
+
+.srs-rating-area {
+    padding: 0.75rem 1.25rem 1.5rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.srs-rating-area.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.srs-rating-prompt {
+    text-align: center;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 0.75rem;
+}
+
+.srs-rating-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    max-width: 450px;
+    margin: 0 auto;
+}
+
+.srs-rate-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.875rem 0.5rem;
+    background: rgba(255,255,255,0.05);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #fff;
+}
+
+.srs-rate-btn:active { transform: scale(0.95); }
+.srs-rate-label { font-size: 0.8rem; font-weight: 600; }
+.srs-rate-desc { font-size: 0.65rem; color: rgba(255,255,255,0.4); }
+
+.srs-rate-again:hover { background: rgba(239,68,68,0.2); border-color: #ef4444; }
+.srs-rate-hard:hover { background: rgba(245,158,11,0.2); border-color: #f59e0b; }
+.srs-rate-good:hover { background: rgba(59,130,246,0.2); border-color: #3b82f6; }
+.srs-rate-easy:hover { background: rgba(34,197,94,0.2); border-color: #22c55e; }
+
+.srs-overview-stats, .srs-complete-stats {
+    display: flex;
+    gap: 2rem;
+    margin: 1.5rem 0;
+}
+
+.srs-overview-stat, .srs-comp-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    min-width: 80px;
+}
+
+.srs-overview-stat strong, .srs-comp-num { font-size: 1.5rem; font-weight: 700; }
+.srs-overview-stat span, .srs-comp-stat span:last-child { font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem; }
+
+.srs-complete-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 480px) {
+    .srs-card { max-width: none; height: auto; min-height: 250px; }
+    .srs-stats-bar { gap: 1rem; padding: 0.5rem; }
+    .srs-stat-num { font-size: 1rem; }
+    .srs-rating-area { padding: 0.5rem 0.75rem 1rem; }
+    .srs-rate-btn { padding: 0.625rem 0.25rem; border-radius: 12px; }
+}

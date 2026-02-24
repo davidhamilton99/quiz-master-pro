@@ -159,6 +159,9 @@ function renderCommunityCard(quiz) {
             <button class="btn btn-primary btn-sm" onclick="window.app.studyCommunityQuiz(${quiz.id})">
                 ${icon('bookOpen')} Study
             </button>
+            <button class="btn btn-secondary btn-sm" onclick="window.app.copyQuizToLibrary(${quiz.id})">
+                ${icon('copy')} Copy to Library
+            </button>
         </div>
     </div>
     `;
