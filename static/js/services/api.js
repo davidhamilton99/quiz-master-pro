@@ -104,17 +104,17 @@ export async function login(username, password) {
         
         // Update state via callback
         if (stateUpdater) {
-            stateUpdater({ 
-                token: data.token, 
-                user: data.user, 
-                isAuthenticated: true, 
-                view: 'library'
+            stateUpdater({
+                token: data.token,
+                user: data.user,
+                isAuthenticated: true,
+                view: 'home'
             });
         }
-        
+
         // Load quizzes
         await loadQuizzes();
-        
+
         showToast(`Welcome back, ${data.user.username}!`, 'success');
         
         // Return proper object (Bug #3 fix)
@@ -143,17 +143,17 @@ export async function register(username, password, email = null) {
         
         // Update state via callback
         if (stateUpdater) {
-            stateUpdater({ 
-                token: data.token, 
-                user: data.user, 
-                isAuthenticated: true, 
-                view: 'library'
+            stateUpdater({
+                token: data.token,
+                user: data.user,
+                isAuthenticated: true,
+                view: 'home'
             });
         }
-        
+
         // Load quizzes
         await loadQuizzes();
-        
+
         showToast('Account created successfully!', 'success');
         
         // Return proper object (Bug #3 fix)

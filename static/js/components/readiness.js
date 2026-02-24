@@ -87,7 +87,7 @@ export function renderReadiness() {
     }
 
     const activeCert = certs.find(c => c.certification_id === _activeCertId) || certs[0];
-    const readinessScore = _readiness?.readiness_score ?? 0;
+    const readinessScore = _readiness?.overall_score ?? 0;
     const gaugeClass = readinessScore >= 70 ? 'gauge-good' : readinessScore >= 40 ? 'gauge-ok' : 'gauge-low';
 
     return `

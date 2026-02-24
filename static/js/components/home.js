@@ -6,7 +6,7 @@ import { renderNav } from '../utils/nav.js';
 import { getWeakQuestions, getCertReadiness } from '../services/api.js';
 
 // Per-session cache
-let _homeReadiness = null;   // { readiness_score, ... } for primary cert
+let _homeReadiness = null;   // { overall_score, ... } for primary cert
 let _homeWeakQs = [];        // array of weak question records
 let _homeDataLoaded = false;
 
@@ -53,7 +53,7 @@ export function renderHome() {
         ? (state.quizzes || []).find(q => q.id === resumeProgress.quizId)
         : null;
 
-    const readinessScore = _homeReadiness?.readiness_score ?? null;
+    const readinessScore = _homeReadiness?.overall_score ?? null;
 
     return `
     ${renderNav('home')}

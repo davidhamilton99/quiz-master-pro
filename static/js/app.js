@@ -435,9 +435,20 @@ window.app = {
     clearCommunitySearch: () => setCommunitySearch(''),
     studyCommunityQuiz: async (quizId) => {
         const { getQuiz } = await import('./services/api.js');
-        const quiz = await getQuiz(quizId).catch(() => null);
-        if (quiz) { openStudyModal(quiz.id); setState({ quizzes: [...(getState().quizzes || []), quiz] }); }
-        else { showToast('Could not load quiz', 'error'); }
+        try {
+            showLoading();
+            const quiz = await getQuiz(quizId);
+            hideLoading();
+            // Add to state.quizzes if not already present, THEN open modal
+            const existing = (getState().quizzes || []);
+            if (!existing.find(q => q.id === quiz.id)) {
+                setState({ quizzes: [...existing, quiz] }, true);
+            }
+            openStudyModal(quiz.id);
+        } catch (e) {
+            hideLoading();
+            showToast('Could not load quiz', 'error');
+        }
     },
 
     // Readiness
