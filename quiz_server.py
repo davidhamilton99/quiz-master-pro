@@ -13,6 +13,7 @@ import hashlib
 import secrets
 import json
 import os
+import re
 import threading
 from datetime import datetime, timedelta
 from functools import wraps
@@ -430,6 +431,111 @@ def _read_questions_for_quiz(c, quiz_id):
         questions.append(q)
     return questions
 
+# Domain auto-tagging rules: (title_pattern, cert_code_or_None, domain_codes)
+# When cert_code is None, the rule applies to the quiz's own certification.
+# '__all__' means tag to all domains for that certification.
+_DOMAIN_TAG_RULES = [
+    # CCNA
+    (re.compile(r'ccna\s+week\s+[1-3]($|\D)', re.I), 'cisco-ccna-200-301', ['1.0']),
+    (re.compile(r'ccna\s+week\s+4($|\D)', re.I), 'cisco-ccna-200-301', ['2.0']),
+    (re.compile(r'ccna\s+week\s+5($|\D)', re.I), 'cisco-ccna-200-301', ['3.0']),
+    (re.compile(r'ccna\s+week\s+6($|\D)', re.I), 'cisco-ccna-200-301', ['3.0', '4.0']),
+    (re.compile(r'ccna\s+week\s+7($|\D)', re.I), 'cisco-ccna-200-301', ['4.0', '5.0']),
+    (re.compile(r'ccna\s+week\s+8($|\D)', re.I), 'cisco-ccna-200-301', ['5.0']),
+    (re.compile(r'ccna\s+week\s+9($|\D)', re.I), 'cisco-ccna-200-301', ['2.0']),
+    (re.compile(r'ccna\s+week\s+1[0-9]($|\D)', re.I), 'cisco-ccna-200-301', ['6.0']),
+    (re.compile(r'chapter\s+\d+\s+vol\s+1', re.I), 'cisco-ccna-200-301', ['1.0', '2.0', '3.0']),
+    (re.compile(r'chapter\s+\d+\s+vol\s+2', re.I), 'cisco-ccna-200-301', ['4.0', '5.0', '6.0']),
+    # Security+
+    (re.compile(r'security\s+week\s+1($|\D)', re.I), 'comptia-sec-sy0-701', ['1.0']),
+    (re.compile(r'security\s+week\s+2($|\D)', re.I), 'comptia-sec-sy0-701', ['4.0']),
+    (re.compile(r'security\s+week\s+3($|\D)', re.I), 'comptia-sec-sy0-701', ['2.0']),
+    (re.compile(r'security\s+week\s+4($|\D)', re.I), 'comptia-sec-sy0-701', ['3.0']),
+    (re.compile(r'security\s+week\s+5($|\D)', re.I), 'comptia-sec-sy0-701', ['4.0']),
+    (re.compile(r'security\s+week\s+6($|\D)', re.I), 'comptia-sec-sy0-701', ['5.0']),
+    (re.compile(r'security\s+part\s+\d+', re.I), 'comptia-sec-sy0-701', ['__all__']),
+    (re.compile(r'\bcryptography\b', re.I), 'comptia-sec-sy0-701', ['1.0']),
+    (re.compile(r'\bfirewalls?\b', re.I), 'comptia-sec-sy0-701', ['3.0']),
+    # A+ Core 2
+    (re.compile(r'operating\s+systems?\s+part\s+\d+', re.I), 'comptia-a-core2-221-1102', ['1.0']),
+    (re.compile(r'\bsoftware\s+troubleshooting\b', re.I), 'comptia-a-core2-221-1102', ['3.0']),
+    (re.compile(r'\boperational\s+procedures?\b', re.I), 'comptia-a-core2-221-1102', ['4.0']),
+    # Generic practice exams - all domains
+    (re.compile(r'practice\s+exam', re.I), None, ['__all__']),
+    (re.compile(r'mock\s+exam', re.I), None, ['__all__']),
+    (re.compile(r'full\s+exam', re.I), None, ['__all__']),
+    (re.compile(r'final\s+exam', re.I), None, ['__all__']),
+]
+
+def _auto_tag_question_domains(c, quiz_id, cert_id, title):
+    """Automatically tag questions in a quiz to certification domains.
+
+    Uses title-based keyword matching to assign domains. If no specific rule
+    matches but a certification is linked, tags to ALL domains for that cert
+    (so simulations and readiness always have data to work with).
+    """
+    if not cert_id:
+        return
+
+    # Build lookup tables
+    c.execute('SELECT id, code FROM certifications')
+    cert_code_to_id = {r['code']: r['id'] for r in c.fetchall()}
+    cert_id_to_code = {v: k for k, v in cert_code_to_id.items()}
+
+    c.execute('''SELECT id, certification_id, code, weight
+        FROM domains WHERE parent_domain_id IS NULL ORDER BY sort_order''')
+    domains_by_cert = {}
+    domain_by_cert_code = {}
+    for r in c.fetchall():
+        cid = r['certification_id']
+        domains_by_cert.setdefault(cid, []).append(dict(r))
+        domain_by_cert_code[(cid, r['code'])] = r['id']
+
+    # Try to match title to specific domains
+    domain_ids = None
+    title_lower = title.lower() if title else ''
+    for pattern, rule_cert_code, domain_codes in _DOMAIN_TAG_RULES:
+        if not pattern.search(title_lower):
+            continue
+        if rule_cert_code is not None:
+            rule_cert_id = cert_code_to_id.get(rule_cert_code)
+            if rule_cert_id != cert_id:
+                continue
+        else:
+            rule_cert_id = cert_id
+        if rule_cert_id is None:
+            continue
+        if domain_codes == ['__all__']:
+            domain_ids = [d['id'] for d in domains_by_cert.get(rule_cert_id, [])]
+        else:
+            domain_ids = []
+            for code in domain_codes:
+                did = domain_by_cert_code.get((rule_cert_id, code))
+                if did:
+                    domain_ids.append(did)
+        break
+
+    # Fallback: if no specific rule matched, tag to ALL domains for this cert.
+    # This ensures every cert-linked quiz feeds into readiness and simulation.
+    if not domain_ids:
+        domain_ids = [d['id'] for d in domains_by_cert.get(cert_id, [])]
+
+    if not domain_ids:
+        return
+
+    # Get all question IDs for this quiz
+    c.execute('SELECT id FROM questions WHERE quiz_id = ? AND is_active = 1', (quiz_id,))
+    question_ids = [r['id'] for r in c.fetchall()]
+
+    for q_id in question_ids:
+        for d_id in domain_ids:
+            try:
+                c.execute('INSERT OR IGNORE INTO question_domains (question_id, domain_id) VALUES (?, ?)',
+                          (q_id, d_id))
+            except sqlite3.IntegrityError:
+                pass
+
+
 def _migrate_quiz(c, quiz_id, questions_json_str):
     """Migrate a single quiz from JSON blob to normalized questions table."""
     try:
@@ -792,6 +898,7 @@ def create_quiz():
          data.get('color', '#6366f1'), data.get('certification_id')))
     quiz_id = c.lastrowid
     _insert_questions_for_quiz(c, quiz_id, questions_list)
+    _auto_tag_question_domains(c, quiz_id, data.get('certification_id'), title)
     conn.commit()
     conn.close()
     return jsonify({'message': 'Created', 'quiz_id': quiz_id}), 201
@@ -833,6 +940,7 @@ def update_quiz(id):
     # Replace normalized questions: delete old, insert new
     c.execute('DELETE FROM questions WHERE quiz_id = ?', (id,))
     _insert_questions_for_quiz(c, id, questions_list)
+    _auto_tag_question_domains(c, id, data.get('certification_id'), data.get('title'))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Updated'})
@@ -844,16 +952,22 @@ def update_quiz_settings(id):
     data = request.get_json() or {}
     conn = get_db()
     c = conn.cursor()
+    new_cert_id = data.get('certification_id') or None
     with _db_write_lock:
         c.execute('''UPDATE quizzes
                      SET is_public=?, certification_id=?, last_modified=?
                      WHERE id=? AND user_id=?''',
                   (1 if data.get('is_public') else 0,
-                   data.get('certification_id') or None,
+                   new_cert_id,
                    datetime.now(), id, request.user_id))
         if c.rowcount == 0:
             conn.close()
             return jsonify({'error': 'Not found or not authorized'}), 404
+        # Auto-tag questions when a certification is linked
+        if new_cert_id:
+            c.execute('SELECT title FROM quizzes WHERE id = ?', (id,))
+            row = c.fetchone()
+            _auto_tag_question_domains(c, id, new_cert_id, row['title'] if row else '')
         conn.commit()
     conn.close()
     return jsonify({'message': 'Settings updated'})
@@ -1604,7 +1718,6 @@ def get_study_stats():
 
 # === Study Guide Builder ===
 
-import re
 import html as html_module
 from io import BytesIO
 
@@ -2469,9 +2582,9 @@ def get_cert_readiness(cert_id):
         else:
             status = 'weak'
         weight = d['weight'] or 0
-        if seen > 0:
-            weighted_score_sum += score * weight
-            total_weight += weight
+        # Always include domain weight — unseen domains score 0, not excluded
+        weighted_score_sum += score * weight
+        total_weight += weight
         domains.append({
             'name': d['name'],
             'code': d['code'],
@@ -3498,11 +3611,812 @@ def seed_sub_objectives():
     conn.close()
 
 
+def seed_security_plus_questions():
+    """Seed a starter Security+ (SY0-701) question bank with 75 exam-aligned questions.
+
+    Creates a system-owned public quiz with questions distributed across all 5 domains,
+    automatically tagged via the domain system. This gives new users immediate access
+    to readiness scoring, simulations, and weak-point tracking.
+    """
+    conn = get_db()
+    c = conn.cursor()
+
+    # Check if already seeded (look for our specific system quiz)
+    c.execute("SELECT id FROM quizzes WHERE title = 'CompTIA Security+ (SY0-701) — Starter Question Bank'")
+    if c.fetchone():
+        conn.close()
+        return
+
+    # Get the Security+ certification ID
+    c.execute("SELECT id FROM certifications WHERE code = 'comptia-sec-sy0-701'")
+    cert_row = c.fetchone()
+    if not cert_row:
+        conn.close()
+        return
+    cert_id = cert_row['id']
+
+    # Get domain IDs
+    c.execute('''SELECT id, code, name FROM domains
+        WHERE certification_id = ? AND parent_domain_id IS NULL
+        ORDER BY sort_order''', (cert_id,))
+    domains = {r['code']: r['id'] for r in c.fetchall()}
+
+    # === QUESTIONS BY DOMAIN ===
+    # Domain 1.0: General Security Concepts (12%)
+    d1_questions = [
+        {
+            'question': 'Which security control type is designed to discourage a threat actor from performing an attack?',
+            'type': 'choice',
+            'options': ['Detective', 'Corrective', 'Deterrent', 'Compensating'],
+            'correct': 2,
+            'explanation': 'Deterrent controls discourage threat actors from attempting an attack. Examples include warning banners, security cameras, and security guards.'
+        },
+        {
+            'question': 'What is the primary purpose of the CIA triad in information security?',
+            'type': 'choice',
+            'options': [
+                'To classify data based on sensitivity levels',
+                'To define the three fundamental goals of information security',
+                'To establish a chain of custody for digital evidence',
+                'To create a risk assessment framework'
+            ],
+            'correct': 1,
+            'explanation': 'The CIA triad — Confidentiality, Integrity, and Availability — defines the three fundamental goals that information security programs must address.'
+        },
+        {
+            'question': 'A company implements a policy requiring all changes to production systems to go through a formal review board. Which security concept does this represent?',
+            'type': 'choice',
+            'options': ['Incident response', 'Change management', 'Risk transfer', 'Data classification'],
+            'correct': 1,
+            'explanation': 'Change management ensures that all changes to IT systems are evaluated, approved, and documented to minimize disruption and security risks.'
+        },
+        {
+            'question': 'Which cryptographic concept ensures that a sender cannot deny having sent a message?',
+            'type': 'choice',
+            'options': ['Confidentiality', 'Integrity', 'Non-repudiation', 'Authentication'],
+            'correct': 2,
+            'explanation': 'Non-repudiation ensures that the sender of a message cannot later deny having sent it. Digital signatures provide non-repudiation by using the sender\'s private key.'
+        },
+        {
+            'question': 'What is the key difference between symmetric and asymmetric encryption?',
+            'type': 'choice',
+            'options': [
+                'Symmetric uses one key; asymmetric uses a key pair',
+                'Symmetric is slower than asymmetric',
+                'Asymmetric cannot be used for digital signatures',
+                'Symmetric requires a certificate authority'
+            ],
+            'correct': 0,
+            'explanation': 'Symmetric encryption uses a single shared key for both encryption and decryption. Asymmetric encryption uses a key pair (public and private) — one encrypts, the other decrypts.'
+        },
+        {
+            'question': 'A company wants to ensure that sensitive files have not been tampered with during transfer. Which technology should they use?',
+            'type': 'choice',
+            'options': ['AES-256 encryption', 'SHA-256 hashing', 'RSA key exchange', 'TLS handshake'],
+            'correct': 1,
+            'explanation': 'Hashing algorithms like SHA-256 create a fixed-length digest of data. Comparing hashes before and after transfer verifies that the file has not been modified (integrity).'
+        },
+        {
+            'question': 'Which of the following is an example of a technical security control?',
+            'type': 'choice',
+            'options': ['Security awareness training', 'Firewall rules', 'Acceptable use policy', 'Background checks'],
+            'correct': 1,
+            'explanation': 'Technical (logical) controls are implemented through technology. Firewalls, IDS/IPS, encryption, and access control lists are all technical controls. Training and policies are administrative controls.'
+        },
+        {
+            'question': 'What does the zero trust security model assume?',
+            'type': 'choice',
+            'options': [
+                'Internal networks are inherently secure',
+                'All users and devices must be verified regardless of location',
+                'Firewalls provide sufficient perimeter protection',
+                'VPN connections are always encrypted'
+            ],
+            'correct': 1,
+            'explanation': 'Zero trust assumes no implicit trust is granted to users, devices, or networks — even those inside the corporate perimeter. Every access request must be verified, validated, and authorized.'
+        },
+        {
+            'question': 'Which key stretching algorithm is specifically designed for password hashing?',
+            'type': 'choice',
+            'options': ['AES', 'bcrypt', 'RSA', 'SHA-256'],
+            'correct': 1,
+            'explanation': 'bcrypt is a key stretching algorithm designed specifically for password hashing. It incorporates a salt and is intentionally slow to resist brute-force attacks. PBKDF2 and Argon2 are also key stretching algorithms.'
+        },
+        {
+            'question': 'What is the primary purpose of a gap analysis in security?',
+            'type': 'choice',
+            'options': [
+                'To identify the difference between current and desired security posture',
+                'To detect vulnerabilities in network infrastructure',
+                'To monitor real-time security events',
+                'To encrypt data at rest and in transit'
+            ],
+            'correct': 0,
+            'explanation': 'A gap analysis compares an organization\'s current security posture against a desired state (such as a framework or standard) to identify areas that need improvement.'
+        },
+        {
+            'question': 'Which of the following BEST describes the concept of least privilege?',
+            'type': 'choice',
+            'options': [
+                'Users should have minimal password complexity requirements',
+                'Users should only have the minimum access rights needed to perform their job',
+                'Administrators should have access to all systems',
+                'Guest accounts should be disabled on all systems'
+            ],
+            'correct': 1,
+            'explanation': 'The principle of least privilege states that users, processes, and systems should be granted only the minimum permissions necessary to perform their required tasks — nothing more.'
+        },
+        {
+            'question': 'A block cipher encrypts data in fixed-size blocks. Which of the following is a block cipher?',
+            'type': 'choice',
+            'options': ['RC4', 'AES', 'ChaCha20', 'Salsa20'],
+            'correct': 1,
+            'explanation': 'AES (Advanced Encryption Standard) is a block cipher that encrypts data in 128-bit blocks. RC4, ChaCha20, and Salsa20 are stream ciphers that encrypt data one bit or byte at a time.'
+        },
+        {
+            'question': 'What type of certificate is used to establish the root of trust in a PKI hierarchy?',
+            'type': 'choice',
+            'options': ['Wildcard certificate', 'Self-signed root CA certificate', 'Extended validation certificate', 'Code signing certificate'],
+            'correct': 1,
+            'explanation': 'A self-signed root CA certificate establishes the root of trust in a PKI hierarchy. All other certificates in the chain derive their trust from this root certificate.'
+        },
+        {
+            'question': 'Which of the following describes defense in depth?',
+            'type': 'choice',
+            'options': [
+                'Using a single powerful firewall to protect the network',
+                'Implementing multiple overlapping layers of security controls',
+                'Encrypting all data at rest with AES-256',
+                'Requiring biometric authentication for all users'
+            ],
+            'correct': 1,
+            'explanation': 'Defense in depth is a security strategy that uses multiple, overlapping layers of security controls. If one layer fails, additional layers continue to provide protection.'
+        },
+        {
+            'question': 'Which of the following is an example of something you are in multi-factor authentication?',
+            'type': 'choice',
+            'options': ['A password', 'A smart card', 'A fingerprint scan', 'A one-time PIN from an app'],
+            'correct': 2,
+            'explanation': 'Multi-factor authentication uses at least two of: something you know (password), something you have (smart card, token), and something you are (biometrics like fingerprints, iris scans). A fingerprint is a biometric — something you are.'
+        },
+    ]
+
+    # Domain 2.0: Threats, Vulnerabilities, and Mitigations (22%)
+    d2_questions = [
+        {
+            'question': 'An attacker sends a carefully crafted email that appears to come from the CEO, asking the CFO to wire money to an external account. What type of attack is this?',
+            'type': 'choice',
+            'options': ['Phishing', 'Whaling', 'Vishing', 'Smishing'],
+            'correct': 1,
+            'explanation': 'Whaling is a highly targeted form of phishing (spear phishing) directed at senior executives or high-value targets. The attack impersonates another executive to manipulate the target into taking action.'
+        },
+        {
+            'question': 'Which type of malware encrypts files and demands payment for the decryption key?',
+            'type': 'choice',
+            'options': ['Trojan', 'Worm', 'Ransomware', 'Rootkit'],
+            'correct': 2,
+            'explanation': 'Ransomware encrypts the victim\'s files or locks system access, then demands a ransom payment (usually in cryptocurrency) in exchange for the decryption key.'
+        },
+        {
+            'question': 'An attacker positions themselves between two communicating parties to intercept and potentially modify traffic. What is this attack called?',
+            'type': 'choice',
+            'options': ['SQL injection', 'On-path attack (MITM)', 'Cross-site scripting', 'Buffer overflow'],
+            'correct': 1,
+            'explanation': 'An on-path attack (man-in-the-middle / MITM) occurs when an attacker intercepts communication between two parties, potentially reading or modifying the data in transit.'
+        },
+        {
+            'question': 'What is the primary difference between a vulnerability scan and a penetration test?',
+            'type': 'choice',
+            'options': [
+                'Vulnerability scans are automated; penetration tests are always manual',
+                'Vulnerability scans identify weaknesses; penetration tests actively exploit them',
+                'Vulnerability scans require physical access; penetration tests are remote only',
+                'There is no difference; the terms are interchangeable'
+            ],
+            'correct': 1,
+            'explanation': 'Vulnerability scans identify and report potential weaknesses but do not exploit them. Penetration tests go further by actively attempting to exploit vulnerabilities to determine real-world impact.'
+        },
+        {
+            'question': 'Which threat actor type is MOST likely to have advanced resources and target critical infrastructure?',
+            'type': 'choice',
+            'options': ['Script kiddie', 'Hacktivist', 'Nation-state', 'Insider threat'],
+            'correct': 2,
+            'explanation': 'Nation-state actors are government-sponsored threat actors with significant resources, advanced capabilities, and often target critical infrastructure, intellectual property, and government systems.'
+        },
+        {
+            'question': 'What is a zero-day vulnerability?',
+            'type': 'choice',
+            'options': [
+                'A vulnerability that has been patched within 24 hours',
+                'A vulnerability that is unknown to the vendor and has no available patch',
+                'A vulnerability in day-zero backup configurations',
+                'A vulnerability that only exists on newly installed systems'
+            ],
+            'correct': 1,
+            'explanation': 'A zero-day vulnerability is a previously unknown software flaw that the vendor has not yet patched. Attackers who discover zero-days can exploit them before any defense is available.'
+        },
+        {
+            'question': 'An employee plugs in a USB drive they found in the parking lot. The drive installs malware when connected. What type of attack is this?',
+            'type': 'choice',
+            'options': ['Tailgating', 'Baiting', 'Pretexting', 'Shoulder surfing'],
+            'correct': 1,
+            'explanation': 'Baiting involves leaving infected physical media (USB drives, CDs) in a location where a target will find and use them. The attacker relies on human curiosity to deliver the malware payload.'
+        },
+        {
+            'question': 'Which attack targets the web application layer by inserting malicious SQL statements into input fields?',
+            'type': 'choice',
+            'options': ['XSS', 'CSRF', 'SQL injection', 'Directory traversal'],
+            'correct': 2,
+            'explanation': 'SQL injection attacks insert malicious SQL code into application input fields that interact with a database, potentially allowing the attacker to read, modify, or delete data.'
+        },
+        {
+            'question': 'What is the MITRE ATT&CK framework used for?',
+            'type': 'choice',
+            'options': [
+                'Managing software development lifecycles',
+                'Cataloguing adversary tactics, techniques, and procedures',
+                'Encrypting sensitive data in transit',
+                'Configuring network firewall rules'
+            ],
+            'correct': 1,
+            'explanation': 'MITRE ATT&CK is a knowledge base of adversary tactics, techniques, and procedures (TTPs) based on real-world observations. It helps security teams understand, detect, and respond to threats.'
+        },
+        {
+            'question': 'A company discovers that a former employee\'s credentials were used to access systems two weeks after termination. What control failure does this represent?',
+            'type': 'choice',
+            'options': [
+                'Lack of encryption',
+                'Insufficient offboarding procedures',
+                'Missing intrusion detection',
+                'Inadequate physical security'
+            ],
+            'correct': 1,
+            'explanation': 'Proper offboarding procedures require immediately disabling or revoking access credentials when an employee leaves the organization to prevent unauthorized access.'
+        },
+        {
+            'question': 'Which type of attack floods a target with traffic from many compromised systems simultaneously?',
+            'type': 'choice',
+            'options': ['DoS', 'DDoS', 'ARP spoofing', 'DNS poisoning'],
+            'correct': 1,
+            'explanation': 'A Distributed Denial of Service (DDoS) attack uses multiple compromised systems (a botnet) to overwhelm a target with traffic, making it unavailable to legitimate users.'
+        },
+        {
+            'question': 'What is credential stuffing?',
+            'type': 'choice',
+            'options': [
+                'Guessing passwords using dictionary words',
+                'Using previously breached username/password pairs to access other services',
+                'Capturing credentials via a keylogger',
+                'Creating fake login pages to steal credentials'
+            ],
+            'correct': 1,
+            'explanation': 'Credential stuffing uses stolen username/password combinations from data breaches to attempt login on other services, exploiting the common habit of password reuse across sites.'
+        },
+        {
+            'question': 'Which vulnerability allows an attacker to inject client-side scripts into web pages viewed by other users?',
+            'type': 'choice',
+            'options': ['SQL injection', 'Cross-site scripting (XSS)', 'Buffer overflow', 'Race condition'],
+            'correct': 1,
+            'explanation': 'Cross-site scripting (XSS) allows attackers to inject malicious scripts into web applications. When other users view the affected page, the script executes in their browser, potentially stealing session cookies or redirecting to malicious sites.'
+        },
+        {
+            'question': 'An organization wants to understand the likelihood and impact of various threats. What should they perform?',
+            'type': 'choice',
+            'options': ['Penetration test', 'Threat assessment', 'Risk analysis', 'Vulnerability scan'],
+            'correct': 2,
+            'explanation': 'Risk analysis evaluates both the likelihood of threats occurring and their potential impact on the organization, helping prioritize security investments and mitigation strategies.'
+        },
+        {
+            'question': 'Which indicator of compromise (IoC) would MOST likely suggest a system has been compromised by a rootkit?',
+            'type': 'choice',
+            'options': [
+                'Increased outbound traffic on port 443',
+                'Discrepancies between OS-reported and raw disk file listings',
+                'Multiple failed login attempts from a single IP',
+                'Unexpected entries in the DNS cache'
+            ],
+            'correct': 1,
+            'explanation': 'Rootkits hide their presence by modifying OS functions. Discrepancies between what the OS reports and what exists at the raw disk level indicate the OS is being manipulated — a classic rootkit indicator.'
+        },
+    ]
+
+    # Domain 3.0: Security Architecture (18%)
+    d3_questions = [
+        {
+            'question': 'Which network device operates at Layer 7 of the OSI model and can make routing decisions based on application data?',
+            'type': 'choice',
+            'options': ['Switch', 'Router', 'Application-layer firewall', 'Hub'],
+            'correct': 2,
+            'explanation': 'Application-layer (Layer 7) firewalls can inspect, filter, and make decisions based on application-specific data such as HTTP headers, URLs, and payload content.'
+        },
+        {
+            'question': 'What is the primary purpose of a DMZ in network architecture?',
+            'type': 'choice',
+            'options': [
+                'To connect branch offices via VPN tunnels',
+                'To provide a buffer zone between the internet and the internal network for public-facing services',
+                'To encrypt all internal network traffic',
+                'To monitor network traffic for intrusion detection'
+            ],
+            'correct': 1,
+            'explanation': 'A DMZ (demilitarized zone) is a network segment that sits between the internet and the internal network. Public-facing servers (web, email, DNS) are placed in the DMZ to limit exposure of the internal network.'
+        },
+        {
+            'question': 'A company needs to ensure that their cloud provider meets specific security requirements. What document should they review?',
+            'type': 'choice',
+            'options': ['NDA', 'SLA', 'MOU', 'AUP'],
+            'correct': 1,
+            'explanation': 'A Service Level Agreement (SLA) defines the expected level of service, including security requirements, uptime guarantees, and remedies for failures between a service provider and customer.'
+        },
+        {
+            'question': 'Which cloud deployment model provides dedicated infrastructure for a single organization?',
+            'type': 'choice',
+            'options': ['Public cloud', 'Private cloud', 'Community cloud', 'Hybrid cloud'],
+            'correct': 1,
+            'explanation': 'A private cloud provides infrastructure dedicated exclusively to a single organization, offering greater control over security, compliance, and customization compared to public cloud deployments.'
+        },
+        {
+            'question': 'What is microsegmentation in a data center environment?',
+            'type': 'choice',
+            'options': [
+                'Dividing storage into small partitions',
+                'Creating granular security zones with individual workload-level policies',
+                'Splitting DNS zones into subdomains',
+                'Breaking large databases into smaller tables'
+            ],
+            'correct': 1,
+            'explanation': 'Microsegmentation creates fine-grained security zones around individual workloads or applications, applying specific security policies at the workload level rather than just at the network perimeter.'
+        },
+        {
+            'question': 'Which technology provides site-to-site encrypted connectivity over the public internet?',
+            'type': 'choice',
+            'options': ['NAT', 'IPSec VPN', 'VLAN', 'Port mirroring'],
+            'correct': 1,
+            'explanation': 'IPSec VPN creates encrypted tunnels over the public internet between two sites, providing confidentiality and integrity for data in transit between networks.'
+        },
+        {
+            'question': 'In the shared responsibility model for IaaS cloud services, who is responsible for patching the guest operating system?',
+            'type': 'choice',
+            'options': [
+                'The cloud provider exclusively',
+                'The customer',
+                'Both the cloud provider and the customer equally',
+                'Neither — it is automated'
+            ],
+            'correct': 1,
+            'explanation': 'In IaaS, the customer is responsible for everything from the OS up: patching, application security, data, and access control. The cloud provider manages the underlying infrastructure (hypervisor, network, physical security).'
+        },
+        {
+            'question': 'What does a load balancer provide in terms of security and availability?',
+            'type': 'choice',
+            'options': [
+                'Encrypts data at rest across multiple servers',
+                'Distributes traffic across multiple servers to prevent overload and single points of failure',
+                'Scans incoming traffic for malware signatures',
+                'Provides NAT translation for internal servers'
+            ],
+            'correct': 1,
+            'explanation': 'Load balancers distribute incoming traffic across multiple backend servers, improving availability (no single point of failure) and providing some DDoS mitigation by absorbing excess traffic.'
+        },
+        {
+            'question': 'Which design principle involves running applications with the fewest features and services necessary?',
+            'type': 'choice',
+            'options': ['Defense in depth', 'Least functionality', 'Separation of duties', 'Fail-open'],
+            'correct': 1,
+            'explanation': 'Least functionality means configuring systems to provide only essential capabilities, disabling or removing unnecessary services, ports, and protocols to reduce the attack surface.'
+        },
+        {
+            'question': 'What is the purpose of an air-gapped network?',
+            'type': 'choice',
+            'options': [
+                'To improve wireless signal strength',
+                'To physically isolate a network from all external connections',
+                'To create redundant network paths',
+                'To separate voice and data traffic'
+            ],
+            'correct': 1,
+            'explanation': 'An air-gapped network is physically isolated from any external network, including the internet. It is used for highly sensitive systems where any external connectivity would pose an unacceptable risk.'
+        },
+        {
+            'question': 'Which infrastructure as code concept ensures that deploying the same configuration always produces the same result?',
+            'type': 'choice',
+            'options': ['Elasticity', 'Idempotence', 'Scalability', 'Orchestration'],
+            'correct': 1,
+            'explanation': 'Idempotence means that applying the same operation multiple times produces the same result as applying it once. In infrastructure as code, this ensures consistent, repeatable deployments.'
+        },
+        {
+            'question': 'A company deploys a web application firewall (WAF). At which layer does a WAF primarily operate?',
+            'type': 'choice',
+            'options': ['Layer 2 — Data Link', 'Layer 3 — Network', 'Layer 4 — Transport', 'Layer 7 — Application'],
+            'correct': 3,
+            'explanation': 'A WAF operates at Layer 7 (Application layer), inspecting HTTP/HTTPS traffic for attacks like SQL injection, XSS, and other web application exploits.'
+        },
+        {
+            'question': 'What is the primary security benefit of containerization compared to traditional virtual machines?',
+            'type': 'choice',
+            'options': [
+                'Containers provide stronger isolation than VMs',
+                'Containers reduce the attack surface by sharing the host kernel without a full OS per instance',
+                'Containers automatically encrypt all network traffic',
+                'Containers eliminate the need for access controls'
+            ],
+            'correct': 1,
+            'explanation': 'Containers are lightweight, sharing the host OS kernel. They reduce the attack surface compared to full VMs by eliminating the need for a complete OS per instance, though they provide less isolation than VMs.'
+        },
+        {
+            'question': 'Which secure protocol should replace Telnet for remote command-line access?',
+            'type': 'choice',
+            'options': ['FTP', 'SSH', 'SNMP', 'RDP'],
+            'correct': 1,
+            'explanation': 'SSH (Secure Shell) provides encrypted remote command-line access and should always be used instead of Telnet, which transmits all data (including credentials) in cleartext.'
+        },
+        {
+            'question': 'What type of redundancy involves maintaining a secondary site with current data that can take over operations within minutes?',
+            'type': 'choice',
+            'options': ['Cold site', 'Warm site', 'Hot site', 'Mobile site'],
+            'correct': 2,
+            'explanation': 'A hot site is a fully operational duplicate of the primary site with real-time data replication. It can assume operations within minutes (or instantly) after a failure, providing the fastest recovery time.'
+        },
+    ]
+
+    # Domain 4.0: Security Operations (28%)
+    d4_questions = [
+        {
+            'question': 'During an incident response, what is the FIRST step after detection?',
+            'type': 'choice',
+            'options': ['Eradication', 'Containment', 'Analysis', 'Recovery'],
+            'correct': 2,
+            'explanation': 'After detection, the next step is analysis (identification) — confirming and understanding the incident, its scope, and impact before moving to containment. The full order is: Preparation → Detection → Analysis → Containment → Eradication → Recovery → Lessons Learned.'
+        },
+        {
+            'question': 'Which log source would BEST help identify unauthorized access attempts to a web application?',
+            'type': 'choice',
+            'options': ['Firewall logs', 'Web server access logs', 'DHCP logs', 'DNS query logs'],
+            'correct': 1,
+            'explanation': 'Web server access logs record all HTTP requests including URLs, status codes, client IPs, and user agents. They are the best source for identifying unauthorized access attempts, brute-force attacks, and exploitation against web applications.'
+        },
+        {
+            'question': 'What is the primary purpose of a SIEM system?',
+            'type': 'choice',
+            'options': [
+                'To encrypt sensitive data at rest',
+                'To aggregate, correlate, and analyze security events from multiple sources',
+                'To prevent malware from executing on endpoints',
+                'To manage user identities and access rights'
+            ],
+            'correct': 1,
+            'explanation': 'A SIEM (Security Information and Event Management) system collects and aggregates log data from multiple sources, correlates events, generates alerts, and provides dashboards for real-time security monitoring and incident investigation.'
+        },
+        {
+            'question': 'Which of the following is a benefit of automated patch management?',
+            'type': 'choice',
+            'options': [
+                'It eliminates all vulnerabilities',
+                'It reduces the window of exposure by applying patches consistently and quickly',
+                'It removes the need for change management',
+                'It guarantees zero downtime during updates'
+            ],
+            'correct': 1,
+            'explanation': 'Automated patch management reduces the window between patch release and deployment, ensuring consistent and timely application of security updates across the organization.'
+        },
+        {
+            'question': 'An organization wants to test its incident response procedures without affecting production systems. What should they conduct?',
+            'type': 'choice',
+            'options': ['Full-scale disaster recovery', 'Tabletop exercise', 'Red team engagement', 'Production penetration test'],
+            'correct': 1,
+            'explanation': 'A tabletop exercise is a discussion-based session where team members walk through an incident scenario step by step. It tests the incident response plan without impacting production systems.'
+        },
+        {
+            'question': 'What is the order of volatility in digital forensics?',
+            'type': 'choice',
+            'options': [
+                'Hard drive → RAM → CPU cache → network traffic',
+                'CPU registers → RAM → disk → archival media',
+                'Archival media → disk → RAM → CPU registers',
+                'RAM → disk → CPU registers → archival media'
+            ],
+            'correct': 1,
+            'explanation': 'The order of volatility (most volatile first): CPU registers/cache → RAM → disk (temporary files) → disk (permanent) → remote logs → archival media. During forensics, collect the most volatile evidence first.'
+        },
+        {
+            'question': 'Which identity management concept allows a user to authenticate once and access multiple applications?',
+            'type': 'choice',
+            'options': ['MFA', 'SSO', 'RBAC', 'PAM'],
+            'correct': 1,
+            'explanation': 'Single Sign-On (SSO) allows users to authenticate once and then access multiple applications and systems without re-entering credentials for each one.'
+        },
+        {
+            'question': 'What is the primary purpose of a data loss prevention (DLP) solution?',
+            'type': 'choice',
+            'options': [
+                'To backup data to prevent loss from hardware failure',
+                'To detect and prevent unauthorized transmission of sensitive data',
+                'To encrypt all data on endpoint devices',
+                'To manage user passwords and access tokens'
+            ],
+            'correct': 1,
+            'explanation': 'DLP solutions monitor, detect, and block the unauthorized transfer of sensitive data (PII, financial data, intellectual property) through email, web uploads, USB drives, and other channels.'
+        },
+        {
+            'question': 'Which access control model assigns permissions based on a user\'s job function?',
+            'type': 'choice',
+            'options': ['DAC', 'MAC', 'RBAC', 'ABAC'],
+            'correct': 2,
+            'explanation': 'Role-Based Access Control (RBAC) assigns permissions to roles (e.g., "HR Manager", "Network Admin") rather than to individual users. Users inherit permissions when assigned to a role matching their job function.'
+        },
+        {
+            'question': 'During a forensic investigation, what must be maintained to ensure evidence is admissible in court?',
+            'type': 'choice',
+            'options': ['Encryption key', 'Chain of custody', 'Service level agreement', 'Change management log'],
+            'correct': 1,
+            'explanation': 'Chain of custody documents who collected the evidence, when it was collected, how it was stored, and who has had access to it. Without proper chain of custody, evidence may be inadmissible in legal proceedings.'
+        },
+        {
+            'question': 'What type of security tool uses signature-based and behavioral analysis to detect threats on individual devices?',
+            'type': 'choice',
+            'options': ['SIEM', 'EDR', 'NAC', 'SOAR'],
+            'correct': 1,
+            'explanation': 'Endpoint Detection and Response (EDR) tools monitor endpoint devices for suspicious activity using signatures, behavioral analysis, and machine learning. They provide visibility, detection, and response capabilities at the endpoint level.'
+        },
+        {
+            'question': 'What is the purpose of network access control (NAC)?',
+            'type': 'choice',
+            'options': [
+                'To encrypt wireless network traffic',
+                'To ensure only compliant devices can connect to the network',
+                'To route traffic between network segments',
+                'To cache frequently accessed web content'
+            ],
+            'correct': 1,
+            'explanation': 'NAC solutions verify that devices meet security requirements (antivirus updated, patches applied, compliant configuration) before allowing them to connect to the network, and can quarantine non-compliant devices.'
+        },
+        {
+            'question': 'Which of the following is the MOST effective way to protect against password-based attacks?',
+            'type': 'choice',
+            'options': [
+                'Requiring passwords to be changed every 30 days',
+                'Implementing multi-factor authentication',
+                'Increasing minimum password length to 10 characters',
+                'Using a password complexity requirement'
+            ],
+            'correct': 1,
+            'explanation': 'MFA adds additional authentication factors beyond just a password. Even if a password is compromised through phishing, brute force, or credential stuffing, the attacker still needs the additional factor(s) to gain access.'
+        },
+        {
+            'question': 'A security analyst notices unusual outbound DNS queries to a suspicious domain. What might this indicate?',
+            'type': 'choice',
+            'options': [
+                'A misconfigured DNS server',
+                'DNS tunneling used for command-and-control or data exfiltration',
+                'A standard software update process',
+                'Normal web browsing activity'
+            ],
+            'correct': 1,
+            'explanation': 'DNS tunneling encodes data within DNS queries and responses to establish covert communication channels. Attackers use this technique for command-and-control (C2) communication and data exfiltration, often bypassing traditional security controls.'
+        },
+        {
+            'question': 'What is the key difference between a vulnerability assessment and a threat hunt?',
+            'type': 'choice',
+            'options': [
+                'Vulnerability assessments are automated; threat hunts are always manual',
+                'Vulnerability assessments look for weaknesses; threat hunts proactively look for active compromises',
+                'Threat hunts only use open-source tools',
+                'Vulnerability assessments require physical access to systems'
+            ],
+            'correct': 1,
+            'explanation': 'Vulnerability assessments identify potential weaknesses in systems. Threat hunting is a proactive process where analysts actively search for signs of compromise or ongoing attacks that may have evaded automated detection.'
+        },
+    ]
+
+    # Domain 5.0: Security Program Management and Oversight (20%)
+    d5_questions = [
+        {
+            'question': 'Which risk management strategy involves purchasing insurance to cover potential losses?',
+            'type': 'choice',
+            'options': ['Risk avoidance', 'Risk transfer', 'Risk mitigation', 'Risk acceptance'],
+            'correct': 1,
+            'explanation': 'Risk transfer shifts the financial impact of a risk to a third party. Purchasing cyber insurance is a common example — the insurance company assumes the financial burden if a covered incident occurs.'
+        },
+        {
+            'question': 'What is the purpose of a Business Impact Analysis (BIA)?',
+            'type': 'choice',
+            'options': [
+                'To test backup restoration procedures',
+                'To identify critical business functions and the impact of their disruption',
+                'To scan systems for vulnerabilities',
+                'To document network topology'
+            ],
+            'correct': 1,
+            'explanation': 'A BIA identifies critical business functions, assesses the impact of their disruption over time, and determines recovery priorities and resource requirements. It informs business continuity and disaster recovery planning.'
+        },
+        {
+            'question': 'Which compliance framework is specifically designed for organizations that process credit card payments?',
+            'type': 'choice',
+            'options': ['HIPAA', 'SOX', 'PCI DSS', 'FERPA'],
+            'correct': 2,
+            'explanation': 'PCI DSS (Payment Card Industry Data Security Standard) is a set of security requirements for organizations that store, process, or transmit cardholder data. It is maintained by the PCI Security Standards Council.'
+        },
+        {
+            'question': 'What defines the maximum acceptable amount of data loss measured in time during a disaster?',
+            'type': 'choice',
+            'options': ['RTO', 'RPO', 'MTTR', 'MTBF'],
+            'correct': 1,
+            'explanation': 'Recovery Point Objective (RPO) defines the maximum acceptable amount of data loss measured in time. An RPO of 4 hours means the organization can tolerate losing up to 4 hours of data.'
+        },
+        {
+            'question': 'An organization implements security awareness training for all employees. What type of control is this?',
+            'type': 'choice',
+            'options': ['Technical', 'Administrative', 'Physical', 'Compensating'],
+            'correct': 1,
+            'explanation': 'Security awareness training is an administrative (managerial) control. Administrative controls include policies, procedures, training, and governance mechanisms that direct how security is managed.'
+        },
+        {
+            'question': 'Which regulation specifically protects the personal data and privacy of EU citizens?',
+            'type': 'choice',
+            'options': ['HIPAA', 'SOX', 'GDPR', 'CCPA'],
+            'correct': 2,
+            'explanation': 'The General Data Protection Regulation (GDPR) protects personal data and privacy of individuals in the European Union, imposing strict requirements on data collection, processing, storage, and transfer.'
+        },
+        {
+            'question': 'What is the purpose of a risk register?',
+            'type': 'choice',
+            'options': [
+                'To log all security incidents as they occur',
+                'To document identified risks, their assessment, and mitigation plans',
+                'To track employee access permissions',
+                'To store encryption keys securely'
+            ],
+            'correct': 1,
+            'explanation': 'A risk register is a centralized document that tracks all identified risks, their likelihood, impact, risk rating, owners, mitigation strategies, and current status. It is a core artifact in risk management programs.'
+        },
+        {
+            'question': 'What does RTO (Recovery Time Objective) define?',
+            'type': 'choice',
+            'options': [
+                'The maximum acceptable data loss in time',
+                'The maximum acceptable time to restore a system after a failure',
+                'The expected frequency of system failures',
+                'The total cost of a security incident'
+            ],
+            'correct': 1,
+            'explanation': 'Recovery Time Objective (RTO) defines the maximum acceptable time between a system failure and its restoration to operational status. A shorter RTO requires more investment in recovery capabilities.'
+        },
+        {
+            'question': 'A company wants to evaluate the effectiveness of its security controls against a recognized standard. What should they conduct?',
+            'type': 'choice',
+            'options': ['Vulnerability scan', 'Penetration test', 'Security audit', 'Threat hunt'],
+            'correct': 2,
+            'explanation': 'A security audit is a systematic evaluation of an organization\'s security posture against a set of criteria, standards, or regulatory requirements (such as ISO 27001, NIST, or PCI DSS).'
+        },
+        {
+            'question': 'Which of the following is an example of data sovereignty?',
+            'type': 'choice',
+            'options': [
+                'Encrypting data before storing it in the cloud',
+                'A regulation requiring citizen data to be stored within the country\'s borders',
+                'Implementing role-based access controls on databases',
+                'Using a content delivery network for global distribution'
+            ],
+            'correct': 1,
+            'explanation': 'Data sovereignty refers to laws and regulations that require data to be stored and processed within the borders of a specific country or jurisdiction, reflecting the principle that data is subject to the laws of the country where it resides.'
+        },
+        {
+            'question': 'What is the primary purpose of a security policy?',
+            'type': 'choice',
+            'options': [
+                'To configure firewall rules for the network',
+                'To establish management direction and expectations for protecting organizational assets',
+                'To detail step-by-step procedures for system administration',
+                'To define technical specifications for security tools'
+            ],
+            'correct': 1,
+            'explanation': 'A security policy is a high-level document that establishes management\'s intent, direction, and expectations for how the organization will protect its information assets. Procedures and standards provide the implementation details.'
+        },
+        {
+            'question': 'Which of the following BEST describes the concept of due diligence in security?',
+            'type': 'choice',
+            'options': [
+                'Installing antivirus software on all endpoints',
+                'Continuously researching and understanding threats and risks relevant to the organization',
+                'Responding to incidents within the defined SLA',
+                'Requiring all employees to use complex passwords'
+            ],
+            'correct': 1,
+            'explanation': 'Due diligence is the ongoing practice of researching, understanding, and staying informed about threats, vulnerabilities, and risks. Due care is the implementation of security controls based on that understanding.'
+        },
+        {
+            'question': 'An organization classifies its data as Public, Internal, Confidential, and Restricted. What security concept does this represent?',
+            'type': 'choice',
+            'options': ['Access control lists', 'Data classification', 'Network segmentation', 'Role-based access'],
+            'correct': 1,
+            'explanation': 'Data classification assigns sensitivity labels to data based on its value and the impact of unauthorized disclosure. It guides the appropriate level of security controls and handling procedures for each category.'
+        },
+        {
+            'question': 'What is the role of a data processor under GDPR?',
+            'type': 'choice',
+            'options': [
+                'The individual whose data is being collected',
+                'The entity that determines the purposes and means of processing personal data',
+                'The entity that processes personal data on behalf of the data controller',
+                'The regulatory authority that enforces GDPR compliance'
+            ],
+            'correct': 2,
+            'explanation': 'Under GDPR, the data processor processes personal data on behalf of the data controller (who determines the purpose and means of processing). Cloud service providers often act as data processors for their customers.'
+        },
+        {
+            'question': 'Which type of agreement defines the terms and conditions for sharing data between two organizations?',
+            'type': 'choice',
+            'options': ['SLA', 'NDA', 'ISA (Interconnection Security Agreement)', 'BPA'],
+            'correct': 2,
+            'explanation': 'An Interconnection Security Agreement (ISA) defines the security requirements and responsibilities for connecting information systems between two organizations, including data sharing terms and security controls.'
+        },
+    ]
+
+    # Build the full question list with domain info
+    all_questions = []
+    domain_map = [
+        ('1.0', d1_questions),
+        ('2.0', d2_questions),
+        ('3.0', d3_questions),
+        ('4.0', d4_questions),
+        ('5.0', d5_questions),
+    ]
+
+    for domain_code, questions in domain_map:
+        for q in questions:
+            q['_domain_code'] = domain_code
+            all_questions.append(q)
+
+    # Create the system quiz (user_id=0 as system-owned)
+    # First, ensure user_id 0 doesn't cause FK issues — use the first user, or create without FK
+    questions_json = json.dumps([{
+        'question': q['question'],
+        'type': q['type'],
+        'options': q.get('options'),
+        'correct': q.get('correct'),
+        'explanation': q.get('explanation'),
+    } for q in all_questions])
+
+    # Use user_id 0 for system content (not FK-enforced in SQLite by default)
+    c.execute('''INSERT INTO quizzes
+        (user_id, title, description, questions, color, certification_id, is_public, is_migrated)
+        VALUES (0, ?, ?, ?, ?, ?, 1, 1)''',
+        ('CompTIA Security+ (SY0-701) — Starter Question Bank',
+         '75 exam-aligned practice questions covering all 5 Security+ domains. '
+         'Use for readiness scoring, exam simulation, and identifying weak areas.',
+         questions_json, '#8b5cf6', cert_id))
+    quiz_id = c.lastrowid
+
+    # Insert normalized questions and tag domains
+    for idx, q in enumerate(all_questions):
+        c.execute('''INSERT INTO questions
+            (quiz_id, question_index, question_text, type, options, correct,
+             pairs, code, code_language, image, image_alt, explanation, difficulty)
+            VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, 0)''',
+            (quiz_id, idx, q['question'], q['type'],
+             json.dumps(q.get('options')),
+             json.dumps(q.get('correct')),
+             q.get('explanation')))
+        question_id = c.lastrowid
+
+        # Tag to the specific domain
+        domain_code = q['_domain_code']
+        domain_id = domains.get(domain_code)
+        if domain_id:
+            c.execute('INSERT OR IGNORE INTO question_domains (question_id, domain_id) VALUES (?, ?)',
+                      (question_id, domain_id))
+
+    conn.commit()
+    conn.close()
+    print(f"[STARTUP] Seeded Security+ question bank: {len(all_questions)} questions across 5 domains", flush=True)
+
+
 # Initialize database tables on module load (for WSGI)
 try:
     init_db()
     seed_certifications()
     seed_sub_objectives()
+    seed_security_plus_questions()
 except Exception as e:
     print(f"[STARTUP] DB init error: {e}", flush=True)
 

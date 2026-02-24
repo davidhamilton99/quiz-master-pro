@@ -137,7 +137,7 @@ export function loadAuth() {
         if (token && userStr && userStr !== 'undefined' && userStr !== 'null') {
             const user = JSON.parse(userStr);
             if (user && typeof user === 'object') {
-                setState({ isAuthenticated: true, user, token, view: 'library' }, true);
+                setState({ isAuthenticated: true, user, token, view: 'home' }, true);
                 return true;
             }
         }
