@@ -4659,6 +4659,43 @@ select:focus:not(:focus-visible) {
 .quick-icon { color: var(--primary-light); margin-bottom: 0.25rem; }
 .quick-label { font-size: 0.8rem; }
 
+/* Getting Started (new users) */
+.home-getting-started { margin-top: 0.5rem; }
+.home-gs-intro { font-size: 0.9375rem; color: var(--text-secondary); margin-bottom: 1rem; }
+.home-gs-steps { display: flex; flex-direction: column; gap: 0.625rem; }
+.home-gs-step {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.home-gs-step:hover {
+    border-color: var(--primary);
+    background: rgba(124, 92, 252, 0.06);
+}
+.gs-step-num {
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+.gs-step-content { flex: 1; }
+.gs-step-content strong { display: block; color: var(--text-primary); font-size: 0.9375rem; margin-bottom: 0.125rem; }
+.gs-step-content span { font-size: 0.8125rem; color: var(--text-muted); }
+.gs-step-arrow { color: var(--text-muted); flex-shrink: 0; }
+
 /* ==================== STUDY HUB TABS ==================== */
 
 .study-hub-tabs-bar {

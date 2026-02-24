@@ -4,6 +4,7 @@ import { login, register, getBookmarks } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
 import { showLoading, hideLoading } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
+import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 
 export function renderAuth() {
     const state = getState();
@@ -147,6 +148,11 @@ export async function handleAuth() {
             getBookmarks().then(bms => {
                 setState({ bookmarks: bms, bookmarkedQuestions: new Set(bms.map(b => b.question_id)) });
             }).catch(() => {});
+
+            // Show onboarding for new users (registration) or first time on this device
+            if (!isLogin || shouldShowOnboarding()) {
+                setTimeout(() => startOnboarding(), 500);
+            }
         } else {
             setState({ authError: result.error || 'Authentication failed' });
         }

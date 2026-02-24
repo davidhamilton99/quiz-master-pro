@@ -566,6 +566,13 @@ export async function copyQuizToLibrary(quizId) {
 }
 
 /**
+ * Create a sample quiz for a new user
+ */
+export async function createSampleQuiz() {
+    return await apiCall('/sample-quiz', { method: 'POST' });
+}
+
+/**
  * Get all bookmarked questions
  */
 export async function getBookmarks() {
