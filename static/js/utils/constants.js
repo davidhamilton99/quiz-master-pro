@@ -134,5 +134,5 @@ export const FEATURES = {
     TOUCH_SUPPORT: true,
     WEB_WORKERS: false, // Enable when implemented
     OFFLINE_MODE: false, // Enable when service worker ready
-    ANALYTICS: false,
+    ANALYTICS: true,
 };

@@ -559,6 +559,13 @@ export async function getSrsStats() {
 // ==================== Bookmarks ====================
 
 /**
+ * Copy a public quiz to the current user's library
+ */
+export async function copyQuizToLibrary(quizId) {
+    return await apiCall(`/community/quizzes/${quizId}/copy`, { method: 'POST' });
+}
+
+/**
  * Get all bookmarked questions
  */
 export async function getBookmarks() {

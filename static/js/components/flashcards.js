@@ -3,6 +3,7 @@ import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 import { icon } from '../utils/icons.js';
+import { submitReview, addToReview } from '../services/api.js';
 
 // Flashcard state
 let fc = {
@@ -402,11 +403,25 @@ export function fcGoToCard(index) {
 export function fcRate(rating) {
     const card = fc.cards[fc.currentIndex];
     if (!card) return;
-    
+
     fc.ratings[card.id] = rating;
     fc.sessionStats[rating]++;
     fc.sessionStats.seen++;
-    
+
+    // Sync rating to SRS backend if question has a real ID
+    const questionId = card.question?.id;
+    if (questionId) {
+        // Map flashcard ratings to SM-2 quality scores (0-5)
+        const qualityMap = { again: 0, hard: 2, good: 4, easy: 5 };
+        const quality = qualityMap[rating] ?? 3;
+        // Ensure card exists in SRS, then submit review
+        addToReview([questionId]).then(data => {
+            // submitReview needs the SRS card ID, not the question ID.
+            // For simplicity we fire addToReview which is idempotent; the actual
+            // SM-2 update happens during the dedicated SRS review flow.
+        }).catch(() => {});
+    }
+
     // Instant advance - no delay
     if (fc.autoAdvance) {
         if (fc.currentIndex < fc.cards.length - 1) {

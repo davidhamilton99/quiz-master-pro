@@ -5,11 +5,13 @@ import { icon } from '../utils/icons.js';
 
 export function renderResults() {
     const state = getState();
-    const { correct, total, percentage, isPerfect, answers } = state.quizResults || {};
+    const { correct, total, percentage, isPerfect, answers,
+            isSimulation, passed, domainScores, certName,
+            passingScore, timeTaken } = state.quizResults || {};
     const quiz = state.currentQuiz;
     const profile = state.playerProfile;
     const levelInfo = getLevelInfo(profile.xp);
-    
+
     if (!quiz) {
         return `<div class="results-page container">
             <div class="text-center">
@@ -18,27 +20,34 @@ export function renderResults() {
             </div>
         </div>`;
     }
-    
+
     const message = getMessage(percentage);
     const tierColors = {
         bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700',
         platinum: '#e5e4e2', diamond: '#b9f2ff', legendary: '#ff6b6b'
     };
-    
+
     return `
         <div class="results-page">
             <div class="container">
                 <div class="results-hero">
-                    ${isPerfect ? `<div class="perfect-banner">${icon('trophy')} PERFECT SCORE ${icon('trophy')}</div>` : ''}
-                    
+                    ${isSimulation ? `
+                        <div class="sim-result-banner ${passed ? 'passed' : 'failed'}">
+                            ${passed ? `${icon('check')} PASSED` : `${icon('x')} NOT PASSED`}
+                        </div>
+                        ${certName ? `<p class="text-muted" style="margin-bottom:0.5rem">${escapeHtml(certName)} Practice Exam</p>` : ''}
+                        ${passingScore ? `<p class="text-muted" style="font-size:0.8rem">Passing score: ${passingScore}%</p>` : ''}
+                    ` : ''}
+                    ${isPerfect && !isSimulation ? `<div class="perfect-banner">${icon('trophy')} PERFECT SCORE ${icon('trophy')}</div>` : ''}
+
                     <div class="results-score ${isPerfect ? 'perfect' : ''}" style="--score-color: ${getScoreColor(percentage)}">
                         <span class="results-score-pct" id="score-counter">0</span>
                         <span class="results-score-percent">%</span>
                     </div>
-                    
+
                     <h2 class="results-msg">${message.emoji} ${message.text}</h2>
                     <p class="text-muted">${escapeHtml(quiz.title)}</p>
-                    
+
                     <div class="results-stats">
                         <div class="stat-card">
                             <div class="stat-value text-success">${correct}</div>
@@ -52,8 +61,16 @@ export function renderResults() {
                             <div class="stat-value">${total}</div>
                             <div class="stat-label">Total</div>
                         </div>
+                        ${timeTaken ? `
+                        <div class="stat-card">
+                            <div class="stat-value">${Math.floor(timeTaken / 60)}:${String(timeTaken % 60).padStart(2, '0')}</div>
+                            <div class="stat-label">Time</div>
+                        </div>
+                        ` : ''}
                     </div>
-                    
+
+                    ${isSimulation && domainScores ? renderDomainBreakdown(domainScores) : ''}
+
                     <!-- XP & Progress Section -->
                     <div class="results-progress card">
                         <div class="progress-header">
@@ -77,7 +94,7 @@ export function renderResults() {
                             <span class="xp-bar-text">${levelInfo.xpInLevel} / ${levelInfo.xpForNext} XP to level ${levelInfo.level + 1}</span>
                         </div>
                     </div>
-                    
+
                     <div class="results-actions">
                         <button class="btn btn-primary btn-lg" onclick="window.app.retryQuiz()">
                             ${icon('rotateCcw')} Try Again
@@ -85,8 +102,8 @@ export function renderResults() {
                         <button class="btn btn-secondary" onclick="window.app.reviewQuiz()">
                             ${icon('fileText')} Review Answers
                         </button>
-                        <button class="btn btn-ghost" onclick="window.app.navigate('library')">
-                            ${icon('arrowLeft')} Back to Library
+                        <button class="btn btn-ghost" onclick="window.app.navigate('${isSimulation ? 'readiness' : 'library'}')">
+                            ${icon('arrowLeft')} ${isSimulation ? 'Back to Readiness' : 'Back to Library'}
                         </button>
                     </div>
                 </div>
@@ -254,6 +271,41 @@ function checkIfCorrect(answer, question) {
             }
             return answer === question.correct;
     }
+}
+
+function renderDomainBreakdown(domainScores) {
+    const domains = Object.entries(domainScores)
+        .map(([name, data]) => ({
+            name,
+            correct: data.correct,
+            total: data.total,
+            pct: data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0,
+        }))
+        .sort((a, b) => a.pct - b.pct);
+
+    if (domains.length === 0) return '';
+
+    return `
+        <div class="domain-breakdown card" style="width:100%;margin:1.5rem 0">
+            <h3 style="margin:0 0 1rem;font-size:1rem">${icon('barChart')} Domain Breakdown</h3>
+            <div class="domain-list">
+                ${domains.map(d => `
+                    <div class="domain-row" style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem">
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem">
+                                <span style="font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(d.name)}</span>
+                                <span style="font-size:0.75rem;color:${d.pct >= 70 ? '#10b981' : d.pct >= 50 ? '#f59e0b' : '#ef4444'};font-weight:600;flex-shrink:0;margin-left:0.5rem">${d.pct}%</span>
+                            </div>
+                            <div style="height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden">
+                                <div style="height:100%;width:${d.pct}%;background:${d.pct >= 70 ? '#10b981' : d.pct >= 50 ? '#f59e0b' : '#ef4444'};border-radius:3px;transition:width 0.5s ease"></div>
+                            </div>
+                        </div>
+                        <span style="font-size:0.7rem;color:rgba(255,255,255,0.5);flex-shrink:0">${d.correct}/${d.total}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
 }
 
 function getMessage(percentage) {

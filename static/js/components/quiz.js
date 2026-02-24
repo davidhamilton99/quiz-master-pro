@@ -4,7 +4,7 @@ import {
     recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
     getLevelInfo
 } from '../state.js';
-import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, removeBookmark, startStudySession, endStudySession } from '../services/api.js';
+import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, removeBookmark, startStudySession, endStudySession, logEvent } from '../services/api.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 import { TIME, STREAK, QUIZ } from '../utils/constants.js';
@@ -1294,6 +1294,9 @@ export async function startQuiz(quizId, options = {}) {
             startTimer();
         }
 
+        // Log quiz start event
+        logEvent('quiz_started', { quiz_id: quiz.id, study_mode: options.studyMode, timed: !!options.timed, simulation: isSimulation });
+
         // Update daily streak
         updateDailyStreak();
 
@@ -1368,6 +1371,9 @@ export async function submitQuiz() {
     const isPerfect = correct === total;
 
     recordQuizComplete(correct, total);
+
+    // Log quiz completion event
+    logEvent('quiz_completed', { quiz_id: quiz.id, correct, total, percentage, isPerfect });
 
     // Celebrations
     if (window.sounds && window.animations) {

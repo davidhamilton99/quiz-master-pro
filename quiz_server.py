@@ -2737,6 +2737,44 @@ def community_quizzes():
     } for r in rows]
     return jsonify({'quizzes': quizzes})
 
+@app.route('/api/community/quizzes/<int:quiz_id>/copy', methods=['POST'])
+@token_required
+def copy_community_quiz(quiz_id):
+    """Copy a public quiz to the current user's library."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Verify the quiz exists and is public
+    c.execute('SELECT * FROM quizzes WHERE id = ? AND is_public = 1', (quiz_id,))
+    source = c.fetchone()
+    if not source:
+        conn.close()
+        return jsonify({'error': 'Quiz not found or not public'}), 404
+
+    # Don't allow copying your own quiz
+    if source['user_id'] == request.user_id:
+        conn.close()
+        return jsonify({'error': 'This quiz is already in your library'}), 409
+
+    # Read normalized questions from source
+    questions_list = _read_questions_for_quiz(c, quiz_id) if source['is_migrated'] else json.loads(source['questions'])
+
+    # Create new quiz for the current user
+    title = source['title']
+    c.execute('''INSERT INTO quizzes (user_id, title, description, questions, color, certification_id, is_migrated)
+                 VALUES (?, ?, ?, ?, ?, ?, 1)''',
+              (request.user_id, title, source['description'] or '',
+               json.dumps(questions_list), source['color'] or '#6366f1',
+               source['certification_id']))
+    new_quiz_id = c.lastrowid
+    _insert_questions_for_quiz(c, new_quiz_id, questions_list)
+    if source['certification_id']:
+        _auto_tag_question_domains(c, new_quiz_id, source['certification_id'], title)
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Quiz copied to your library', 'quiz_id': new_quiz_id}), 201
+
 @app.route('/api/health')
 def health():
     return jsonify({'status': 'ok'})
