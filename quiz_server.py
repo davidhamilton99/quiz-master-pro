@@ -2775,6 +2775,70 @@ def copy_community_quiz(quiz_id):
     conn.close()
     return jsonify({'message': 'Quiz copied to your library', 'quiz_id': new_quiz_id}), 201
 
+@app.route('/api/sample-quiz', methods=['POST'])
+@token_required
+def create_sample_quiz():
+    """Create a sample quiz so new users can try the app immediately."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Only create if user has zero quizzes (true first-timer)
+    c.execute('SELECT COUNT(*) as cnt FROM quizzes WHERE user_id = ?', (request.user_id,))
+    if c.fetchone()['cnt'] > 0:
+        conn.close()
+        return jsonify({'message': 'You already have quizzes'}), 200
+
+    sample_questions = [
+        {
+            'question': 'What does HTTP stand for?',
+            'type': 'choice',
+            'options': ['HyperText Transfer Protocol', 'High Tech Transfer Protocol',
+                        'HyperText Transmission Process', 'Home Tool Transfer Protocol'],
+            'correct': 0,
+            'explanation': 'HTTP stands for HyperText Transfer Protocol. It is the foundation of data communication on the web.'
+        },
+        {
+            'question': 'Which layer of the OSI model does a router operate at?',
+            'type': 'choice',
+            'options': ['Layer 1 - Physical', 'Layer 2 - Data Link',
+                        'Layer 3 - Network', 'Layer 4 - Transport'],
+            'correct': 2,
+            'explanation': 'Routers operate at Layer 3 (Network layer) of the OSI model, making forwarding decisions based on IP addresses.'
+        },
+        {
+            'question': 'TCP is a connection-oriented protocol.',
+            'type': 'truefalse',
+            'options': ['True', 'False'],
+            'correct': 0,
+            'explanation': 'TCP (Transmission Control Protocol) is connection-oriented. It establishes a connection using a three-way handshake before data transfer.'
+        },
+        {
+            'question': 'Which of these are valid IP address classes? (Select all that apply)',
+            'type': 'multiselect',
+            'options': ['Class A', 'Class B', 'Class F', 'Class C'],
+            'correct': [0, 1, 3],
+            'explanation': 'IP addresses are divided into classes A, B, C, D, and E. There is no Class F.'
+        },
+        {
+            'question': 'What is the default port for HTTPS?',
+            'type': 'choice',
+            'options': ['80', '443', '8080', '22'],
+            'correct': 1,
+            'explanation': 'HTTPS uses port 443 by default. Port 80 is used by HTTP, 8080 is an alternative HTTP port, and 22 is for SSH.'
+        },
+    ]
+
+    c.execute('''INSERT INTO quizzes (user_id, title, description, questions, color, is_migrated)
+                 VALUES (?, ?, ?, ?, ?, 1)''',
+              (request.user_id, 'Networking Basics (Sample Quiz)',
+               'A sample quiz to help you explore the app. Feel free to edit or delete it!',
+               json.dumps(sample_questions), '#6366f1'))
+    quiz_id = c.lastrowid
+    _insert_questions_for_quiz(c, quiz_id, sample_questions)
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Sample quiz created', 'quiz_id': quiz_id}), 201
+
 @app.route('/api/health')
 def health():
     return jsonify({'status': 'ok'})

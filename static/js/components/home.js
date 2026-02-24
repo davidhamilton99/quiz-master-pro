@@ -3,7 +3,8 @@ import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInf
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { renderNav } from '../utils/nav.js';
-import { getWeakQuestions, getCertReadiness, getSrsStats } from '../services/api.js';
+import { getWeakQuestions, getCertReadiness, getSrsStats, createSampleQuiz, loadQuizzes } from '../services/api.js';
+import { showToast } from '../utils/toast.js';
 
 // Per-session cache
 let _homeReadiness = null;   // { overall_score, ... } for primary cert
@@ -217,8 +218,49 @@ export function renderHome() {
             ` : `
             <section class="home-section">
                 <div class="home-section-header">
-                    <h2 class="home-section-title">${icon('sparkles')} Quick Start</h2>
+                    <h2 class="home-section-title">${icon('sparkles')} ${(state.quizzes || []).length === 0 ? 'Getting Started' : 'Quick Start'}</h2>
                 </div>
+
+                ${(state.quizzes || []).length === 0 ? `
+                <!-- New user: explain what to do -->
+                <div class="home-getting-started">
+                    <p class="home-gs-intro">Welcome! Here's how to get started studying:</p>
+                    <div class="home-gs-steps">
+                        <div class="home-gs-step" onclick="window.app.showCreateOptions()">
+                            <div class="gs-step-num">1</div>
+                            <div class="gs-step-content">
+                                <strong>Create your first quiz</strong>
+                                <span>Type questions yourself, paste in bulk, or use the AI wizard</span>
+                            </div>
+                            <span class="gs-step-arrow">${icon('arrowRight')}</span>
+                        </div>
+                        <div class="home-gs-step" onclick="window.app.navigate('community')">
+                            <div class="gs-step-num">2</div>
+                            <div class="gs-step-content">
+                                <strong>Or browse community quizzes</strong>
+                                <span>Copy quizzes shared by other students to your library</span>
+                            </div>
+                            <span class="gs-step-arrow">${icon('arrowRight')}</span>
+                        </div>
+                        <div class="home-gs-step" onclick="window.app.showCertPicker()">
+                            <div class="gs-step-num">3</div>
+                            <div class="gs-step-content">
+                                <strong>Track a certification</strong>
+                                <span>Add your target cert to see readiness scores per domain</span>
+                            </div>
+                            <span class="gs-step-arrow">${icon('arrowRight')}</span>
+                        </div>
+                    </div>
+                    <div class="home-gs-sample">
+                        <p class="text-muted" style="font-size:0.8125rem;margin-top:1rem;text-align:center">
+                            Not sure where to start?
+                            <button class="btn-link" onclick="window.app.trySampleQuiz()">Try a sample quiz</button>
+                            to see how it works.
+                        </p>
+                    </div>
+                </div>
+                ` : `
+                <!-- Existing user: quick-action grid -->
                 <div class="home-quick-grid">
                     <button class="home-quick-btn" onclick="window.app.navigate('study')">
                         <span class="quick-icon">${icon('library', 'icon-lg')}</span>
@@ -237,6 +279,7 @@ export function renderHome() {
                         <span class="quick-label">Readiness</span>
                     </button>
                 </div>
+                `}
             </section>
             `}
 

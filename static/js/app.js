@@ -56,7 +56,11 @@ import {
 
 // NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
-import { 
+import {
+    renderOnboarding, shouldShowOnboarding, startOnboarding,
+    completeOnboarding, onboardingNext, onboardingBack, onboardingSkip
+} from './components/onboarding.js';
+import {
     renderWizard, resetWizard, wizardSetTitle, wizardSetCategory, wizardToggleType,
     wizardToggleCode, wizardSetCount, wizardAdjustCount, wizardNext, wizardBack, wizardCopyPrompt, 
     wizardSetContent, wizardPreviewContent, wizardFinish, exitWizard
@@ -325,7 +329,7 @@ function renderInternal() {
             content = state.isAuthenticated ? renderHome() : renderLanding();
     }
 
-    app.innerHTML = content;
+    app.innerHTML = content + renderOnboarding();
 }
 
 // Subscribe to state changes
@@ -588,6 +592,27 @@ window.app = {
     fcTouchMove,
     fcTouchEnd,
     
+
+    // Onboarding
+    onboardingNext,
+    onboardingBack,
+    onboardingSkip,
+
+    // Sample quiz for new users
+    trySampleQuiz: async () => {
+        const { createSampleQuiz, loadQuizzes: refreshQuizzes } = await import('./services/api.js');
+        try {
+            showLoading();
+            const result = await createSampleQuiz();
+            await refreshQuizzes();
+            hideLoading();
+            showToast('Sample quiz added to your library!', 'success');
+            setState({ view: 'study' });
+        } catch (e) {
+            hideLoading();
+            showToast(e.message || 'Failed to create sample quiz', 'error');
+        }
+    },
 
     // SRS Review
     startSrsReview: () => initSrsReview(),
