@@ -259,7 +259,7 @@ function renderStudyModeFeedback(q, state) {
             case 'matching':
                 feedbackHtml += `<strong>Correct matches:</strong><ul class="correct-list">`;
                 q.pairs.forEach((pair, i) => {
-                    feedbackHtml += `<li>${escapeHtml(pair.left)} &larr;’ ${escapeHtml(pair.right)}</li>`;
+                    feedbackHtml += `<li>${escapeHtml(pair.left)} &larr; ${escapeHtml(pair.right)}</li>`;
                 });
                 feedbackHtml += `</ul>`;
                 break;
@@ -831,15 +831,19 @@ export function checkOrderingAnswer() {
 function handleStudyModeCheck(userAnswer, question) {
     const state = getState();
     const isCorrect = checkIfCorrect(userAnswer, question, state.currentQuestionIndex);
-    
+
     if (isCorrect) {
+        const newStreak = (state.quizStreak || 0) + 1;
+        const newMaxStreak = Math.max(newStreak, state.maxQuizStreak || 0);
+        setState({ quizStreak: newStreak, maxQuizStreak: newMaxStreak }, true);
         recordCorrectAnswer();
-        if (window.sounds) window.sounds.playCorrect(state.quizStreak);
+        if (window.sounds) window.sounds.playCorrect(newStreak);
         if (window.animations) {
             const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
             if (answerEl) window.animations.burstCorrect(answerEl);
         }
     } else {
+        setState({ quizStreak: 0 }, true);
         recordWrongAnswer();
         if (window.sounds) window.sounds.playWrong();
         if (window.animations) {
@@ -847,7 +851,7 @@ function handleStudyModeCheck(userAnswer, question) {
             if (answerEl) window.animations.burstWrong(answerEl);
         }
     }
-    
+
     setState({ showAnswer: true });
 }
 
@@ -1519,5 +1523,17 @@ export function exitQuiz() {
     }
     stopTimer();
     saveQuizProgress();
+
+    // End the active study session so study time is tracked even on early exit
+    if (state.activeStudySessionId) {
+        const answeredCount = state.answers.filter(a => a !== undefined).length;
+        endStudySession(state.activeStudySessionId, {
+            questions_reviewed: answeredCount,
+            questions_correct: 0,
+            duration_seconds: state.quizStartTime ? Math.round((Date.now() - state.quizStartTime) / 1000) : 0
+        }).catch(e => console.error('Failed to end study session on exit:', e));
+        setState({ activeStudySessionId: null }, true);
+    }
+
     setState({ view: 'library', currentQuiz: null });
 }

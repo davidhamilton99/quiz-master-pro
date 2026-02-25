@@ -6,7 +6,17 @@ export const ExportService = {
     toAnki(quiz) {
         return quiz.questions.map(q => {
             const front = q.question + (q.code ? '\n```\n' + q.code + '\n```' : '');
-            let back = q.options ? q.options.filter((_, i) => q.correct.includes(i)).join(', ') : '';
+            let back = '';
+            if (q.type === 'truefalse') {
+                const correctBool = Array.isArray(q.correct) ? q.correct[0] === 0 : q.correct === 0;
+                back = correctBool ? 'True' : 'False';
+            } else if (q.type === 'matching' && q.pairs) {
+                back = q.pairs.map(p => `${p.left} → ${p.right}`).join('; ');
+            } else if (q.type === 'ordering' && q.options) {
+                back = q.options.map((o, i) => `${i + 1}. ${o}`).join('; ');
+            } else if (q.options && q.correct) {
+                back = q.options.filter((_, i) => (q.correct || []).includes(i)).join(', ');
+            }
             if (q.explanation) back += '\n\n' + q.explanation;
             return front.replace(/\t/g, '  ').replace(/\n/g, '<br>') + '\t' + back.replace(/\t/g, '  ').replace(/\n/g, '<br>');
         }).join('\n');
@@ -14,7 +24,19 @@ export const ExportService = {
     toCSV(quiz) {
         let csv = 'Question,Type,Options,Correct,Explanation\n';
         quiz.questions.forEach(q => {
-            csv += `"${q.question.replace(/"/g, '""')}",${q.type},"${(q.options||[]).join('; ').replace(/"/g, '""')}","${q.options ? q.options.filter((_, i) => q.correct.includes(i)).join('; ').replace(/"/g, '""') : ''}","${(q.explanation||'').replace(/"/g, '""')}"\n`;
+            let optionsStr = (q.options || []).join('; ').replace(/"/g, '""');
+            let correctStr = '';
+            if (q.type === 'truefalse') {
+                const correctBool = Array.isArray(q.correct) ? q.correct[0] === 0 : q.correct === 0;
+                correctStr = correctBool ? 'True' : 'False';
+            } else if (q.type === 'matching' && q.pairs) {
+                correctStr = q.pairs.map(p => `${p.left}:${p.right}`).join('; ');
+            } else if (q.type === 'ordering' && q.options) {
+                correctStr = q.options.join('; ');
+            } else if (q.options && q.correct) {
+                correctStr = q.options.filter((_, i) => (q.correct || []).includes(i)).join('; ').replace(/"/g, '""');
+            }
+            csv += `"${q.question.replace(/"/g, '""')}",${q.type || 'choice'},"${optionsStr}","${correctStr}","${(q.explanation || '').replace(/"/g, '""')}"\n`;
         });
         return csv;
     },
@@ -23,7 +45,16 @@ export const ExportService = {
         quiz.questions.forEach((q, i) => {
             md += `## Question ${i + 1}\n\n${q.question}\n\n`;
             if (q.code) md += '```\n' + q.code + '\n```\n\n';
-            if (q.options) q.options.forEach((opt, j) => { md += `${q.correct.includes(j) ? '✓' : '○'} ${String.fromCharCode(65 + j)}. ${opt}\n`; });
+            if (q.type === 'truefalse') {
+                const correctBool = Array.isArray(q.correct) ? q.correct[0] === 0 : q.correct === 0;
+                md += `✓ ${correctBool ? 'True' : 'False'}\n`;
+            } else if (q.type === 'matching' && q.pairs) {
+                q.pairs.forEach(p => { md += `- ${p.left} → ${p.right}\n`; });
+            } else if (q.type === 'ordering' && q.options) {
+                q.options.forEach((opt, j) => { md += `${j + 1}. ${opt}\n`; });
+            } else if (q.options) {
+                q.options.forEach((opt, j) => { md += `${(q.correct || []).includes(j) ? '✓' : '○'} ${String.fromCharCode(65 + j)}. ${opt}\n`; });
+            }
             if (q.explanation) md += `\n> ${q.explanation}\n`;
             md += '\n---\n\n';
         });

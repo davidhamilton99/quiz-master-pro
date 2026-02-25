@@ -165,12 +165,14 @@ export function renderReview() {
 
 function renderReviewAnswer(q, userAnswer, isCorrect) {
     switch (q.type) {
-        case 'truefalse':
-            const correctBool = q.correct === true || q.correct === 'true';
+        case 'truefalse': {
+            // correct is stored as [0] for True, [1] for False
+            const correctBool = Array.isArray(q.correct) ? q.correct[0] === 0 : q.correct === 0;
+            const userAnswerStr = userAnswer === true ? 'True' : userAnswer === false ? 'False' : 'Not answered';
             return `
                 <div class="review-tf">
                     <div class="review-answer ${userAnswer === correctBool ? 'correct' : 'user-wrong'}">
-                        Your answer: <strong>${userAnswer === true ? 'True' : userAnswer === false ? 'False' : 'Not answered'}</strong>
+                        Your answer: <strong>${userAnswerStr}</strong>
                     </div>
                     ${!isCorrect ? `
                         <div class="review-answer correct">
@@ -179,14 +181,35 @@ function renderReviewAnswer(q, userAnswer, isCorrect) {
                     ` : ''}
                 </div>
             `;
+        }
             
-        case 'matching':
+        case 'matching': {
+            // userAnswer format: { leftIndex: rightDisplayIndex }
+            // matchingShuffled[questionIndex] maps rightDisplayIndex → { origIndex, text }
+            const state = getState();
+            // Find question index by searching quiz questions
+            const quiz = state.currentQuiz;
+            const questionIndex = quiz ? quiz.questions.findIndex(qx => qx === q || (qx.question === q.question && qx.type === q.type)) : -1;
+            const shuffledRight = questionIndex >= 0 ? (state.matchingShuffled || {})[questionIndex] : null;
+
             return `
                 <div class="review-matching">
                     ${q.pairs.map((pair, i) => {
-                        const userMatch = userAnswer?.[i];
-                        const isMatchCorrect = userMatch === i;
-                        const userMatchText = userMatch !== undefined ? q.pairs[userMatch]?.right : 'Not matched';
+                        const rightDisplayIdx = userAnswer?.[i];
+                        let userMatchText = 'Not matched';
+                        let isMatchCorrect = false;
+                        if (rightDisplayIdx !== undefined) {
+                            if (shuffledRight) {
+                                // Use the shuffled order to look up the actual right-side text
+                                const rightItem = shuffledRight[rightDisplayIdx];
+                                userMatchText = rightItem ? rightItem.text : 'Unknown';
+                                isMatchCorrect = rightItem && rightItem.origIndex === i;
+                            } else {
+                                // No shuffle info: fall back to treating displayIndex as origIndex
+                                userMatchText = q.pairs[rightDisplayIdx]?.right ?? 'Unknown';
+                                isMatchCorrect = rightDisplayIdx === i;
+                            }
+                        }
                         return `
                             <div class="review-match-row ${isMatchCorrect ? 'correct' : 'incorrect'}">
                                 <span class="match-left">${escapeHtml(pair.left)}</span>
@@ -198,6 +221,7 @@ function renderReviewAnswer(q, userAnswer, isCorrect) {
                     }).join('')}
                 </div>
             `;
+        }
             
         case 'ordering':
             // Get items - parser stores as q.options, but may also be q.items
@@ -255,11 +279,27 @@ function renderReviewAnswer(q, userAnswer, isCorrect) {
 function checkIfCorrect(answer, question) {
     switch (question.type) {
         case 'truefalse':
-            const correctBool = question.correct === true || question.correct === 'true';
+            // correct is stored as [0] for True, [1] for False (index into [True,False])
+            const correctBool = Array.isArray(question.correct) ? question.correct[0] === 0 : question.correct === 0;
             return answer === correctBool;
-        case 'matching':
+        case 'matching': {
             if (!answer) return false;
-            return Object.entries(answer).every(([left, right]) => parseInt(left) === parseInt(right));
+            // Look up matchingShuffled to correctly verify pairs
+            const state = getState();
+            const quiz = state.currentQuiz;
+            const qIndex = quiz ? quiz.questions.findIndex(qx => qx === question || (qx.question === question.question && qx.type === question.type)) : -1;
+            const shuffledRight = qIndex >= 0 ? (state.matchingShuffled || {})[qIndex] : null;
+            if (!shuffledRight) {
+                // Fallback: all left indices must equal right display indices (unshuffled)
+                return Object.entries(answer).every(([left, right]) => parseInt(left) === parseInt(right));
+            }
+            if (Object.keys(answer).length !== question.pairs.length) return false;
+            return Object.entries(answer).every(([left, right]) => {
+                const leftIdx = parseInt(left);
+                const rightItem = shuffledRight[parseInt(right)];
+                return rightItem && rightItem.origIndex === leftIdx;
+            });
+        }
         case 'ordering':
             if (!answer) return false;
             return answer.every((item, idx) => item.origIndex === idx);

@@ -470,6 +470,7 @@ export function recordCorrectAnswer() {
 export function recordWrongAnswer() {
     const s = getState();
     setState({ totalAnswered: s.totalAnswered + 1 }, true);
+    saveProfile();
 }
 
 export function recordQuizComplete(correct, total) {
