@@ -8,6 +8,13 @@ import { showToast } from '../utils/toast.js';
 
 // Cached certs list for dropdown
 let certsCache = null;
+
+// Deferred render timer — prevents blur-before-click destroying button elements
+let _veRenderTimer = null;
+function scheduleVeRender() {
+    clearTimeout(_veRenderTimer);
+    _veRenderTimer = setTimeout(() => setState({}), 50);
+}
 async function ensureCertsLoaded() {
     if (!certsCache) certsCache = await getCertifications();
     return certsCache;
@@ -434,7 +441,8 @@ export function saveField(field, value) {
     const s = getState();
     const q = [...s.parsedQuestions];
     q[s.currentEditQuestion] = { ...q[s.currentEditQuestion], [field]: value || null };
-    setState({ parsedQuestions: q });
+    setState({ parsedQuestions: q }, true);
+    scheduleVeRender();
 }
 
 // PHASE 2: Clear image
@@ -489,7 +497,8 @@ export function savePair(i, side, value) {
     current.options = pairs.map(p => p.right);
     current.correct = pairs.map((_, idx) => idx);
     q[s.currentEditQuestion] = current;
-    setState({ parsedQuestions: q });
+    setState({ parsedQuestions: q }, true);
+    scheduleVeRender();
 }
 
 export function addPair() {
@@ -522,7 +531,8 @@ export function saveOption(i, value) {
     current.options = [...current.options];
     current.options[i] = value;
     q[s.currentEditQuestion] = current;
-    setState({ parsedQuestions: q });
+    setState({ parsedQuestions: q }, true);
+    scheduleVeRender();
 }
 
 export function addOpt() { 
@@ -559,6 +569,31 @@ export function setQuestionDomain(domainIds) {
     saveField('domainIds', domainIds);
 }
 
+export function toggleOptionExplanations() {
+    const s = getState();
+    const q = [...s.parsedQuestions];
+    const current = { ...q[s.currentEditQuestion] };
+    current._showOptionExplanations = !current._showOptionExplanations;
+    q[s.currentEditQuestion] = current;
+    setState({ parsedQuestions: q });
+}
+
+export function saveOptionExplanation(i, value) {
+    const s = getState();
+    const q = [...s.parsedQuestions];
+    const current = { ...q[s.currentEditQuestion] };
+    const exps = { ...(current.optionExplanations || {}) };
+    if (value) {
+        exps[i] = value;
+    } else {
+        delete exps[i];
+    }
+    current.optionExplanations = Object.keys(exps).length ? exps : null;
+    q[s.currentEditQuestion] = current;
+    setState({ parsedQuestions: q }, true);
+    scheduleVeRender();
+}
+
 // Compatibility
 export function updateQ(f, v) { saveField(f, v); }
 export function updateOpt(i, v) { saveOption(i, v); }
@@ -567,7 +602,7 @@ export function updatePair(i, s, v) { savePair(i, s, v); }
 export async function saveVisual() {
     const state = getState();
     const invalid = state.parsedQuestions.filter(q => {
-        if (!q.question.trim()) return true;
+        if (!(q.question || '').trim()) return true;
         if (q.type === 'truefalse') return false;
         if (q.type === 'matching') return !q.pairs || q.pairs.length < 2 || q.pairs.some(p => !p.left.trim() || !p.right.trim());
         if (q.type === 'choice' && !q.correct.length) return true;
