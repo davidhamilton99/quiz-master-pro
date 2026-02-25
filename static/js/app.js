@@ -17,9 +17,9 @@ import { renderHome, resetHomeCache } from './components/home.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
 import { renderReadiness, setReadinessTab, selectReadinessCert } from './components/readiness.js';
 import {
-    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect, 
+    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect,
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
-    selectMatchLeft, selectMatchRight, unmatchItem, clearAllMatches, 
+    selectMatchLeft, selectMatchRight, unmatchItem, removeMatch, clearAllMatches,
     moveOrderItem, initQuizHandlers, checkMatchingAnswer, checkOrderingAnswer
 } from './components/quiz.js';
 import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
@@ -27,7 +27,8 @@ import {
     renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz,
     openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt,
     toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
-    saveField, changeType, savePair, saveOption, linkCertification, setQuestionDomain
+    saveField, changeType, savePair, saveOption, linkCertification, setQuestionDomain,
+    removeOpt, previewImage, clearImage, toggleOptionExplanations, saveOptionExplanation
 } from './components/create.js';
 import {
     renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
@@ -459,11 +460,8 @@ window.app = {
             showLoading();
             const quiz = await getQuiz(quizId);
             hideLoading();
-            // Add to state.quizzes if not already present, THEN open modal
-            const existing = (getState().quizzes || []);
-            if (!existing.find(q => q.id === quiz.id)) {
-                setState({ quizzes: [...existing, quiz] }, true);
-            }
+            // Store in a separate preview field so it never appears in the user's own library
+            setState({ communityQuizPreview: quiz }, true);
             openStudyModal(quiz.id);
         } catch (e) {
             hideLoading();
@@ -524,6 +522,7 @@ window.app = {
     selectMatchLeft,
     selectMatchRight,
     unmatchItem,
+    removeMatch,
     clearAllMatches,
     moveOrderItem,
     initQuizHandlers,
@@ -560,6 +559,11 @@ window.app = {
     changeType,
     savePair,
     saveOption,
+    removeOpt,
+    previewImage,
+    clearImage,
+    toggleOptionExplanations,
+    saveOptionExplanation,
     linkCertification,
     setQuestionDomain,
     

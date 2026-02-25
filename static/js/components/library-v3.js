@@ -67,7 +67,7 @@ export function renderLibrary() {
     </main>
 
     <!-- Study Mode Modal -->
-    ${showStudyModal ? renderStudyModal(state.quizzes.find(q => q.id === showStudyModal)) : ''}
+    ${showStudyModal ? renderStudyModal(state.quizzes.find(q => q.id === showStudyModal) || (state.communityQuizPreview?.id === showStudyModal ? state.communityQuizPreview : null)) : ''}
 
     <div class="mobile-tab-spacer"></div>
     `;
@@ -675,7 +675,7 @@ export function openStudyModal(quizId) {
 
 export function closeStudyModal() {
     showStudyModal = null;
-    setState({ view: 'study' });
+    setState({ communityQuizPreview: null, view: 'study' });
 }
 
 export function toggleCardMenu(quizId, btnEl) {

@@ -1413,8 +1413,8 @@ def get_cert_performance(cert_id):
     conn = get_db()
     c = conn.cursor()
 
-    # Get domains for this cert
-    c.execute('SELECT * FROM domains WHERE certification_id = ? ORDER BY sort_order', (cert_id,))
+    # Get top-level domains only (exclude sub-domains)
+    c.execute('SELECT * FROM domains WHERE certification_id = ? AND parent_domain_id IS NULL ORDER BY sort_order', (cert_id,))
     domains = [dict(r) for r in c.fetchall()]
 
     for domain in domains:
