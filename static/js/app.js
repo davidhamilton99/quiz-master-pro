@@ -67,8 +67,8 @@ import {
 } from './components/wizard.js';
 
 // Lightweight animation utils (shake/pulse only - gamification removed)
-import { addShakeAnimation, addPulseAnimation } from './utils/animations.js';
-window.animations = { addShakeAnimation, addPulseAnimation };
+import { addShakeAnimation, addPulseAnimation, showConfetti, showFireworks, burstCorrect, burstWrong } from './utils/animations.js';
+window.animations = { addShakeAnimation, addPulseAnimation, showConfetti, showFireworks, burstCorrect, burstWrong };
 
 const app = document.getElementById('app');
 

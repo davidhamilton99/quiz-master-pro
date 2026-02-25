@@ -63,6 +63,7 @@ def serve_static(filename):
 def get_db():
     conn = sqlite3.connect(DATABASE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 def init_db():
@@ -609,7 +610,15 @@ def _check_answer_correct(user_answer, correct_data, q_type, qrow):
     """Check if a user's answer is correct for a given question."""
     if user_answer is None:
         return False
-    if q_type in ('choice', 'truefalse'):
+    if q_type == 'truefalse':
+        # correct_data is [0] for True, [1] for False (0 = True index, 1 = False index)
+        # user_answer is a Python bool (True/False) sent from the frontend
+        if isinstance(correct_data, list) and len(correct_data) > 0:
+            correct_bool = correct_data[0] == 0  # 0 means True is correct
+            user_bool = bool(user_answer)
+            return user_bool == correct_bool
+        return False
+    if q_type == 'choice':
         if isinstance(correct_data, list) and len(correct_data) > 0:
             if isinstance(user_answer, list):
                 return set(user_answer) == set(correct_data)
