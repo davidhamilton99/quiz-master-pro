@@ -511,6 +511,36 @@ export async function getStudyStats(period = 'week') {
     return await apiCall(`/study-sessions/stats?period=${period}`);
 }
 
+// ==================== Objective Confidence & Study Resources ====================
+
+/**
+ * Get objectives (sub-domains) with user's confidence ratings for a certification
+ */
+export async function getCertObjectives(certId) {
+    const data = await apiCall(`/certifications/${certId}/objectives`);
+    return data.domains || [];
+}
+
+/**
+ * Update confidence ratings for objectives
+ * @param {number} certId
+ * @param {Object} ratings - {domain_id: confidence_level (0-3)}
+ */
+export async function updateObjectiveConfidence(certId, ratings) {
+    return await apiCall(`/certifications/${certId}/objectives`, {
+        method: 'PUT',
+        body: JSON.stringify({ ratings })
+    });
+}
+
+/**
+ * Get study resources for a certification
+ */
+export async function getStudyResources(certId) {
+    const data = await apiCall(`/certifications/${certId}/resources`);
+    return data.resources || [];
+}
+
 // ==================== Readiness Dashboard ====================
 
 /**

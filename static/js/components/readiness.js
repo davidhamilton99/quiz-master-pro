@@ -1,36 +1,51 @@
-/* Readiness Center - 3 tabs: Overview, Simulate, Weak Points (Phase 2.3) */
+/* Readiness Center - 4 tabs: Overview, Objectives, Simulate, Weak Points */
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { renderNav } from '../utils/nav.js';
 import {
     getUserCertifications, getCertPerformance, getCertTrends,
-    getWeakQuestions, getCertReadiness
+    getWeakQuestions, getCertReadiness,
+    getCertObjectives, updateObjectiveConfidence, getStudyResources
 } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
 import { showLoading, hideLoading } from '../utils/dom.js';
 
 // Module state
-let _tab = 'overview';          // 'overview' | 'simulate' | 'weak'
+let _tab = 'overview';          // 'overview' | 'objectives' | 'simulate' | 'weak'
 let _activeCertId = null;       // currently selected cert
 let _readiness = null;          // getCertReadiness response
 let _domains = [];              // getCertPerformance response
 let _trends = [];               // getCertTrends response
 let _weakQs = [];               // getWeakQuestions response
+let _objectives = [];           // getCertObjectives response
+let _resources = [];            // getStudyResources response
 let _dataLoaded = false;
+let _objectivesLoaded = false;
+let _resourcesLoaded = false;
+let _expandedDomains = new Set(); // track which domains are expanded in objectives tab
 
 export function setReadinessTab(tab) {
     _tab = tab;
+    // Lazy-load objectives and resources data
+    if (tab === 'objectives' && !_objectivesLoaded && _activeCertId) {
+        _loadObjectivesData(_activeCertId);
+    }
     setState({});
 }
 
 export async function selectReadinessCert(certId) {
     _activeCertId = certId;
     _dataLoaded = false;
+    _objectivesLoaded = false;
+    _resourcesLoaded = false;
     _readiness = null;
     _domains = [];
     _trends = [];
     _weakQs = [];
+    _objectives = [];
+    _resources = [];
+    _expandedDomains = new Set();
     setState({});
     await _loadReadinessData(certId);
 }
@@ -38,21 +53,66 @@ export async function selectReadinessCert(certId) {
 async function _loadReadinessData(certId) {
     if (!certId) return;
     try {
-        const [readiness, domains, trends, weakQs] = await Promise.all([
+        const [readiness, domains, trends, weakQs, resources] = await Promise.all([
             getCertReadiness(certId),
             getCertPerformance(certId),
             getCertTrends(certId),
             getWeakQuestions(certId, 10),
+            getStudyResources(certId).catch(() => []),
         ]);
         _readiness = readiness;
         _domains = domains || [];
         _trends = trends || [];
         _weakQs = weakQs || [];
+        _resources = resources || [];
+        _resourcesLoaded = true;
     } catch (e) {
         console.warn('Readiness data load failed:', e);
     }
     _dataLoaded = true;
     if (getState().view === 'readiness') setState({});
+}
+
+async function _loadObjectivesData(certId) {
+    if (!certId) return;
+    try {
+        _objectives = await getCertObjectives(certId);
+    } catch (e) {
+        console.warn('Objectives load failed:', e);
+        _objectives = [];
+    }
+    _objectivesLoaded = true;
+    if (getState().view === 'readiness') setState({});
+}
+
+export async function setObjectiveConfidence(domainId, confidence) {
+    if (!_activeCertId) return;
+    // Optimistic update
+    for (const domain of _objectives) {
+        if (domain.domain_id === domainId) {
+            domain.confidence = confidence;
+        }
+        for (const obj of (domain.objectives || [])) {
+            if (obj.domain_id === domainId) {
+                obj.confidence = confidence;
+            }
+        }
+    }
+    setState({});
+    try {
+        await updateObjectiveConfidence(_activeCertId, { [domainId]: confidence });
+    } catch (e) {
+        showToast('Failed to save confidence rating', 'error');
+    }
+}
+
+export function toggleObjectiveDomain(domainId) {
+    if (_expandedDomains.has(domainId)) {
+        _expandedDomains.delete(domainId);
+    } else {
+        _expandedDomains.add(domainId);
+    }
+    setState({});
 }
 
 export function renderReadiness() {
@@ -126,7 +186,7 @@ export function renderReadiness() {
                 <div class="readiness-hero-info">
                     <h2>${escapeHtml(activeCert.name || 'Certification')}</h2>
                     <p class="text-muted">${escapeHtml(activeCert.code || '')}</p>
-                    ${activeCert.target_date ? `<p class="readiness-target-date">🎯 Target: ${new Date(activeCert.target_date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}</p>` : ''}
+                    ${activeCert.target_date ? `<p class="readiness-target-date">${icon('crosshair')} Target: ${new Date(activeCert.target_date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}</p>` : ''}
                     <button class="btn btn-ghost btn-sm readiness-remove-btn"
                             onclick="window.app.unenrollCert(${activeCert.certification_id}, '${escapeHtml(activeCert.name || '')}')">
                         Remove
@@ -139,6 +199,9 @@ export function renderReadiness() {
                 <button class="readiness-tab ${_tab === 'overview' ? 'active' : ''}" onclick="window.app.setReadinessTab('overview')">
                     ${icon('barChart')} Overview
                 </button>
+                <button class="readiness-tab ${_tab === 'objectives' ? 'active' : ''}" onclick="window.app.setReadinessTab('objectives')">
+                    ${icon('listChecks')} Objectives
+                </button>
                 <button class="readiness-tab ${_tab === 'simulate' ? 'active' : ''}" onclick="window.app.setReadinessTab('simulate')">
                     ${icon('penLine')} Simulate
                 </button>
@@ -150,6 +213,7 @@ export function renderReadiness() {
             <!-- Tab content -->
             <div class="readiness-tab-body">
                 ${_tab === 'overview' ? renderOverviewTab(activeCert) : ''}
+                ${_tab === 'objectives' ? renderObjectivesTab(activeCert) : ''}
                 ${_tab === 'simulate' ? renderSimulateTab(activeCert) : ''}
                 ${_tab === 'weak' ? renderWeakTab() : ''}
             </div>
@@ -165,8 +229,40 @@ function renderOverviewTab(cert) {
         return `<div class="readiness-loading"><div class="spinner"></div><p class="text-muted">Loading data…</p></div>`;
     }
 
+    const prediction = _readiness?.prediction;
+    const studyTime = _readiness?.study_time;
+
     return `
     <div class="overview-grid">
+
+        <!-- Readiness Signal card -->
+        <div class="readiness-card readiness-signal-card">
+            <h3 class="readiness-card-title">${icon('shield')} Readiness Signal</h3>
+            ${prediction ? `
+            <div class="signal-content">
+                <div class="signal-badge ${prediction.likely_pass ? 'signal-pass' : 'signal-fail'}">
+                    ${prediction.likely_pass ? 'Likely to Pass' : 'Not Yet Ready'}
+                </div>
+                <div class="signal-meta">
+                    <span class="signal-confidence">Confidence: <strong>${prediction.confidence}</strong></span>
+                    <span class="signal-trend">
+                        Trend: <strong>${prediction.trend}</strong>
+                        ${prediction.trend === 'improving' ? '<span class="trend-arrow trend-up"></span>' : ''}
+                        ${prediction.trend === 'declining' ? '<span class="trend-arrow trend-down"></span>' : ''}
+                        ${prediction.trend === 'stable' ? '<span class="trend-arrow trend-flat"></span>' : ''}
+                    </span>
+                </div>
+                ${studyTime ? `
+                <div class="signal-study-time">
+                    <span>${icon('clock')} ${studyTime.total_hours}h studied</span>
+                    <span class="text-muted">(${studyTime.sessions} sessions, last 30 days)</span>
+                </div>
+                ` : ''}
+            </div>
+            ` : `
+            <p class="text-muted">Take a few simulations to generate your readiness prediction.</p>
+            `}
+        </div>
 
         <!-- Domain performance bars -->
         <div class="readiness-card">
@@ -215,6 +311,130 @@ function renderOverviewTab(cert) {
             `}
         </div>
 
+        <!-- Study Resources card -->
+        <div class="readiness-card">
+            <h3 class="readiness-card-title">${icon('bookOpen')} Study Resources</h3>
+            ${!_resourcesLoaded ? `
+                <p class="text-muted">Loading resources…</p>
+            ` : _resources.length === 0 ? `
+                <p class="text-muted">No study resources available for this certification yet.</p>
+            ` : `
+            <div class="resources-list">
+                ${_resources.slice(0, 5).map(r => {
+                    const typeIcon = r.resource_type === 'video' ? 'play' : r.resource_type === 'book' ? 'bookOpen' : 'link';
+                    return `
+                    <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" class="resource-item">
+                        <div class="resource-icon">${icon(typeIcon)}</div>
+                        <div class="resource-body">
+                            <div class="resource-title">${escapeHtml(r.title)}</div>
+                            <div class="resource-meta text-muted">
+                                ${escapeHtml(r.provider || '')}
+                                ${r.is_free ? '<span class="resource-free-badge">Free</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="resource-arrow">${icon('chevronRight')}</div>
+                    </a>
+                    `;
+                }).join('')}
+            </div>
+            `}
+        </div>
+
+    </div>
+    `;
+}
+
+// Confidence level labels and colors
+const CONFIDENCE_LABELS = ['Not Started', 'Learning', 'Reviewing', 'Confident'];
+const CONFIDENCE_CLASSES = ['conf-none', 'conf-learning', 'conf-reviewing', 'conf-confident'];
+
+function renderObjectivesTab(cert) {
+    if (!_objectivesLoaded) {
+        return `<div class="readiness-loading"><div class="spinner"></div><p class="text-muted">Loading objectives…</p></div>`;
+    }
+
+    if (_objectives.length === 0) {
+        return `
+        <div class="weak-empty">
+            <div class="weak-empty-icon">${icon('listChecks', 'icon-2xl')}</div>
+            <h3>No Objectives Available</h3>
+            <p class="text-muted">Objectives haven't been defined for this certification yet.</p>
+        </div>
+        `;
+    }
+
+    // Calculate overall self-assessment progress
+    let totalObj = 0, totalConf = 0;
+    for (const d of _objectives) {
+        for (const obj of (d.objectives || [])) {
+            totalObj++;
+            totalConf += obj.confidence;
+        }
+    }
+    const avgConf = totalObj > 0 ? (totalConf / (totalObj * 3) * 100) : 0;
+    const confPct = Math.round(avgConf);
+
+    return `
+    <div class="objectives-section">
+        <div class="objectives-summary">
+            <div class="objectives-summary-gauge">
+                <div class="obj-gauge-bar">
+                    <div class="obj-gauge-fill" style="width:${confPct}%"></div>
+                </div>
+                <span class="obj-gauge-label">${confPct}% Self-Assessed Confidence</span>
+            </div>
+            <p class="text-muted objectives-hint">Rate your confidence on each exam objective to track study progress. Click a domain to expand.</p>
+        </div>
+        <div class="objectives-domains">
+            ${_objectives.map(d => {
+                const isExpanded = _expandedDomains.has(d.domain_id);
+                const children = d.objectives || [];
+                // Domain-level confidence summary
+                let dConf = 0, dTotal = 0;
+                for (const obj of children) { dTotal++; dConf += obj.confidence; }
+                const dPct = dTotal > 0 ? Math.round(dConf / (dTotal * 3) * 100) : 0;
+                const dClass = dPct >= 75 ? 'bar-good' : dPct >= 40 ? 'bar-ok' : 'bar-low';
+
+                return `
+                <div class="obj-domain ${isExpanded ? 'expanded' : ''}">
+                    <button class="obj-domain-header" onclick="window.app.toggleObjectiveDomain(${d.domain_id})">
+                        <div class="obj-domain-left">
+                            <span class="obj-domain-code">${escapeHtml(d.code || '')}</span>
+                            <span class="obj-domain-name">${escapeHtml(d.name)}</span>
+                            ${d.weight ? `<span class="obj-domain-weight">${Math.round(d.weight * 100)}%</span>` : ''}
+                        </div>
+                        <div class="obj-domain-right">
+                            <div class="obj-mini-bar">
+                                <div class="obj-mini-fill ${dClass}" style="width:${dPct}%"></div>
+                            </div>
+                            <span class="obj-domain-chevron">${icon('chevronRight')}</span>
+                        </div>
+                    </button>
+                    ${isExpanded && children.length > 0 ? `
+                    <div class="obj-children">
+                        ${children.map(obj => `
+                        <div class="obj-item">
+                            <div class="obj-item-info">
+                                <span class="obj-item-code">${escapeHtml(obj.code || '')}</span>
+                                <span class="obj-item-name">${escapeHtml(obj.name)}</span>
+                            </div>
+                            <div class="obj-confidence-btns">
+                                ${[0, 1, 2, 3].map(level => `
+                                    <button class="obj-conf-btn ${obj.confidence === level ? CONFIDENCE_CLASSES[level] + ' active' : ''}"
+                                            onclick="window.app.setObjectiveConfidence(${obj.domain_id}, ${level})"
+                                            title="${CONFIDENCE_LABELS[level]}">
+                                        ${CONFIDENCE_LABELS[level].charAt(0)}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        `).join('')}
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }).join('')}
+        </div>
     </div>
     `;
 }

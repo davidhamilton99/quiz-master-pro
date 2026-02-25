@@ -337,6 +337,36 @@ def init_db():
     )''')
     c.execute('CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id)')
 
+    # Objective confidence self-assessment
+    c.execute('''CREATE TABLE IF NOT EXISTS objective_confidence (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        domain_id INTEGER NOT NULL,
+        confidence INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, domain_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_obj_conf_user ON objective_confidence(user_id)')
+
+    # Study resources linked to certifications
+    c.execute('''CREATE TABLE IF NOT EXISTS study_resources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        certification_id INTEGER NOT NULL,
+        domain_id INTEGER,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL,
+        resource_type TEXT NOT NULL DEFAULT 'article',
+        provider TEXT,
+        is_free BOOLEAN DEFAULT 1,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (certification_id) REFERENCES certifications(id) ON DELETE CASCADE,
+        FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE SET NULL
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_study_res_cert ON study_resources(certification_id)')
+
     # Phase 7.4 - Usage analytics event log
     c.execute('''CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2699,6 +2729,110 @@ def get_cert_readiness(cert_id):
         'prediction': prediction
     })
 
+# ==================== Objective Confidence & Study Resources ====================
+
+@app.route('/api/certifications/<int:cert_id>/objectives', methods=['GET'])
+@token_required
+def get_objectives(cert_id):
+    """Get all sub-objectives for a certification with user's confidence ratings."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Fetch top-level domains and their sub-objectives
+    c.execute('''SELECT d.id, d.name, d.code, d.weight, d.parent_domain_id, d.sort_order
+        FROM domains d
+        WHERE d.certification_id = ?
+        ORDER BY d.parent_domain_id NULLS FIRST, d.sort_order''', (cert_id,))
+    all_domains = [dict(r) for r in c.fetchall()]
+
+    # Fetch user's confidence ratings
+    domain_ids = [d['id'] for d in all_domains]
+    confidence_map = {}
+    if domain_ids:
+        placeholders = ','.join('?' * len(domain_ids))
+        c.execute(f'''SELECT domain_id, confidence FROM objective_confidence
+            WHERE user_id = ? AND domain_id IN ({placeholders})''',
+            [request.user_id] + domain_ids)
+        for row in c.fetchall():
+            confidence_map[row['domain_id']] = row['confidence']
+
+    # Build nested structure: top-level domains with children
+    top_domains = [d for d in all_domains if d['parent_domain_id'] is None]
+    children_map = {}
+    for d in all_domains:
+        if d['parent_domain_id'] is not None:
+            children_map.setdefault(d['parent_domain_id'], []).append(d)
+
+    result = []
+    for td in top_domains:
+        children = children_map.get(td['id'], [])
+        obj_list = []
+        for child in children:
+            obj_list.append({
+                'domain_id': child['id'],
+                'code': child['code'],
+                'name': child['name'],
+                'confidence': confidence_map.get(child['id'], 0),
+            })
+        result.append({
+            'domain_id': td['id'],
+            'code': td['code'],
+            'name': td['name'],
+            'weight': td['weight'],
+            'confidence': confidence_map.get(td['id'], 0),
+            'objectives': obj_list,
+        })
+
+    conn.close()
+    return jsonify({'domains': result})
+
+
+@app.route('/api/certifications/<int:cert_id>/objectives', methods=['PUT'])
+@token_required
+def update_objectives(cert_id):
+    """Update confidence ratings for objectives. Body: {ratings: {domain_id: confidence}}"""
+    data = request.get_json()
+    ratings = data.get('ratings', {})
+    if not ratings:
+        return jsonify({'error': 'No ratings provided'}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+    now = datetime.now()
+    with _db_write_lock:
+        for domain_id_str, confidence in ratings.items():
+            domain_id = int(domain_id_str)
+            confidence = max(0, min(3, int(confidence)))  # clamp 0-3
+            c.execute('''INSERT INTO objective_confidence (user_id, domain_id, confidence, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, domain_id) DO UPDATE SET
+                confidence = excluded.confidence, updated_at = excluded.updated_at''',
+                (request.user_id, domain_id, confidence, now))
+        conn.commit()
+    conn.close()
+    return jsonify({'message': 'Updated', 'count': len(ratings)})
+
+
+@app.route('/api/certifications/<int:cert_id>/resources', methods=['GET'])
+@token_required
+def get_study_resources(cert_id):
+    """Get study resources for a certification, optionally filtered by domain."""
+    domain_id = request.args.get('domain_id', type=int)
+    conn = get_db()
+    c = conn.cursor()
+    if domain_id:
+        c.execute('''SELECT * FROM study_resources
+            WHERE certification_id = ? AND (domain_id = ? OR domain_id IS NULL)
+            ORDER BY sort_order''', (cert_id, domain_id))
+    else:
+        c.execute('''SELECT * FROM study_resources
+            WHERE certification_id = ?
+            ORDER BY sort_order''', (cert_id,))
+    resources = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return jsonify({'resources': resources})
+
+
 @app.route('/api/community/quizzes', methods=['GET'])
 @token_required
 def community_quizzes():
@@ -4524,12 +4658,70 @@ def seed_security_plus_questions():
     print(f"[STARTUP] Seeded Security+ question bank: {len(all_questions)} questions across 5 domains", flush=True)
 
 
+def seed_study_resources():
+    """Seed study resources for major certifications."""
+    conn = get_db()
+    c = conn.cursor()
+
+    c.execute('SELECT COUNT(*) as cnt FROM study_resources')
+    if c.fetchone()['cnt'] > 0:
+        conn.close()
+        return
+
+    # Build cert code -> id map
+    c.execute('SELECT id, code FROM certifications')
+    cert_map = {r['code']: r['id'] for r in c.fetchall()}
+
+    resources = [
+        # CompTIA Network+ (N10-009)
+        ('comptia-net-n10-009', 'Professor Messer Network+ Course', 'https://www.professormesser.com/network-plus/n10-009/n10-009-video/n10-009-training-course/', 'video', 'Professor Messer', True),
+        ('comptia-net-n10-009', 'CompTIA Network+ Official Study Guide', 'https://www.comptia.org/training/books/network-n10-009-study-guide', 'book', 'CompTIA', False),
+        ('comptia-net-n10-009', 'CompTIA Network+ Exam Objectives', 'https://www.comptia.org/certifications/network', 'article', 'CompTIA', True),
+        # CompTIA Security+ (SY0-701)
+        ('comptia-sec-sy0-701', 'Professor Messer Security+ Course', 'https://www.professormesser.com/security-plus/sy0-701/sy0-701-video/sy0-701-comptia-security-plus-course/', 'video', 'Professor Messer', True),
+        ('comptia-sec-sy0-701', 'CompTIA Security+ Official Study Guide', 'https://www.comptia.org/training/books/security-sy0-701-study-guide', 'book', 'CompTIA', False),
+        ('comptia-sec-sy0-701', 'CompTIA Security+ Exam Objectives', 'https://www.comptia.org/certifications/security', 'article', 'CompTIA', True),
+        # CompTIA A+ Core 1
+        ('comptia-a-core1-221-1101', 'Professor Messer A+ Core 1 Course', 'https://www.professormesser.com/a-plus/220-1101/220-1101-video/220-1101-training-course/', 'video', 'Professor Messer', True),
+        ('comptia-a-core1-221-1101', 'CompTIA A+ Exam Objectives', 'https://www.comptia.org/certifications/a', 'article', 'CompTIA', True),
+        # CompTIA A+ Core 2
+        ('comptia-a-core2-221-1102', 'Professor Messer A+ Core 2 Course', 'https://www.professormesser.com/a-plus/220-1102/220-1102-video/220-1102-training-course/', 'video', 'Professor Messer', True),
+        # Cisco CCNA
+        ('cisco-ccna-200-301', 'Jeremy\'s IT Lab CCNA Course', 'https://www.youtube.com/playlist?list=PLxbwE86jKRgMpuZuLBivzlM8s2Dk5lXBQ', 'video', 'Jeremy\'s IT Lab', True),
+        ('cisco-ccna-200-301', 'Cisco CCNA Official Cert Guide', 'https://www.ciscopress.com/store/ccna-200-301-official-cert-guide-library-9781587147142', 'book', 'Cisco Press', False),
+        ('cisco-ccna-200-301', 'Cisco CCNA Exam Topics', 'https://www.cisco.com/c/en/us/training-events/training-certifications/exams/current-list/ccna-200-301.html', 'article', 'Cisco', True),
+        # AWS Solutions Architect Associate
+        ('aws-saa-c03', 'Stephane Maarek AWS SAA Course', 'https://www.udemy.com/course/aws-certified-solutions-architect-associate-saa-c03/', 'video', 'Udemy', False),
+        ('aws-saa-c03', 'AWS SAA Exam Guide', 'https://aws.amazon.com/certification/certified-solutions-architect-associate/', 'article', 'AWS', True),
+        ('aws-saa-c03', 'AWS Well-Architected Framework', 'https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html', 'article', 'AWS', True),
+        # AWS Cloud Practitioner
+        ('aws-clf-c02', 'AWS Cloud Practitioner Essentials', 'https://aws.amazon.com/training/digital/aws-cloud-practitioner-essentials/', 'video', 'AWS', True),
+        ('aws-clf-c02', 'AWS CLF Exam Guide', 'https://aws.amazon.com/certification/certified-cloud-practitioner/', 'article', 'AWS', True),
+        # Azure Fundamentals
+        ('az-900', 'Microsoft Learn AZ-900 Path', 'https://learn.microsoft.com/en-us/certifications/azure-fundamentals/', 'article', 'Microsoft', True),
+        ('az-900', 'John Savill AZ-900 Study Cram', 'https://www.youtube.com/watch?v=8n-kWJetQRk', 'video', 'YouTube', True),
+    ]
+
+    for i, (cert_code, title, url, rtype, provider, is_free) in enumerate(resources):
+        cert_id = cert_map.get(cert_code)
+        if not cert_id:
+            continue
+        c.execute('''INSERT INTO study_resources (certification_id, title, url, resource_type, provider, is_free, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            (cert_id, title, url, rtype, provider, 1 if is_free else 0, i))
+
+    conn.commit()
+    conn.close()
+    print(f"[STARTUP] Seeded {len(resources)} study resources", flush=True)
+
+
 # Initialize database tables on module load (for WSGI)
 try:
     init_db()
     seed_certifications()
     seed_sub_objectives()
     seed_security_plus_questions()
+    seed_study_resources()
 except Exception as e:
     print(f"[STARTUP] DB init error: {e}", flush=True)
 
