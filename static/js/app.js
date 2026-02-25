@@ -15,7 +15,7 @@ import {
 } from './components/library-v3.js';
 import { renderHome, resetHomeCache } from './components/home.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
-import { renderReadiness, setReadinessTab, selectReadinessCert } from './components/readiness.js';
+import { renderReadiness, setReadinessTab, selectReadinessCert, setObjectiveConfidence, toggleObjectiveDomain } from './components/readiness.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect,
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
@@ -472,6 +472,8 @@ window.app = {
     // Readiness
     setReadinessTab,
     selectReadinessCert,
+    setObjectiveConfidence,
+    toggleObjectiveDomain,
 
     // Create options
     showCreateOptions,
