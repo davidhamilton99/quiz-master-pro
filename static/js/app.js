@@ -258,7 +258,7 @@ function render() {
                 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:1rem;color:#f8fafc;font-family:sans-serif;">
                     <h2 style="margin:0">Something went wrong</h2>
                     <p style="margin:0;color:#94a3b8;">Please reload the page to continue.</p>
-                    <button onclick="location.reload()" style="padding:0.5rem 1.5rem;background:#8b5cf6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;">Reload</button>
+                    <button onclick="location.reload()" style="padding:0.5rem 1.5rem;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:1rem;">Reload</button>
                 </div>`;
         }
     }

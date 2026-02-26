@@ -656,6 +656,6 @@ export function exitWizard() {
 }
 
 function getRandomColor() {
-    const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'];
+    const colors = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#0891b2', '#7c3aed', '#c2410c', '#0d9488', '#4f46e5', '#059669'];
     return colors[Math.floor(Math.random() * colors.length)];
 }
