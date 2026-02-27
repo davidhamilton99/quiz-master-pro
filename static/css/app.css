@@ -373,16 +373,6 @@ code, pre, kbd, samp {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: 4px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-4px);
-    transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
-}
-
-.dropdown-menu.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
 }
 
 .dropdown-item {
@@ -418,14 +408,6 @@ code, pre, kbd, samp {
     align-items: center;
     justify-content: center;
     padding: 24px;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity var(--transition-base), visibility var(--transition-base);
-}
-
-.modal-overlay.active {
-    opacity: 1;
-    visibility: visible;
 }
 
 .modal {
