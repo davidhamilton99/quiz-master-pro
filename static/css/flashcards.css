@@ -424,7 +424,14 @@
 }
 
 .fc2-rate-btn:active { transform: scale(0.95); }
-.fc2-rate-icon { font-size: 1.5rem; }
+.fc2-rate-icon { font-size: 1.5rem; line-height: 1; }
+
+/* Default icon colors for each rating button */
+.fc2-rate-again .fc2-rate-icon { color: #dc2626; }
+.fc2-rate-hard .fc2-rate-icon { color: #d97706; }
+.fc2-rate-good .fc2-rate-icon { color: #2563eb; }
+.fc2-rate-easy .fc2-rate-icon { color: #16a34a; }
+
 .fc2-rate-label { font-size: 0.75rem; font-weight: 600; color: var(--text-primary, #1a1a1f); }
 
 .fc2-rate-key {
@@ -436,10 +443,10 @@
     font-weight: 500;
 }
 
-.fc2-rate-again:hover, .fc2-rate-again.selected { background: rgba(220, 38, 38, 0.08); border-color: #dc2626; }
-.fc2-rate-hard:hover, .fc2-rate-hard.selected { background: rgba(217, 119, 6, 0.08); border-color: #d97706; }
-.fc2-rate-good:hover, .fc2-rate-good.selected { background: rgba(37, 99, 235, 0.08); border-color: #2563eb; }
-.fc2-rate-easy:hover, .fc2-rate-easy.selected { background: rgba(22, 163, 74, 0.08); border-color: #16a34a; }
+.fc2-rate-again:hover, .fc2-rate-again.selected { background: rgba(220, 38, 38, 0.12); border-color: #dc2626; }
+.fc2-rate-hard:hover, .fc2-rate-hard.selected { background: rgba(217, 119, 6, 0.12); border-color: #d97706; }
+.fc2-rate-good:hover, .fc2-rate-good.selected { background: rgba(37, 99, 235, 0.12); border-color: #2563eb; }
+.fc2-rate-easy:hover, .fc2-rate-easy.selected { background: rgba(22, 163, 74, 0.12); border-color: #16a34a; }
 
 /* ==================== Bottom Navigation ==================== */
 .fc2-bottom-nav {
