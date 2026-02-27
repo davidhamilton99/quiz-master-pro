@@ -1122,8 +1122,191 @@
     margin-bottom: 1rem;
 }
 
+/* ==================== Study Hub Tabs Bar ==================== */
+.study-hub-tabs-bar {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 56px;
+    z-index: 90;
+}
+
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 7px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    border-radius: var(--radius-pill);
+    margin-left: 4px;
+}
+
+.study-hub-tab.active .tab-badge {
+    background: var(--primary-muted);
+    color: var(--primary);
+}
+
+/* ==================== Study Stats Strip ==================== */
+.study-stats-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 12px 0;
+    margin-bottom: 24px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+/* ==================== My Certs Tab ==================== */
+.my-certs-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 24px;
+    min-height: 400px;
+}
+
+.my-certs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.my-cert-item {
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+
+.my-cert-item:hover { border-color: var(--primary); }
+.my-cert-item.active { border-color: var(--primary); background: var(--primary-muted); }
+
+.my-cert-code {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 2px;
+}
+
+.my-cert-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.my-cert-target {
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
+.my-cert-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    background: none;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.my-cert-add:hover { border-color: var(--primary); color: var(--primary); }
+
+.my-cert-detail {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+}
+
+.cert-detail-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+}
+
+.cert-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.cert-detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.cert-domains { margin-top: 16px; }
+.cert-domains h3 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; }
+
+.cert-weak-preview { margin-top: 24px; }
+.cert-weak-preview h3 { font-size: 1rem; font-weight: 600; margin-bottom: 12px; }
+
+/* ==================== Saved Tab ==================== */
+.saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.saved-card {
+    padding: 16px;
+}
+
+.saved-card-meta {
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+}
+
+.saved-card-q {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.saved-card-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.certs-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 48px 24px;
+    gap: 12px;
+}
+
+.certs-empty-state .empty-icon {
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
+    .study-hub-tabs-bar { top: 0; }
+
+    .my-certs-layout {
+        grid-template-columns: 1fr;
+    }
+
     .stat-item {
         padding: 0.25rem 1.25rem;
     }
