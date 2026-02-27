@@ -2149,6 +2149,112 @@ code, pre, kbd, samp {
 
 .btn-link:hover { color: var(--primary-dark); }
 
+/* ---- Shared SVG Gauges & Rings ---- */
+
+.gauge-svg, .ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.gauge-bg, .ring-bg {
+    fill: none;
+    stroke: var(--bg-secondary);
+    stroke-width: 3;
+}
+
+.gauge-arc, .ring-fill {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.4s ease;
+}
+
+.gauge-good { stroke: var(--success); }
+.gauge-ok { stroke: var(--warning); }
+.gauge-low { stroke: var(--error); }
+
+.gauge-label, .ring-pct {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+}
+
+/* ---- Shared Utilities ---- */
+
+.mobile-tab-spacer {
+    height: 80px;
+    display: none;
+}
+
+.cert-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.cert-pill:hover { border-color: var(--primary); color: var(--primary); }
+.cert-pill.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.cert-pill-add { border-style: dashed; color: var(--text-muted); }
+.cert-pill-add:hover { border-color: var(--primary); color: var(--primary); }
+
+.badge-cert {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: var(--primary-muted);
+    color: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+.cert-filter-btn {
+    padding: 6px 14px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.cert-filter-btn:hover { border-color: var(--primary); color: var(--primary); }
+.cert-filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-family: var(--font-sans);
+    font-size: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.btn-link:hover { color: var(--primary-dark); }
+
 /* ---- Home Screen ---- */
 
 .home-container { max-width: 900px; margin: 0 auto; padding: 24px; }
@@ -2459,21 +2565,14 @@ code, pre, kbd, samp {
 }
 
 .study-hub-tab {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     padding: 10px 16px;
-    font-family: var(--font-sans);
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-secondary);
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
     cursor: pointer;
+    border-bottom: 2px solid transparent;
     transition: color var(--transition-fast), border-color var(--transition-fast);
     margin-bottom: -1px;
-    white-space: nowrap;
 }
 
 .study-hub-tab:hover { color: var(--text-primary); }
@@ -3169,8 +3268,6 @@ code, pre, kbd, samp {
 }
 
 .comm-card {
-    display: flex;
-    flex-direction: column;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -3182,7 +3279,7 @@ code, pre, kbd, samp {
 
 .comm-card-accent { height: 3px; }
 
-.comm-card-body { padding: 16px 16px 0; flex: 1; }
+.comm-card-body { padding: 16px 16px 0; }
 
 .comm-card-top {
     display: flex;
@@ -3252,10 +3349,9 @@ code, pre, kbd, samp {
    ============================================ */
 
 @media (max-width: 768px) {
-    .mobile-tab-bar { display: flex; }
+    .mobile-tab-bar { display: block; }
     .mobile-tab-spacer { display: block; }
-    .app-header .header-nav { display: none; }
-    .app-header .btn-text-desktop { display: none; }
+    .app-header-nav { display: none; }
 
     .home-container,
     .study-hub-container,
