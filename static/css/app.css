@@ -762,31 +762,35 @@ code, pre, kbd, samp {
     gap: 12px;
     padding: 14px 16px;
     background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+    border-left: 3px solid transparent;
+    border-radius: 4px;
     cursor: pointer;
     transition: border-color var(--transition-fast), background var(--transition-fast);
     font-size: 0.9375rem;
     line-height: 1.5;
+    color: var(--text-primary);
 }
 
 .option:hover {
-    border-color: var(--primary);
-    background: var(--primary-muted);
+    border-color: var(--border);
+    border-left-color: var(--primary);
 }
 
 .option.selected {
-    border-color: var(--primary);
+    border-left-color: var(--primary);
     background: var(--primary-muted);
 }
 
 .option.correct {
-    border-color: var(--success);
+    border-color: var(--border-light);
+    border-left-color: var(--success);
     background: var(--success-muted);
 }
 
 .option.incorrect {
-    border-color: var(--error);
+    border-color: var(--border-light);
+    border-left-color: var(--error);
     background: var(--error-muted);
 }
 
@@ -838,44 +842,25 @@ code, pre, kbd, samp {
     gap: 12px;
 }
 
-.tf-option {
-    display: flex;
-    align-items: center;
+.tf-options .option {
     justify-content: center;
-    gap: 8px;
-    padding: 16px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: 0.9375rem;
+    border-left-width: 1px;
     font-weight: 500;
-    transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.tf-option:hover {
+.tf-options .option.selected {
+    border-left-width: 1px;
     border-color: var(--primary);
-    background: var(--primary-muted);
 }
 
-.tf-option.selected {
-    border-color: var(--primary);
-    background: var(--primary-muted);
-}
-
-.tf-option.correct {
+.tf-options .option.correct {
+    border-left-width: 1px;
     border-color: var(--success);
-    background: var(--success-muted);
 }
 
-.tf-option.incorrect {
+.tf-options .option.incorrect {
+    border-left-width: 1px;
     border-color: var(--error);
-    background: var(--error-muted);
-}
-
-.tf-option.disabled {
-    pointer-events: none;
-    opacity: 0.7;
 }
 
 /* ---- Matching ---- */
@@ -1104,33 +1089,25 @@ code, pre, kbd, samp {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    flex-shrink: 0;
     font-size: 0.8125rem;
     font-weight: 600;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    flex-shrink: 0;
-    color: var(--text-secondary);
-    background: var(--bg-secondary);
+    color: var(--text-muted);
+    border: none;
+    background: none;
 }
 
 .option.selected .option-letter {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
+    color: var(--primary);
 }
 
 .option.correct .option-letter {
-    background: var(--success);
-    color: #fff;
-    border-color: var(--success);
+    color: var(--success);
 }
 
 .option.incorrect .option-letter {
-    background: var(--error);
-    color: #fff;
-    border-color: var(--error);
+    color: var(--error);
 }
 
 .option-explanation {
@@ -2336,12 +2313,12 @@ code, pre, kbd, samp {
 
 .study-feedback.correct {
     background: var(--success-muted);
-    border: 1px solid var(--success);
+    border: none;
 }
 
 .study-feedback.incorrect {
     background: var(--error-muted);
-    border: 1px solid var(--error);
+    border: none;
 }
 
 .study-feedback-header {

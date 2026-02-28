@@ -488,7 +488,7 @@ function renderMultipleChoice(q, questionIndex) {
         const isSelected = isMulti
             ? (userAnswer || []).includes(i)
             : userAnswer === i;
-        const isCorrectOpt = isMulti
+        const isCorrectOpt = Array.isArray(displayCorrect)
             ? displayCorrect.includes(i)
             : displayCorrect === i;
 
