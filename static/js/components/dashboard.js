@@ -308,7 +308,7 @@ function renderDomainSection(readiness, fallbackDomains) {
         <div class="dash-section">
             <div class="dash-section-title">Domain Breakdown</div>
             <p style="color:var(--text-muted);font-size:0.875rem">
-                No performance data yet. Take quizzes tagged to this certification's domains to see your progress.
+                No performance data yet. Complete practice exams to see your domain breakdown.
             </p>
         </div>`;
     }

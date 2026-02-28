@@ -1,59 +1,16 @@
 /* Create/Edit Component */
 import { getState, setState } from '../state.js';
-import { getQuiz, createQuiz, updateQuiz, getCertifications, getCertification, assignQuestionDomains } from '../services/api.js';
+import { getQuiz, createQuiz, updateQuiz } from '../services/api.js';
 import { escapeHtml, getRandomColor, showLoading, hideLoading } from '../utils/dom.js';
 import { parseQuizData, questionsToText } from '../utils/parser.js';
 import { icon } from '../utils/icons.js';
 import { showToast } from '../utils/toast.js';
-
-// Cached certs list for dropdown
-let certsCache = null;
 
 // Deferred render timer — prevents blur-before-click destroying button elements
 let _veRenderTimer = null;
 function scheduleVeRender() {
     clearTimeout(_veRenderTimer);
     _veRenderTimer = setTimeout(() => setState({}), 50);
-}
-async function ensureCertsLoaded() {
-    if (!certsCache) certsCache = await getCertifications();
-    return certsCache;
-}
-
-/** Load domains for a certification and store in state */
-export async function linkCertification(certId) {
-    if (!certId) {
-        setState({ editingQuizCertId: null, certDomains: [] });
-        return;
-    }
-    try {
-        const cert = await getCertification(certId);
-        setState({ editingQuizCertId: certId, certDomains: cert.domains || [] });
-    } catch (e) {
-        showToast('Failed to load certification domains', 'error');
-    }
-}
-
-/** Save domain assignments after quiz save */
-async function saveDomainAssignments(quizId) {
-    const state = getState();
-    if (!state.editingQuizCertId || !state.parsedQuestions) return;
-
-    const questionDomainMap = {};
-    state.parsedQuestions.forEach((q, i) => {
-        if (q.domainIds && q.domainIds.length > 0) {
-            // Map question index to domain IDs — backend will resolve by question_index
-            questionDomainMap[i] = q.domainIds;
-        }
-    });
-
-    if (Object.keys(questionDomainMap).length > 0) {
-        try {
-            await assignQuestionDomains(quizId, questionDomainMap);
-        } catch (e) {
-            console.error('Failed to save domain assignments:', e);
-        }
-    }
 }
 
 // Code language options for the dropdown
@@ -114,21 +71,11 @@ function renderVisual() {
     const questions = state.parsedQuestions || [];
     const q = questions[state.currentEditQuestion] || {};
     const qIdx = state.currentEditQuestion;
-    
-    // Trigger cert list load for dropdown
-    ensureCertsLoaded().then(() => { if (getState().view === 'create') setState({}); });
 
     return `<div class="create-page"><header class="create-header"><div class="create-header-inner">
         <button class="btn btn-ghost" onclick="window.app.closeVisual()">← Text Mode</button>
         <h2>Visual Editor</h2>
-        <div style="display:flex;align-items:center;gap:0.5rem">
-            <select class="input" style="width:auto;min-width:180px;font-size:0.8rem;padding:0.4rem 0.6rem"
-                onchange="window.app.linkCertification(this.value ? parseInt(this.value) : null)">
-                <option value="">No Certification</option>
-                ${(certsCache || []).map(c => `<option value="${c.id}" ${state.editingQuizCertId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
-            </select>
-            <button class="btn btn-primary" onclick="window.app.saveVisual()">Save Quiz</button>
-        </div>
+        <button class="btn btn-primary" onclick="window.app.saveVisual()">Save Quiz</button>
     </div></header>
     <div class="editor-layout">
         <aside class="editor-sidebar">
@@ -214,16 +161,6 @@ function renderVisual() {
                     </div>
                 </div>
                 
-                ${state.certDomains.length > 0 ? `
-                <div class="form-group">
-                    <label class="label">Exam Domain <span class="text-muted">(optional)</span></label>
-                    <select class="input" onchange="window.app.setQuestionDomain(this.value ? [parseInt(this.value)] : [])">
-                        <option value="">No domain</option>
-                        ${state.certDomains.map(d => `<option value="${d.id}" ${(q.domainIds || []).includes(d.id) ? 'selected' : ''}>${escapeHtml(d.code || '')} ${escapeHtml(d.name)}</option>`).join('')}
-                    </select>
-                    <p class="helper-text">Tag this question with an exam objective for analytics</p>
-                </div>` : ''}
-
                 ${renderTypeEditor(q, qIdx)}
 
                 <div class="form-group">
@@ -374,11 +311,7 @@ export async function editQuiz(id) {
     showLoading();
     try {
         const quiz = await getQuiz(id);
-        setState({ view: 'create', quizTitle: quiz.title, quizData: questionsToText(quiz.questions), quizCategory: quiz.description || '', editingQuizId: id, visualEditorMode: false, editingQuizCertId: quiz.certification_id || null });
-        // Load cert domains if quiz is linked to a certification
-        if (quiz.certification_id) {
-            linkCertification(quiz.certification_id);
-        }
+        setState({ view: 'create', quizTitle: quiz.title, quizData: questionsToText(quiz.questions), quizCategory: quiz.description || '', editingQuizId: id, visualEditorMode: false });
         hideLoading();
     } catch { hideLoading(); showToast('Failed to load', 'error'); }
 }
@@ -408,8 +341,6 @@ function createEmpty(type) {
         imageAlt: null,
         code: null,
         codeLanguage: null,
-        // Domain tagging
-        domainIds: [],
     };
     if (type === 'truefalse') return { ...base, options: ['True', 'False'], correct: [0] };
     if (type === 'matching') return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }] };
@@ -565,10 +496,6 @@ export function toggleCorrect(i) {
     setState({ parsedQuestions: q }); 
 }
 
-export function setQuestionDomain(domainIds) {
-    saveField('domainIds', domainIds);
-}
-
 export function toggleOptionExplanations() {
     const s = getState();
     const q = [...s.parsedQuestions];
@@ -617,20 +544,13 @@ export async function saveVisual() {
             questions: state.parsedQuestions,
             description: state.quizCategory,
             color: getRandomColor(),
-            certification_id: state.editingQuizCertId || null,
         };
-        let quizId = state.editingQuizId;
-        if (quizId) {
-            await updateQuiz(quizId, payload);
+        if (state.editingQuizId) {
+            await updateQuiz(state.editingQuizId, payload);
         } else {
-            const result = await createQuiz(payload);
-            quizId = result.quizId;
+            await createQuiz(payload);
         }
-        // Save domain assignments if quiz is linked to a certification
-        if (quizId && state.editingQuizCertId) {
-            await saveDomainAssignments(quizId);
-        }
-        setState({ view: 'library', quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null, visualEditorMode: false, parsedQuestions: null, editingQuizCertId: null, certDomains: [] });
+        setState({ view: 'library', quizTitle: '', quizData: '', quizCategory: '', editingQuizId: null, visualEditorMode: false, parsedQuestions: null });
         hideLoading();
     } catch (e) { hideLoading(); showToast(e.message || 'Failed', 'error'); }
 }

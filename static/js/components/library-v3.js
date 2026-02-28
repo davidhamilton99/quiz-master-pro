@@ -1,6 +1,6 @@
 /* Study Hub (was Library) - v3.0 with My Certs + My Quizzes tabs (Phase 2.2) */
 import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
-import { logout, deleteQuiz, updateQuizSettings, getCertifications } from '../services/api.js';
+import { logout, deleteQuiz, updateQuizSettings } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { renderNav } from '../utils/nav.js';
@@ -291,7 +291,7 @@ function renderCertDetail(cert, domains, state) {
             `;
         }).join('')}
     </div>
-    ` : `<p class="text-muted" style="margin-top:1rem">Take some quizzes linked to this certification to see domain performance.</p>`}
+    ` : `<p class="text-muted" style="margin-top:1rem">Complete practice exams to see domain performance.</p>`}
 
     ${weakQs.length > 0 ? `
     <div class="cert-weak-preview">
@@ -705,12 +705,6 @@ export async function showShareSettings(quizId) {
     const quiz = state.quizzes.find(q => q.id === quizId);
     if (!quiz) return;
 
-    // Lazy-load certifications
-    let certs = state.certifications || [];
-    if (!certs.length) {
-        try { certs = await getCertifications(); setState({ certifications: certs }); } catch {}
-    }
-
     const existing = document.getElementById('share-settings-modal');
     if (existing) existing.remove();
 
@@ -736,15 +730,6 @@ export async function showShareSettings(quizId) {
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-
-                <div class="share-cert-row" id="share-cert-row" style="${quiz.is_public ? '' : 'display:none'}">
-                    <label style="font-weight:600;display:block;margin-bottom:0.5rem">Link to Certification <span class="text-muted" style="font-weight:400">(optional)</span></label>
-                    <select class="share-cert-select" id="share-cert-select">
-                        <option value="">— No certification —</option>
-                        ${certs.map(c => `<option value="${c.id}" ${quiz.certification_id == c.id ? 'selected' : ''}>${escapeHtml(c.code || c.name)}: ${escapeHtml(c.name)}</option>`).join('')}
-                    </select>
-                    <div class="share-cert-hint text-muted">Linking helps others discover this quiz when studying for that cert.</div>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="document.getElementById('share-settings-modal').remove()">Cancel</button>
@@ -754,17 +739,11 @@ export async function showShareSettings(quizId) {
     `;
     document.body.appendChild(overlay);
 
-    // Toggle cert row visibility
-    overlay.querySelector('#share-public-toggle').addEventListener('change', (e) => {
-        overlay.querySelector('#share-cert-row').style.display = e.target.checked ? '' : 'none';
-    });
-
     // Save
     overlay.querySelector('#share-save-btn').addEventListener('click', async () => {
         const isPublic = overlay.querySelector('#share-public-toggle').checked;
-        const certId = overlay.querySelector('#share-cert-select')?.value || null;
         overlay.remove();
-        await updateQuizSettings(quizId, { isPublic, certificationId: certId || null });
+        await updateQuizSettings(quizId, { isPublic });
     });
 
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });

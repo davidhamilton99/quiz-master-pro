@@ -224,6 +224,8 @@ def init_db():
         FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
     )''')
 
+    # question_domains table: links questions to certification domains
+    # Used by certification question bank (managed by admin), NOT by user quizzes
     c.execute('''CREATE TABLE IF NOT EXISTS question_domains (
         question_id INTEGER NOT NULL,
         domain_id INTEGER NOT NULL,
@@ -388,10 +390,7 @@ def init_db():
     conn.execute('PRAGMA journal_mode=WAL')
 
     # Add new columns to quizzes table (safe to run multiple times)
-    try:
-        c.execute('ALTER TABLE quizzes ADD COLUMN certification_id INTEGER REFERENCES certifications(id)')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    # NOTE: certification_id column intentionally removed — quizzes and certifications are independent systems
     try:
         c.execute('ALTER TABLE quizzes ADD COLUMN is_migrated BOOLEAN DEFAULT 0')
     except sqlite3.OperationalError:
@@ -456,115 +455,8 @@ def _read_questions_for_quiz(c, quiz_id):
             q['explanation'] = row['explanation']
         if row['option_explanations']:
             q['optionExplanations'] = json.loads(row['option_explanations'])
-        # Include assigned domain IDs
-        c.execute('SELECT domain_id FROM question_domains WHERE question_id = ?', (row['id'],))
-        q['domainIds'] = [r['domain_id'] for r in c.fetchall()]
         questions.append(q)
     return questions
-
-# Domain auto-tagging rules: (title_pattern, cert_code_or_None, domain_codes)
-# When cert_code is None, the rule applies to the quiz's own certification.
-# '__all__' means tag to all domains for that certification.
-_DOMAIN_TAG_RULES = [
-    # CCNA
-    (re.compile(r'ccna\s+week\s+[1-3]($|\D)', re.I), 'cisco-ccna-200-301', ['1.0']),
-    (re.compile(r'ccna\s+week\s+4($|\D)', re.I), 'cisco-ccna-200-301', ['2.0']),
-    (re.compile(r'ccna\s+week\s+5($|\D)', re.I), 'cisco-ccna-200-301', ['3.0']),
-    (re.compile(r'ccna\s+week\s+6($|\D)', re.I), 'cisco-ccna-200-301', ['3.0', '4.0']),
-    (re.compile(r'ccna\s+week\s+7($|\D)', re.I), 'cisco-ccna-200-301', ['4.0', '5.0']),
-    (re.compile(r'ccna\s+week\s+8($|\D)', re.I), 'cisco-ccna-200-301', ['5.0']),
-    (re.compile(r'ccna\s+week\s+9($|\D)', re.I), 'cisco-ccna-200-301', ['2.0']),
-    (re.compile(r'ccna\s+week\s+1[0-9]($|\D)', re.I), 'cisco-ccna-200-301', ['6.0']),
-    (re.compile(r'chapter\s+\d+\s+vol\s+1', re.I), 'cisco-ccna-200-301', ['1.0', '2.0', '3.0']),
-    (re.compile(r'chapter\s+\d+\s+vol\s+2', re.I), 'cisco-ccna-200-301', ['4.0', '5.0', '6.0']),
-    # Security+
-    (re.compile(r'security\s+week\s+1($|\D)', re.I), 'comptia-sec-sy0-701', ['1.0']),
-    (re.compile(r'security\s+week\s+2($|\D)', re.I), 'comptia-sec-sy0-701', ['4.0']),
-    (re.compile(r'security\s+week\s+3($|\D)', re.I), 'comptia-sec-sy0-701', ['2.0']),
-    (re.compile(r'security\s+week\s+4($|\D)', re.I), 'comptia-sec-sy0-701', ['3.0']),
-    (re.compile(r'security\s+week\s+5($|\D)', re.I), 'comptia-sec-sy0-701', ['4.0']),
-    (re.compile(r'security\s+week\s+6($|\D)', re.I), 'comptia-sec-sy0-701', ['5.0']),
-    (re.compile(r'security\s+part\s+\d+', re.I), 'comptia-sec-sy0-701', ['__all__']),
-    (re.compile(r'\bcryptography\b', re.I), 'comptia-sec-sy0-701', ['1.0']),
-    (re.compile(r'\bfirewalls?\b', re.I), 'comptia-sec-sy0-701', ['3.0']),
-    # A+ Core 2
-    (re.compile(r'operating\s+systems?\s+part\s+\d+', re.I), 'comptia-a-core2-221-1102', ['1.0']),
-    (re.compile(r'\bsoftware\s+troubleshooting\b', re.I), 'comptia-a-core2-221-1102', ['3.0']),
-    (re.compile(r'\boperational\s+procedures?\b', re.I), 'comptia-a-core2-221-1102', ['4.0']),
-    # Generic practice exams - all domains
-    (re.compile(r'practice\s+exam', re.I), None, ['__all__']),
-    (re.compile(r'mock\s+exam', re.I), None, ['__all__']),
-    (re.compile(r'full\s+exam', re.I), None, ['__all__']),
-    (re.compile(r'final\s+exam', re.I), None, ['__all__']),
-]
-
-def _auto_tag_question_domains(c, quiz_id, cert_id, title):
-    """Automatically tag questions in a quiz to certification domains.
-
-    Uses title-based keyword matching to assign domains. If no specific rule
-    matches but a certification is linked, tags to ALL domains for that cert
-    (so simulations and readiness always have data to work with).
-    """
-    if not cert_id:
-        return
-
-    # Build lookup tables
-    c.execute('SELECT id, code FROM certifications')
-    cert_code_to_id = {r['code']: r['id'] for r in c.fetchall()}
-    cert_id_to_code = {v: k for k, v in cert_code_to_id.items()}
-
-    c.execute('''SELECT id, certification_id, code, weight
-        FROM domains WHERE parent_domain_id IS NULL ORDER BY sort_order''')
-    domains_by_cert = {}
-    domain_by_cert_code = {}
-    for r in c.fetchall():
-        cid = r['certification_id']
-        domains_by_cert.setdefault(cid, []).append(dict(r))
-        domain_by_cert_code[(cid, r['code'])] = r['id']
-
-    # Try to match title to specific domains
-    domain_ids = None
-    title_lower = title.lower() if title else ''
-    for pattern, rule_cert_code, domain_codes in _DOMAIN_TAG_RULES:
-        if not pattern.search(title_lower):
-            continue
-        if rule_cert_code is not None:
-            rule_cert_id = cert_code_to_id.get(rule_cert_code)
-            if rule_cert_id != cert_id:
-                continue
-        else:
-            rule_cert_id = cert_id
-        if rule_cert_id is None:
-            continue
-        if domain_codes == ['__all__']:
-            domain_ids = [d['id'] for d in domains_by_cert.get(rule_cert_id, [])]
-        else:
-            domain_ids = []
-            for code in domain_codes:
-                did = domain_by_cert_code.get((rule_cert_id, code))
-                if did:
-                    domain_ids.append(did)
-        break
-
-    # Fallback: if no specific rule matched, tag to ALL domains for this cert.
-    # This ensures every cert-linked quiz feeds into readiness and simulation.
-    if not domain_ids:
-        domain_ids = [d['id'] for d in domains_by_cert.get(cert_id, [])]
-
-    if not domain_ids:
-        return
-
-    # Get all question IDs for this quiz
-    c.execute('SELECT id FROM questions WHERE quiz_id = ? AND is_active = 1', (quiz_id,))
-    question_ids = [r['id'] for r in c.fetchall()]
-
-    for q_id in question_ids:
-        for d_id in domain_ids:
-            try:
-                c.execute('INSERT OR IGNORE INTO question_domains (question_id, domain_id) VALUES (?, ?)',
-                          (q_id, d_id))
-            except sqlite3.IntegrityError:
-                pass
 
 
 def _migrate_quiz(c, quiz_id, questions_json_str):
@@ -932,12 +824,11 @@ def create_quiz():
     conn = get_db()
     c = conn.cursor()
     # Dual-write: JSON blob + normalized questions table
-    c.execute('INSERT INTO quizzes (user_id, title, description, questions, color, certification_id, is_migrated) VALUES (?, ?, ?, ?, ?, ?, 1)',
+    c.execute('INSERT INTO quizzes (user_id, title, description, questions, color, is_migrated) VALUES (?, ?, ?, ?, ?, 1)',
         (request.user_id, title, data.get('description', ''), json.dumps(questions_list),
-         data.get('color', '#6366f1'), data.get('certification_id')))
+         data.get('color', '#6366f1')))
     quiz_id = c.lastrowid
     _insert_questions_for_quiz(c, quiz_id, questions_list)
-    _auto_tag_question_domains(c, quiz_id, data.get('certification_id'), title)
     conn.commit()
     conn.close()
     return jsonify({'message': 'Created', 'quiz_id': quiz_id}), 201
@@ -973,15 +864,14 @@ def update_quiz(id):
     conn = get_db()
     c = conn.cursor()
     # Dual-write: update JSON blob AND normalized questions
-    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, certification_id=?, is_public=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
+    c.execute('UPDATE quizzes SET title=?, description=?, questions=?, color=?, is_public=?, is_migrated=1, last_modified=? WHERE id=? AND user_id=?',
         (data.get('title'), data.get('description', ''), json.dumps(questions_list),
-         data.get('color', '#6366f1'), data.get('certification_id'),
+         data.get('color', '#6366f1'),
          1 if data.get('is_public') else 0,
          datetime.now(), id, request.user_id))
     # Replace normalized questions: delete old, insert new
     c.execute('DELETE FROM questions WHERE quiz_id = ?', (id,))
     _insert_questions_for_quiz(c, id, questions_list)
-    _auto_tag_question_domains(c, id, data.get('certification_id'), data.get('title'))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Updated'})
@@ -989,26 +879,19 @@ def update_quiz(id):
 @app.route('/api/quizzes/<int:id>/settings', methods=['PATCH'])
 @token_required
 def update_quiz_settings(id):
-    """Lightweight update: is_public and certification_id only."""
+    """Lightweight update: is_public only."""
     data = request.get_json() or {}
     conn = get_db()
     c = conn.cursor()
-    new_cert_id = data.get('certification_id') or None
     with _db_write_lock:
         c.execute('''UPDATE quizzes
-                     SET is_public=?, certification_id=?, last_modified=?
+                     SET is_public=?, last_modified=?
                      WHERE id=? AND user_id=?''',
                   (1 if data.get('is_public') else 0,
-                   new_cert_id,
                    datetime.now(), id, request.user_id))
         if c.rowcount == 0:
             conn.close()
             return jsonify({'error': 'Not found or not authorized'}), 404
-        # Auto-tag questions when a certification is linked
-        if new_cert_id:
-            c.execute('SELECT title FROM quizzes WHERE id = ?', (id,))
-            row = c.fetchone()
-            _auto_tag_question_domains(c, id, new_cert_id, row['title'] if row else '')
         conn.commit()
     conn.close()
     return jsonify({'message': 'Settings updated'})
@@ -1404,37 +1287,6 @@ def unenroll_certification(cert_id):
     conn.close()
     return jsonify({'message': 'Unenrolled'})
 
-@app.route('/api/quizzes/<int:quiz_id>/domains', methods=['PUT'])
-@token_required
-def assign_question_domains(quiz_id):
-    """Assign domain tags to questions in a quiz.
-    Body: {question_domains: {question_id: [domain_id, ...]}}
-    """
-    data = request.get_json()
-    question_domain_map = data.get('question_domains', {})
-    conn = get_db()
-    c = conn.cursor()
-
-    # Verify quiz ownership
-    c.execute('SELECT id FROM quizzes WHERE id = ? AND user_id = ?', (quiz_id, request.user_id))
-    if not c.fetchone():
-        conn.close()
-        return jsonify({'error': 'Not found'}), 404
-
-    for q_id_str, domain_ids in question_domain_map.items():
-        q_id = int(q_id_str)
-        # Clear existing domains for this question
-        c.execute('DELETE FROM question_domains WHERE question_id = ?', (q_id,))
-        # Insert new domain associations
-        for d_id in domain_ids:
-            try:
-                c.execute('INSERT INTO question_domains (question_id, domain_id) VALUES (?, ?)', (q_id, d_id))
-            except sqlite3.IntegrityError:
-                pass
-
-    conn.commit()
-    conn.close()
-    return jsonify({'message': 'Domains assigned'})
 
 @app.route('/api/certifications/<int:cert_id>/performance', methods=['GET'])
 @token_required
@@ -1572,19 +1424,6 @@ def start_exam_simulation(cert_id):
                 q['domain_code'] = domain['code']
             selected_questions.extend(chosen)
 
-    # If not enough domain-tagged questions, try to fill from user's quizzes linked to this cert
-    if len(selected_questions) < requested_count // 2:
-        c.execute('''SELECT q.* FROM questions q
-            JOIN quizzes qz ON q.quiz_id = qz.id
-            WHERE qz.user_id = ? AND qz.certification_id = ? AND q.is_active = 1''',
-            (request.user_id, cert_id))
-        fallback = [dict(r) for r in c.fetchall()]
-        existing_ids = {q['id'] for q in selected_questions}
-        extras = [q for q in fallback if q['id'] not in existing_ids]
-        needed = requested_count - len(selected_questions)
-        if extras:
-            selected_questions.extend(random.sample(extras, min(needed, len(extras))))
-
     random.shuffle(selected_questions)
 
     # Convert to frontend format
@@ -1691,7 +1530,7 @@ def create_study_session():
     c.execute('''INSERT INTO study_sessions (user_id, session_type, quiz_id, certification_id)
         VALUES (?, ?, ?, ?)''',
         (request.user_id, data.get('session_type', 'quiz'),
-         data.get('quiz_id'), data.get('certification_id')))
+         data.get('quiz_id'), data.get('certification_id') if data.get('session_type') != 'quiz' else None))
     session_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -3154,8 +2993,7 @@ def get_study_resources(cert_id):
 @app.route('/api/community/quizzes', methods=['GET'])
 @token_required
 def community_quizzes():
-    """Return public quizzes, optionally filtered by cert_id and/or search query."""
-    cert_id = request.args.get('cert_id', type=int)
+    """Return public quizzes, optionally filtered by search query."""
     q_search = (request.args.get('q') or '').strip()
     limit = min(int(request.args.get('limit', 50)), 100)
 
@@ -3163,19 +3001,14 @@ def community_quizzes():
     c = conn.cursor()
 
     sql = '''
-        SELECT qz.id, qz.title, qz.description, qz.certification_id,
+        SELECT qz.id, qz.title, qz.description,
                (SELECT COUNT(*) FROM questions WHERE quiz_id = qz.id) AS question_count,
-               u.username,
-               cert.code AS certification_code, cert.name AS certification_name
+               u.username
         FROM quizzes qz
         LEFT JOIN users u ON u.id = qz.user_id
-        LEFT JOIN certifications cert ON cert.id = qz.certification_id
         WHERE qz.is_public = 1
     '''
     params = []
-    if cert_id:
-        sql += ' AND qz.certification_id = ?'
-        params.append(cert_id)
     if q_search:
         sql += ' AND (qz.title LIKE ? OR qz.description LIKE ?)'
         params.extend([f'%{q_search}%', f'%{q_search}%'])
@@ -3190,9 +3023,6 @@ def community_quizzes():
         'id': r['id'],
         'title': r['title'],
         'description': r['description'],
-        'certification_id': r['certification_id'],
-        'certification_code': r['certification_code'],
-        'certification_name': r['certification_name'],
         'question_count': r['question_count'],
         'username': r['username'],
     } for r in rows]
@@ -3222,15 +3052,12 @@ def copy_community_quiz(quiz_id):
 
     # Create new quiz for the current user
     title = source['title']
-    c.execute('''INSERT INTO quizzes (user_id, title, description, questions, color, certification_id, is_migrated)
-                 VALUES (?, ?, ?, ?, ?, ?, 1)''',
+    c.execute('''INSERT INTO quizzes (user_id, title, description, questions, color, is_migrated)
+                 VALUES (?, ?, ?, ?, ?, 1)''',
               (request.user_id, title, source['description'] or '',
-               json.dumps(questions_list), source['color'] or '#6366f1',
-               source['certification_id']))
+               json.dumps(questions_list), source['color'] or '#6366f1'))
     new_quiz_id = c.lastrowid
     _insert_questions_for_quiz(c, new_quiz_id, questions_list)
-    if source['certification_id']:
-        _auto_tag_question_domains(c, new_quiz_id, source['certification_id'], title)
 
     conn.commit()
     conn.close()
@@ -4944,12 +4771,12 @@ def seed_security_plus_questions():
 
     # Use user_id 0 for system content (not FK-enforced in SQLite by default)
     c.execute('''INSERT INTO quizzes
-        (user_id, title, description, questions, color, certification_id, is_public, is_migrated)
-        VALUES (0, ?, ?, ?, ?, ?, 1, 1)''',
+        (user_id, title, description, questions, color, is_public, is_migrated)
+        VALUES (0, ?, ?, ?, ?, 1, 1)''',
         ('CompTIA Security+ (SY0-701) — Starter Question Bank',
          '75 exam-aligned practice questions covering all 5 Security+ domains. '
          'Use for readiness scoring, exam simulation, and identifying weak areas.',
-         questions_json, '#8b5cf6', cert_id))
+         questions_json, '#8b5cf6'))
     quiz_id = c.lastrowid
 
     # Insert normalized questions and tag domains

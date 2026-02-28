@@ -236,13 +236,13 @@ export async function updateQuiz(id, payload) {
 }
 
 /**
- * Update quiz visibility and cert link only (no question rewrite)
+ * Update quiz visibility (public/private)
  */
-export async function updateQuizSettings(id, { isPublic, certificationId }) {
+export async function updateQuizSettings(id, { isPublic }) {
     try {
         await apiCall(`/quizzes/${id}/settings`, {
             method: 'PATCH',
-            body: JSON.stringify({ is_public: isPublic, certification_id: certificationId || null })
+            body: JSON.stringify({ is_public: isPublic })
         });
         await loadQuizzes();
         showToast(isPublic ? 'Quiz is now public!' : 'Quiz set to private', 'success');
@@ -412,16 +412,6 @@ export async function unenrollCertification(certId) {
 // ==================== Domain & Performance ====================
 
 /**
- * Assign domains to questions in a quiz
- */
-export async function assignQuestionDomains(quizId, questionDomainMap) {
-    return await apiCall(`/quizzes/${quizId}/domains`, {
-        method: 'PUT',
-        body: JSON.stringify({ question_domains: questionDomainMap })
-    });
-}
-
-/**
  * Get domain-level performance for a certification
  */
 export async function getCertPerformance(certId) {
@@ -487,9 +477,12 @@ export function logEvent(event, metadata = null) {
  * @returns {Promise<number>} session_id
  */
 export async function startStudySession(sessionType, quizId = null, certId = null) {
+    const body = { session_type: sessionType };
+    if (quizId) body.quiz_id = quizId;
+    if (certId && sessionType !== 'quiz') body.certification_id = certId;
     const data = await apiCall('/study-sessions', {
         method: 'POST',
-        body: JSON.stringify({ session_type: sessionType, quiz_id: quizId, certification_id: certId })
+        body: JSON.stringify(body)
     });
     return data.session_id;
 }

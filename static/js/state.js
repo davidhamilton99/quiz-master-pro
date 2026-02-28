@@ -78,10 +78,6 @@ let state = {
     // Study sessions
     activeStudySessionId: null,
 
-    // Domain tagging in quiz editor
-    editingQuizCertId: null,
-    certDomains: [],
-
     // Cached in-progress quizzes (Bug #1 fix - for synchronous access)
     inProgressQuizzes: [],
 
