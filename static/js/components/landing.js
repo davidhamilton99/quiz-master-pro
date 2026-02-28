@@ -53,8 +53,8 @@ export function renderLanding() {
                     <div class="score-label">Great job!</div>
                 </div>
                 <div class="floating-card card-3">
-                    <span class="streak-icon">${icon('flame', 'icon-lg')}</span>
-                    <div class="streak-count">5 day streak</div>
+                    <span class="streak-icon">${icon('barChart', 'icon-lg')}</span>
+                    <div class="streak-count">85% Ready</div>
                 </div>
             </div>
         </header>
