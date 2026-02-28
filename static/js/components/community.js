@@ -5,6 +5,7 @@ import { icon } from '../utils/icons.js';
 
 import { apiCall } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
+import { getStudyModalQuizId, renderStudyModal } from './library-v3.js';
 
 // Module-level cache
 let _communityQuizzes = null;
@@ -130,6 +131,12 @@ export function renderCommunity() {
         </div>
     </main>
 
+    ${(() => {
+        const modalQuizId = getStudyModalQuizId();
+        if (!modalQuizId) return '';
+        const quiz = state.communityQuizPreview?.id === modalQuizId ? state.communityQuizPreview : null;
+        return renderStudyModal(quiz);
+    })()}
     `;
 }
 

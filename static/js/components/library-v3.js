@@ -461,7 +461,7 @@ function renderQuizRow(quiz, progressList) {
     `;
 }
 
-function renderStudyModal(quiz) {
+export function renderStudyModal(quiz) {
     if (!quiz) return '';
     const count = quiz.questions?.length || 0;
     const isOwned = quiz.is_owned !== 0 && quiz.is_owned !== false;
@@ -653,12 +653,16 @@ export function setViewMode(mode) {
 
 export function openStudyModal(quizId) {
     showStudyModal = quizId;
-    setState({ view: 'study' });
+    setState({});
 }
 
 export function closeStudyModal() {
     showStudyModal = null;
-    setState({ communityQuizPreview: null, view: 'study' });
+    setState({ communityQuizPreview: null });
+}
+
+export function getStudyModalQuizId() {
+    return showStudyModal;
 }
 
 export function toggleCardMenu(quizId, btnEl) {
