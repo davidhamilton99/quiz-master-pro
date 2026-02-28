@@ -652,7 +652,7 @@ export async function wizardFinish() {
 
 export function exitWizard() {
     resetWizard();
-    setState({ view: 'library' });
+    setState({ view: 'mission-control' });
 }
 
 function getRandomColor() {

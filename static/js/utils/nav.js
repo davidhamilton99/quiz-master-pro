@@ -12,13 +12,13 @@ export function renderNav(activeView) {
     <header class="app-header">
         <div class="container">
             <div class="header-top">
-                <div class="brand" onclick="window.app.navigate('home')" style="cursor:pointer">
+                <div class="brand" onclick="window.app.navigate('mission-control')" style="cursor:pointer">
                     <div class="brand-logo">${icon('graduationCap', 'icon-lg')}</div>
                     <span class="brand-name">Quiz Master Pro</span>
                 </div>
 
                 <nav class="header-nav">
-                    <button class="nav-link ${activeView === 'home' ? 'active' : ''}" onclick="window.app.navigate('home')">
+                    <button class="nav-link ${activeView === 'home' ? 'active' : ''}" onclick="window.app.navigate('mission-control')">
                         <span class="nav-icon">${icon('home')}</span>
                         <span class="nav-text">Home</span>
                     </button>
@@ -72,7 +72,7 @@ export function renderNav(activeView) {
 
     <!-- Mobile Bottom Tab Bar -->
     <nav class="mobile-tab-bar">
-        <button class="tab-item ${activeView === 'home' ? 'active' : ''}" onclick="window.app.navigate('home')">
+        <button class="tab-item ${activeView === 'home' ? 'active' : ''}" onclick="window.app.navigate('mission-control')">
             <span class="tab-icon">${icon('home')}</span>
             <span class="tab-label">Home</span>
         </button>

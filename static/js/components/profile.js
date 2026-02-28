@@ -42,7 +42,7 @@ export function renderProfile() {
     if (!data) {
         return `
         <div class="profile-page">
-            <button class="btn btn-ghost mb-4" onclick="window.app.navigate('home')">
+            <button class="btn btn-ghost mb-4" onclick="window.app.navigate('mission-control')">
                 ${icon('arrowLeft')} Back
             </button>
             <div class="empty-state">
@@ -64,7 +64,7 @@ export function renderProfile() {
 
     return `
     <div class="profile-page">
-        <button class="btn btn-ghost mb-4" onclick="window.app.navigate('home')">
+        <button class="btn btn-ghost mb-4" onclick="window.app.navigate('mission-control')">
             ${icon('arrowLeft')} Back
         </button>
 

@@ -102,8 +102,8 @@ export function renderResults() {
                         <button class="btn btn-secondary" onclick="window.app.reviewQuiz()">
                             ${icon('fileText')} Review Answers
                         </button>
-                        <button class="btn btn-ghost" onclick="window.app.navigate('${isSimulation ? 'readiness' : 'library'}')">
-                            ${icon('arrowLeft')} ${isSimulation ? 'Back to Readiness' : 'Back to Library'}
+                        <button class="btn btn-ghost" onclick="window.app.navigate('${isSimulation ? 'readiness' : 'mission-control'}')">
+                            ${icon('arrowLeft')} ${isSimulation ? 'Back to Readiness' : 'Back to Session'}
                         </button>
                     </div>
                 </div>

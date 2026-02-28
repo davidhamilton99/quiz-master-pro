@@ -14,6 +14,9 @@ import {
     showShareSettings, setStudyTab
 } from './components/library-v3.js';
 import { renderHome, resetHomeCache } from './components/home.js';
+import { renderMissionControl, resetMissionControl, refreshSession } from './components/mission-control.js';
+import { renderOnboardingV2, needsImmersiveOnboarding, onboardingSearch, onboardingSelectCert, onboardingSetDate, onboardingSkipDate, onboardingFinish, onboardingSkipAll, resetOnboardingV2 } from './components/onboarding-v2.js';
+import { startDomainQuiz as sessionStartDomainQuiz, invalidateSession } from './components/session.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
 import { renderReadiness, setReadinessTab, selectReadinessCert, setObjectiveConfidence, toggleObjectiveDomain } from './components/readiness.js';
 import {
@@ -279,6 +282,12 @@ function renderInternal() {
         case 'home':
             content = renderHome();
             break;
+        case 'mission-control':
+            content = renderMissionControl();
+            break;
+        case 'onboarding-v2':
+            content = renderOnboardingV2();
+            break;
         case 'profile':
             content = renderProfile();
             break;
@@ -327,7 +336,7 @@ function renderInternal() {
             content = renderDashboard();
             break;
         default:
-            content = state.isAuthenticated ? renderHome() : renderLanding();
+            content = state.isAuthenticated ? renderMissionControl() : renderLanding();
     }
 
     app.innerHTML = content + renderOnboarding();
@@ -599,10 +608,50 @@ window.app = {
     fcTouchEnd,
     
 
-    // Onboarding
+    // Onboarding (legacy)
     onboardingNext,
     onboardingBack,
     onboardingSkip,
+
+    // Immersive Onboarding V2
+    onboardingSearch,
+    onboardingSelectCert,
+    onboardingSetDate,
+    onboardingSkipDate,
+    onboardingFinish,
+    onboardingSkipAll,
+
+    // Mission Control
+    refreshSession,
+    toggleMCMenu: () => {
+        const overlay = document.getElementById('mc-menu-overlay');
+        if (overlay) overlay.classList.toggle('hidden');
+    },
+    closeMCMenu: () => {
+        const overlay = document.getElementById('mc-menu-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    },
+    startSessionDomainQuiz: async (domainId, count) => {
+        try {
+            showLoading();
+            const quiz = await sessionStartDomainQuiz(domainId, count);
+            if (!quiz || !quiz.questions || quiz.questions.length === 0) {
+                hideLoading();
+                showToast('No questions available for this domain yet.', 'warning');
+                return;
+            }
+            hideLoading();
+            startQuiz(null, {
+                studyMode: true,
+                randomizeOptions: false,
+                timed: false,
+                domainQuiz: quiz,
+            });
+        } catch (e) {
+            hideLoading();
+            showToast('Failed to start domain quiz: ' + (e.message || ''), 'error');
+        }
+    },
 
     // Sample quiz for new users
     trySampleQuiz: async () => {
@@ -765,12 +814,13 @@ window.app = {
 async function init() {
     // Load settings
     loadSettings();
-    
+
     // Try to restore auth session
     if (loadAuth()) {
         loadProfile();
         logEvent('login');
-        setState({ view: 'home' });
+        // Start with mission-control; we'll redirect to onboarding-v2 if needed after data loads
+        setState({ view: 'mission-control' });
         try {
             const [quizzes, userCerts, bms] = await Promise.all([
                 loadQuizzes(),
@@ -782,10 +832,17 @@ async function init() {
                 userCertifications: userCerts,
                 bookmarks: bms,
                 bookmarkedQuestions: new Set(bms.map(b => b.question_id)),
-            });
+            }, true);
 
             // Bug #1 fix: Load and cache in-progress quizzes
             await loadInProgressQuizzes();
+
+            // Route to immersive onboarding if user has no certs enrolled
+            if (needsImmersiveOnboarding()) {
+                setState({ view: 'onboarding-v2' });
+            } else {
+                setState({ view: 'mission-control' });
+            }
         } catch (e) {
             showToast('Failed to load quizzes', 'error');
         }
@@ -793,7 +850,7 @@ async function init() {
         // Not logged in - show landing page
         setState({ view: 'landing' });
     }
-    
+
     render();
 }
 

@@ -493,7 +493,7 @@ function closeMenu() {
 }
 
 export function exitFlashcards() {
-    setState({ view: 'library' });
+    setState({ view: 'mission-control' });
 }
 
 // ==================== Touch Handling ====================
