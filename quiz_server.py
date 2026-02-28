@@ -2516,6 +2516,324 @@ def get_srs_stats():
         'streak': streak
     })
 
+# ==================== Session Plan (Immersive Experience) ====================
+
+@app.route('/api/session/plan', methods=['GET'])
+@token_required
+def get_session_plan():
+    """Compute a personalized study session plan based on user's certs, weak areas, SRS, and exam date."""
+    conn = get_db()
+    c = conn.cursor()
+
+    blocks = []
+
+    # 1. Get user certifications with target dates
+    c.execute('''SELECT uc.certification_id, uc.target_date, uc.status,
+        cert.code, cert.name, cert.passing_score
+        FROM user_certifications uc
+        JOIN certifications cert ON uc.certification_id = cert.id
+        WHERE uc.user_id = ?
+        ORDER BY uc.started_at DESC''', (request.user_id,))
+    user_certs = [dict(r) for r in c.fetchall()]
+
+    primary_cert = user_certs[0] if user_certs else None
+
+    # Calculate days remaining
+    days_remaining = None
+    if primary_cert and primary_cert.get('target_date'):
+        try:
+            target = datetime.strptime(primary_cert['target_date'], '%Y-%m-%d').date()
+            days_remaining = (target - datetime.now().date()).days
+            if days_remaining < 0:
+                days_remaining = 0
+        except (ValueError, TypeError):
+            pass
+
+    # 2. SRS cards due
+    c.execute('''SELECT COUNT(*) as cnt FROM srs_cards
+        WHERE user_id = ? AND next_review_at <= datetime('now') AND status != 'graduated' ''',
+        (request.user_id,))
+    srs_due = c.fetchone()['cnt']
+
+    c.execute('''SELECT COUNT(*) as cnt FROM srs_cards WHERE user_id = ?''', (request.user_id,))
+    srs_total = c.fetchone()['cnt']
+
+    c.execute('''SELECT COUNT(*) as cnt FROM srs_cards
+        WHERE user_id = ? AND status = 'graduated' ''', (request.user_id,))
+    srs_graduated = c.fetchone()['cnt']
+
+    if srs_due > 0:
+        est_minutes = max(2, round(srs_due * 0.5))
+        blocks.append({
+            'type': 'srs_review',
+            'priority': 1,
+            'title': f'{srs_due} cards due for review',
+            'subtitle': f'{srs_total} total \u00b7 {srs_graduated} mastered',
+            'estimate_minutes': est_minutes,
+            'action': 'startSrsReview',
+            'count': srs_due,
+        })
+
+    # 3. In-progress quizzes
+    c.execute('''SELECT qp.quiz_id, qp.question_index, qp.answers,
+        qz.title, qz.questions
+        FROM quiz_progress qp
+        JOIN quizzes qz ON qp.quiz_id = qz.id
+        WHERE qp.user_id = ?
+        ORDER BY qp.updated_at DESC LIMIT 1''', (request.user_id,))
+    progress_row = c.fetchone()
+
+    if progress_row:
+        p = dict(progress_row)
+        questions = json.loads(p['questions']) if p['questions'] else []
+        total_q = len(questions)
+        current_idx = p['question_index'] or 0
+        pct = round(current_idx / max(total_q, 1) * 100)
+        blocks.append({
+            'type': 'resume_quiz',
+            'priority': 2,
+            'title': p['title'],
+            'subtitle': f'Question {current_idx + 1} of {total_q}',
+            'progress_pct': pct,
+            'quiz_id': p['quiz_id'],
+            'action': 'resumeQuiz',
+            'action_data': {'quizId': p['quiz_id']},
+        })
+
+    # 4. Weak domain blocks (if user has a primary cert)
+    weak_domains = []
+    if primary_cert:
+        cert_id = primary_cert['certification_id']
+        c.execute('''SELECT d.id, d.name, d.code, d.weight,
+            COALESCE(SUM(qp.times_correct), 0) as correct,
+            COALESCE(SUM(qp.times_seen), 0) as seen
+        FROM domains d
+        LEFT JOIN question_domains qd ON qd.domain_id = d.id
+        LEFT JOIN question_performance qp ON qp.question_id = qd.question_id AND qp.user_id = ?
+        WHERE d.certification_id = ? AND d.parent_domain_id IS NULL
+        GROUP BY d.id
+        ORDER BY CASE
+            WHEN COALESCE(SUM(qp.times_seen), 0) = 0 THEN 1.0
+            ELSE 1.0 - (CAST(COALESCE(SUM(qp.times_correct), 0) AS REAL) / MAX(COALESCE(SUM(qp.times_seen), 0), 1))
+        END DESC''', (request.user_id, cert_id))
+
+        for row in c.fetchall():
+            d = dict(row)
+            seen = d['seen']
+            correct = d['correct']
+            score = round(correct / seen * 100) if seen > 0 else 0
+            if seen == 0:
+                status = 'unseen'
+            elif score >= 80:
+                status = 'strong'
+            elif score >= 60:
+                status = 'moderate'
+            else:
+                status = 'weak'
+            weak_domains.append({
+                'domain_id': d['id'],
+                'name': d['name'],
+                'code': d['code'],
+                'score': score,
+                'seen': seen,
+                'status': status,
+                'weight': d['weight'] or 0,
+            })
+
+        # Build targeted quiz blocks for the 2 weakest non-strong domains
+        block_priority = 10
+        for domain in weak_domains[:3]:
+            if domain['status'] == 'strong':
+                continue
+            # Count available questions for this domain
+            c.execute('''SELECT COUNT(*) as cnt FROM questions q
+                JOIN question_domains qd ON q.id = qd.question_id
+                WHERE qd.domain_id = ? AND q.is_active = 1''', (domain['domain_id'],))
+            available = c.fetchone()['cnt']
+            if available == 0:
+                continue
+            question_count = min(available, 15)
+            est_minutes = max(5, round(question_count * 1.2))
+
+            rationale = ''
+            if domain['status'] == 'unseen':
+                rationale = 'You haven\'t covered this domain yet'
+            elif domain['status'] == 'weak':
+                rationale = f'{domain["score"]}% accuracy \u2014 needs focused practice'
+            else:
+                rationale = f'{domain["score"]}% accuracy \u2014 room to improve'
+
+            blocks.append({
+                'type': 'domain_quiz',
+                'priority': block_priority,
+                'title': domain['name'],
+                'subtitle': rationale,
+                'domain_id': domain['domain_id'],
+                'question_count': question_count,
+                'estimate_minutes': est_minutes,
+                'action': 'startDomainQuiz',
+                'action_data': {
+                    'certId': cert_id,
+                    'domainId': domain['domain_id'],
+                    'count': question_count,
+                },
+                'domain_score': domain['score'],
+                'domain_status': domain['status'],
+            })
+            block_priority += 1
+
+    # 5. Check if user is ready for a simulation
+    show_simulation = False
+    if primary_cert:
+        cert_id = primary_cert['certification_id']
+        # Check: user has answered questions in >= 60% of domains
+        covered = sum(1 for d in weak_domains if d['seen'] >= 5)
+        total_domains = len(weak_domains) if weak_domains else 1
+        coverage = covered / total_domains
+
+        if coverage >= 0.6:
+            # Check if they haven't done a sim in a while (or ever)
+            c.execute('''SELECT MAX(created_at) as last_sim FROM exam_simulations
+                WHERE user_id = ? AND certification_id = ?''', (request.user_id, cert_id))
+            last_sim_row = c.fetchone()
+            last_sim = last_sim_row['last_sim'] if last_sim_row else None
+            days_since_sim = None
+            if last_sim:
+                try:
+                    last_sim_dt = datetime.strptime(last_sim[:19], '%Y-%m-%d %H:%M:%S')
+                    days_since_sim = (datetime.now() - last_sim_dt).days
+                except (ValueError, TypeError):
+                    pass
+
+            if not last_sim or (days_since_sim is not None and days_since_sim >= 3):
+                overall = sum(d['score'] * d['weight'] for d in weak_domains) / max(sum(d['weight'] for d in weak_domains), 1) if weak_domains else 0
+                blocks.append({
+                    'type': 'simulation_prompt',
+                    'priority': 50,
+                    'title': f'Practice Exam: {primary_cert["name"]}',
+                    'subtitle': f'You\'ve covered {round(coverage * 100)}% of domains. Time to test under exam conditions.',
+                    'certification_id': cert_id,
+                    'action': 'startSimulation',
+                    'action_data': {'certId': cert_id},
+                    'readiness_pct': round(overall),
+                })
+
+    # 6. Overall readiness for header context
+    overall_readiness = 0
+    if weak_domains:
+        total_weight = sum(d['weight'] for d in weak_domains)
+        if total_weight > 0:
+            overall_readiness = round(sum(d['score'] * d['weight'] for d in weak_domains) / total_weight)
+
+    # 7. Recent study stats
+    c.execute('''SELECT COALESCE(SUM(duration_seconds), 0) as total_secs
+        FROM study_sessions WHERE user_id = ? AND started_at >= datetime('now', '-30 days')''',
+        (request.user_id,))
+    study_seconds = c.fetchone()['total_secs']
+    study_hours = round(study_seconds / 3600, 1) if study_seconds else 0
+
+    # Sort blocks by priority
+    blocks.sort(key=lambda b: b['priority'])
+
+    conn.close()
+
+    return jsonify({
+        'session': {
+            'blocks': blocks,
+            'context': {
+                'certification': {
+                    'id': primary_cert['certification_id'],
+                    'code': primary_cert['code'],
+                    'name': primary_cert['name'],
+                } if primary_cert else None,
+                'days_remaining': days_remaining,
+                'overall_readiness': overall_readiness,
+                'study_hours_30d': study_hours,
+                'domains': weak_domains[:6] if weak_domains else [],
+            },
+        }
+    })
+
+
+@app.route('/api/session/domain-quiz', methods=['POST'])
+@token_required
+def start_domain_quiz():
+    """Generate a targeted quiz for a specific domain."""
+    data = request.get_json() or {}
+    domain_id = data.get('domain_id')
+    count = data.get('count', 15)
+
+    if not domain_id:
+        return jsonify({'error': 'domain_id required'}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+
+    # Get domain info
+    c.execute('SELECT * FROM domains WHERE id = ?', (domain_id,))
+    domain = c.fetchone()
+    if not domain:
+        conn.close()
+        return jsonify({'error': 'Domain not found'}), 404
+    domain = dict(domain)
+
+    # Get questions for this domain
+    c.execute('''SELECT q.* FROM questions q
+        JOIN question_domains qd ON q.id = qd.question_id
+        WHERE qd.domain_id = ? AND q.is_active = 1''', (domain_id,))
+    all_questions = [dict(r) for r in c.fetchall()]
+
+    if not all_questions:
+        conn.close()
+        return jsonify({'error': 'No questions available for this domain'}), 404
+
+    import random
+    selected = random.sample(all_questions, min(count, len(all_questions)))
+
+    # Format questions for the quiz component
+    questions = []
+    for q in selected:
+        formatted = {
+            'id': q['id'],
+            'question': q['question_text'],
+            'type': q['type'] or 'choice',
+            'explanation': q.get('explanation', ''),
+        }
+        if q.get('options'):
+            formatted['options'] = json.loads(q['options'])
+        if q.get('correct') is not None:
+            try:
+                formatted['correct'] = json.loads(q['correct']) if isinstance(q['correct'], str) else q['correct']
+            except (json.JSONDecodeError, TypeError):
+                formatted['correct'] = q['correct']
+        if q.get('code'):
+            formatted['code'] = q['code']
+        if q.get('pairs'):
+            try:
+                formatted['pairs'] = json.loads(q['pairs'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if q.get('option_explanations'):
+            try:
+                formatted['optionExplanations'] = json.loads(q['option_explanations'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        questions.append(formatted)
+
+    conn.close()
+
+    return jsonify({
+        'quiz': {
+            'id': f'domain-{domain_id}-{int(datetime.now().timestamp())}',
+            'title': domain['name'],
+            'questions': questions,
+            'is_domain_quiz': True,
+            'domain_id': domain_id,
+            'certification_id': domain.get('certification_id'),
+        }
+    })
+
+
 # ==================== Bookmarks ====================
 
 @app.route('/api/bookmarks', methods=['GET'])
