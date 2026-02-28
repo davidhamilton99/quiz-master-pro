@@ -547,12 +547,6 @@ h3 {
     letter-spacing: -0.02em;
 }
 
-.quiz-card-accent {
-    height: 4px;
-    background: linear-gradient(90deg, var(--primary), #a855f7, #ec4899);
-    opacity: 0.7;
-}
-
 .quiz-card-footer {
     background: rgba(0, 0, 0, 0.15);
     border-top: 1px solid rgba(255, 255, 255, 0.03);

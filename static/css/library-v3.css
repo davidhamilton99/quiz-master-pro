@@ -591,11 +591,6 @@
     border-color: var(--primary);
 }
 
-.quiz-card-accent {
-    height: 3px;
-    background: var(--primary);
-}
-
 .quiz-card-body {
     padding: 1.25rem;
     flex: 1;

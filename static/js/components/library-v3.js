@@ -390,8 +390,6 @@ function renderQuizCard(quiz, progressList) {
 
     return `
     <div class="quiz-card-v3" onclick="window.app.openStudyModal(${quiz.id})">
-        <div class="quiz-card-accent" style="background: ${quiz.color || getStableGradient(quiz.id)}"></div>
-
         <div class="quiz-card-body">
             <div class="quiz-card-header">
                 <h3 class="quiz-card-title">${escapeHtml(quiz.title)}</h3>
@@ -522,17 +520,6 @@ function renderStudyModal(quiz) {
     `;
 }
 
-function getStableGradient(quizId) {
-    const colors = [
-        '#2563eb',
-        '#16a34a',
-        '#d97706',
-        '#0891b2',
-        '#7c3aed',
-        '#dc2626',
-    ];
-    return colors[(quizId || 0) % colors.length];
-}
 function getFilteredQuizzes(state) {
     // If state not passed, get it
     if (!state) {
