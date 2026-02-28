@@ -950,6 +950,16 @@
     margin-bottom: 0.75rem;
 }
 
+/* === Bottom tab bar (always visible in MC shell) === */
+
+.mc-tab-bar {
+    display: flex !important;
+}
+
+.mc-page .mc-main {
+    padding-bottom: 5rem;
+}
+
 /* === Responsive === */
 
 @media (max-width: 640px) {

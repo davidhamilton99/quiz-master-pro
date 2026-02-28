@@ -141,6 +141,29 @@ export function renderMCNav(currentView) {
             </div>
         </nav>
     </div>
+
+    <!-- Bottom tab bar — always visible for quick navigation -->
+    <nav class="mobile-tab-bar mc-tab-bar">
+        <button class="tab-item ${v === 'mission-control' ? 'active' : ''}" onclick="window.app.navigate('mission-control')">
+            <span class="tab-icon">${icon('home')}</span>
+            <span class="tab-label">Session</span>
+        </button>
+        <button class="tab-item ${v === 'study' || v === 'library' ? 'active' : ''}" onclick="window.app.navigate('study')">
+            <span class="tab-icon">${icon('library')}</span>
+            <span class="tab-label">Study</span>
+        </button>
+        <button class="tab-item tab-create-btn" onclick="window.app.showCreateOptions()">
+            <span class="tab-create-icon">${icon('plus')}</span>
+        </button>
+        <button class="tab-item ${v === 'readiness' ? 'active' : ''}" onclick="window.app.navigate('readiness')">
+            <span class="tab-icon">${icon('barChart')}</span>
+            <span class="tab-label">Readiness</span>
+        </button>
+        <button class="tab-item ${v === 'community' ? 'active' : ''}" onclick="window.app.navigate('community')">
+            <span class="tab-icon">${icon('globe')}</span>
+            <span class="tab-label">Community</span>
+        </button>
+    </nav>
     `;
 }
 
