@@ -244,7 +244,6 @@ function renderSessionStream(blocks, ctx) {
 function renderBlock(block, index) {
     switch (block.type) {
         case 'srs_review': return renderSrsBlock(block, index);
-        case 'resume_quiz': return renderResumeBlock(block, index);
         case 'domain_quiz': return renderDomainBlock(block, index);
         case 'simulation_prompt': return renderSimBlock(block, index);
         default: return '';
@@ -261,27 +260,6 @@ function renderSrsBlock(block, index) {
             </div>
             <div class="mc-block-meta">
                 <span class="mc-block-estimate">${block.estimate_minutes} min</span>
-                <span class="mc-block-action">${icon('arrowRight')}</span>
-            </div>
-        </div>
-    `;
-}
-
-function renderResumeBlock(block, index) {
-    return `
-        <div class="mc-block mc-block-resume" onclick="window.app.startQuiz(${block.quiz_id})" style="cursor:pointer">
-            <div class="mc-block-order">${index + 1}</div>
-            <div class="mc-block-body">
-                <div class="mc-block-title">Continue: ${escapeHtml(block.title)}</div>
-                <div class="mc-block-subtitle">${escapeHtml(block.subtitle)}</div>
-                <div class="mc-block-progress">
-                    <div class="mc-progress-track">
-                        <div class="mc-progress-fill" style="width: ${block.progress_pct}%"></div>
-                    </div>
-                    <span class="mc-progress-label">${block.progress_pct}%</span>
-                </div>
-            </div>
-            <div class="mc-block-meta">
                 <span class="mc-block-action">${icon('arrowRight')}</span>
             </div>
         </div>
@@ -339,10 +317,10 @@ function renderNoBlocks(ctx) {
     return `
         <div class="mc-empty">
             ${hasCert ? `
-                <p class="mc-empty-text">No study blocks ready yet. Start by taking some quizzes linked to your certification so we can identify your weak areas.</p>
+                <p class="mc-empty-text">No study blocks ready yet. Start a practice exam from your certification workspace to identify weak areas.</p>
                 <div class="mc-empty-actions">
-                    <button class="mc-primary-btn" onclick="window.app.navigate('study')">Go to My Quizzes</button>
-                    <button class="mc-secondary-btn" onclick="window.app.navigate('community')">Browse Community Quizzes</button>
+                    <button class="mc-primary-btn" onclick="window.app.navigate('readiness')">Open Workspace</button>
+                    <button class="mc-secondary-btn" onclick="window.app.navigate('community')">Browse Community</button>
                 </div>
             ` : `
                 <p class="mc-empty-text">Pick a certification to get started. We'll build your sessions around it.</p>
