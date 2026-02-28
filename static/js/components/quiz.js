@@ -631,8 +631,8 @@ function renderMatching(q, questionIndex) {
     
     return `
         <div class="matching-container tap-mode">
-            <p class="helper-text mb-4">Tap a term, then tap its matching definition</p>
-            
+            <p class="helper-text mb-4">Select a term, then select its matching definition</p>
+
             <div class="matching-grid">
                 <div class="matching-column">
                     <div class="matching-header">Terms</div>
@@ -640,22 +640,22 @@ function renderMatching(q, questionIndex) {
                         const isMatched = userAnswer[i] !== undefined;
                         const isSelected = selectedLeft === i && !isMatched;
                         const matchedRightIndex = userAnswer[i];
-                        
+
                         return `
                             <div class="match-item left ${isMatched ? 'matched' : ''} ${isSelected ? 'selected' : ''} ${showingAnswer ? 'disabled' : ''}"
                                 data-index="${i}"
                                 onclick="window.app.selectMatchLeft(${i})">
-                                <span class="match-letter">${String.fromCharCode(65 + i)}</span>
+                                <span class="match-label">${String.fromCharCode(65 + i)}</span>
                                 <span class="match-text">${escapeHtml(pair.left)}</span>
                                 ${isMatched ? `
-                                    <span class="match-badge">${matchedRightIndex + 1}</span>
-                                    ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})" title="Remove match">&times;</button>` : ''}
+                                    <span class="match-indicator">${matchedRightIndex + 1}</span>
+                                    ${!showingAnswer ? `<button class="btn-remove" onclick="event.stopPropagation(); window.app.removeMatch(${i})" title="Remove">&times;</button>` : ''}
                                 ` : ''}
                             </div>
                         `;
                     }).join('')}
                 </div>
-                
+
                 <div class="matching-column">
                     <div class="matching-header">Definitions</div>
                     ${shuffledRight.map((item, i) => {
@@ -663,22 +663,23 @@ function renderMatching(q, questionIndex) {
                         const matchedLeftIndex = rightToLeft[i];
                         const isCorrect = showingAnswer && userAnswer[item.origIndex] === i;
                         const isWrong = showingAnswer && isUsed && !isCorrect;
-                        
+
                         return `
                             <div class="match-item right ${isUsed ? 'used' : ''} ${isCorrect ? 'correct-match' : ''} ${isWrong ? 'wrong-match' : ''} ${showingAnswer ? 'disabled' : ''}"
                                 data-index="${i}"
                                 data-orig-index="${item.origIndex}"
                                 onclick="window.app.selectMatchRight(${i})">
-                                <span class="match-number">${i + 1}</span>
+                                <span class="match-label">${i + 1}</span>
                                 <span class="match-text">${escapeHtml(item.text)}</span>
-                                ${isUsed ? `<span class="match-badge-right">${String.fromCharCode(65 + matchedLeftIndex)}</span>` : ''}
-                                ${showingAnswer && isCorrect ? '<span class="match-check">&#10003;</span>' : ''}
+                                ${isUsed ? `<span class="match-indicator">${String.fromCharCode(65 + matchedLeftIndex)}</span>` : ''}
+                                ${showingAnswer && isCorrect ? '<span class="match-result">&#10003;</span>' : ''}
+                                ${showingAnswer && isWrong ? '<span class="match-result wrong">&#10007;</span>' : ''}
                             </div>
                         `;
                     }).join('')}
                 </div>
             </div>
-            
+
             <div class="mt-4 flex gap-2">
                 ${Object.keys(userAnswer).length > 0 && !showingAnswer ? `
                     <button class="btn btn-secondary btn-sm" onclick="window.app.clearAllMatches()">Clear All</button>
