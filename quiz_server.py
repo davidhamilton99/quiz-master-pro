@@ -2413,33 +2413,8 @@ def get_session_plan():
             'count': srs_due,
         })
 
-    # 3. In-progress quizzes
-    c.execute('''SELECT qp.quiz_id, qp.question_index, qp.answers,
-        qz.title, qz.questions
-        FROM quiz_progress qp
-        JOIN quizzes qz ON qp.quiz_id = qz.id
-        WHERE qp.user_id = ?
-        ORDER BY qp.updated_at DESC LIMIT 1''', (request.user_id,))
-    progress_row = c.fetchone()
-
-    if progress_row:
-        p = dict(progress_row)
-        questions = json.loads(p['questions']) if p['questions'] else []
-        total_q = len(questions)
-        current_idx = p['question_index'] or 0
-        pct = round(current_idx / max(total_q, 1) * 100)
-        blocks.append({
-            'type': 'resume_quiz',
-            'priority': 2,
-            'title': p['title'],
-            'subtitle': f'Question {current_idx + 1} of {total_q}',
-            'progress_pct': pct,
-            'quiz_id': p['quiz_id'],
-            'action': 'resumeQuiz',
-            'action_data': {'quizId': p['quiz_id']},
-        })
-
-    # 4. Weak domain blocks (if user has a primary cert)
+    # 3. Weak domain blocks (if user has a primary cert)
+    # NOTE: In-progress personal quizzes intentionally excluded — quizzes and certifications are independent systems
     weak_domains = []
     if primary_cert:
         cert_id = primary_cert['certification_id']
