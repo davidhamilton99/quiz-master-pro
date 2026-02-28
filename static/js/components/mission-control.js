@@ -1,5 +1,5 @@
 /* Mission Control — the immersive session-based home view */
-import { getState, setState, getLevelInfo } from '../state.js';
+import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { getSessionPlan, invalidateSession } from './session.js';
@@ -141,6 +141,29 @@ export function renderMCNav(currentView) {
             </div>
         </nav>
     </div>
+
+    <!-- Bottom tab bar — always visible for quick navigation -->
+    <nav class="mobile-tab-bar mc-tab-bar">
+        <button class="tab-item ${v === 'mission-control' ? 'active' : ''}" onclick="window.app.navigate('mission-control')">
+            <span class="tab-icon">${icon('home')}</span>
+            <span class="tab-label">Session</span>
+        </button>
+        <button class="tab-item ${v === 'study' || v === 'library' ? 'active' : ''}" onclick="window.app.navigate('study')">
+            <span class="tab-icon">${icon('library')}</span>
+            <span class="tab-label">Study</span>
+        </button>
+        <button class="tab-item tab-create-btn" onclick="window.app.showCreateOptions()">
+            <span class="tab-create-icon">${icon('plus')}</span>
+        </button>
+        <button class="tab-item ${v === 'readiness' ? 'active' : ''}" onclick="window.app.navigate('readiness')">
+            <span class="tab-icon">${icon('barChart')}</span>
+            <span class="tab-label">Readiness</span>
+        </button>
+        <button class="tab-item ${v === 'community' ? 'active' : ''}" onclick="window.app.navigate('community')">
+            <span class="tab-icon">${icon('globe')}</span>
+            <span class="tab-label">Community</span>
+        </button>
+    </nav>
     `;
 }
 
@@ -328,11 +351,53 @@ function renderSimBlock(block, index) {
 function renderNoBlocks(ctx) {
     const cert = ctx.certification;
     if (cert) {
+        const certName = escapeHtml(cert.name || cert.code);
+        const certCode = cert.code ? escapeHtml(cert.code) : '';
         return `
             <div class="mc-entry">
-                <h1 class="mc-entry-cert">${escapeHtml(cert.name || cert.code)}</h1>
-                <p class="mc-entry-text">Start your diagnostic exam to build your personalised study plan.</p>
-                <button class="mc-primary-btn" onclick="window.app.startSimulation(${cert.id})">Begin Diagnostic</button>
+                <div class="mc-entry-header">
+                    ${certCode ? `<span class="mc-entry-code">${certCode}</span>` : ''}
+                    <h1 class="mc-entry-cert">${certName}</h1>
+                    <p class="mc-entry-welcome">Your prep starts here. Let's find out where you stand.</p>
+                </div>
+
+                <div class="mc-diagnostic-card" onclick="window.app.startSimulation(${cert.id})" style="cursor:pointer">
+                    <div class="mc-diagnostic-content">
+                        <span class="mc-diagnostic-label">Recommended first step</span>
+                        <h2 class="mc-diagnostic-title">Diagnostic Exam</h2>
+                        <p class="mc-diagnostic-desc">A 20-question assessment across all exam domains. Takes about 15 minutes. Tells us exactly where to focus your prep.</p>
+                    </div>
+                    <div class="mc-diagnostic-action">
+                        <button class="mc-primary-btn" onclick="event.stopPropagation(); window.app.startSimulation(${cert.id})">Begin Diagnostic</button>
+                    </div>
+                </div>
+
+                <div class="mc-locked-section">
+                    <span class="mc-locked-heading">Available after diagnostic</span>
+                    <div class="mc-locked-grid">
+                        <div class="mc-locked-card">
+                            <div class="mc-locked-icon">${icon('barChart')}</div>
+                            <div class="mc-locked-info">
+                                <span class="mc-locked-title">Domain Breakdown</span>
+                                <span class="mc-locked-desc">See your readiness across every exam objective</span>
+                            </div>
+                        </div>
+                        <div class="mc-locked-card">
+                            <div class="mc-locked-icon">${icon('target')}</div>
+                            <div class="mc-locked-info">
+                                <span class="mc-locked-title">Weak Areas</span>
+                                <span class="mc-locked-desc">Pinpoint the topics that need the most attention</span>
+                            </div>
+                        </div>
+                        <div class="mc-locked-card">
+                            <div class="mc-locked-icon">${icon('listChecks')}</div>
+                            <div class="mc-locked-info">
+                                <span class="mc-locked-title">Study Plan</span>
+                                <span class="mc-locked-desc">A personalised session plan built from your results</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }

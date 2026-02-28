@@ -53,8 +53,8 @@ export function renderLanding() {
                     <div class="score-label">Great job!</div>
                 </div>
                 <div class="floating-card card-3">
-                    <span class="streak-icon">${icon('flame', 'icon-lg')}</span>
-                    <div class="streak-count">5 day streak</div>
+                    <span class="streak-icon">${icon('barChart', 'icon-lg')}</span>
+                    <div class="streak-count">85% Ready</div>
                 </div>
             </div>
         </header>
@@ -179,8 +179,8 @@ export function renderLanding() {
 
                 <div class="feature-card">
                     <div class="feature-icon">${icon('trophy', 'icon-2xl')}</div>
-                    <h3>XP & Streaks</h3>
-                    <p>Earn XP for every quiz, level up, and maintain daily streaks. A little gamification goes a long way.</p>
+                    <h3>Track Progress</h3>
+                    <p>See your readiness score improve over time and maintain daily study streaks.</p>
                 </div>
             </div>
         </section>

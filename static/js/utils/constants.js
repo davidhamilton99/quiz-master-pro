@@ -73,16 +73,6 @@ export const DRAG = {
     TOUCH_MOVE_THRESHOLD: 10, // pixels before considering it a drag
 };
 
-// XP Rewards
-export const XP = {
-    CORRECT_ANSWER: 10,
-    STREAK_BONUS: 2,
-    QUIZ_COMPLETE: 50,
-    PERFECT_SCORE: 100,
-    DAILY_LOGIN: 25,
-    CREATE_QUIZ: 75,
-};
-
 // Gem Rewards
 export const GEMS = {
     PERFECT_SCORE_BONUS: 25,

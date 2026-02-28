@@ -1,14 +1,13 @@
 /* Quiz Component */
 import {
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
-    recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
-    getLevelInfo
+    recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak
 } from '../state.js';
 import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, removeBookmark, startStudySession, endStudySession, logEvent } from '../services/api.js';
 import { invalidateSession } from './session.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
-import { TIME, STREAK, QUIZ } from '../utils/constants.js';
+import { TIME, QUIZ } from '../utils/constants.js';
 import { icon } from '../utils/icons.js';
 
 let timerInterval = null;
@@ -212,7 +211,6 @@ export function renderQuiz() {
             </div>
         </header>
         <main class="quiz-main"><div class="quiz-content">
-            ${renderStreakDisplay(state.quizStreak)}
             <div class="question-header">
                 <div class="question-num">
                     Question ${state.currentQuestionIndex + 1}
@@ -344,40 +342,6 @@ function getCorrectOptionsForDisplay(q, questionIndex) {
     } else {
         return `${String.fromCharCode(65 + displayCorrect)}. ${escapeHtml(displayOptions[displayCorrect])}`;
     }
-}
-
-function renderStreakDisplay(streak) {
-    if (!streak || streak < 3) return '';
-    
-    const intensity = Math.min(Math.floor(streak / 5), 3);
-    const fires = '&#128293;'.repeat(intensity + 1);
-    
-    let message = '';
-    let className = 'streak-indicator';
-    
-    if (streak >= STREAK.LEGENDARY) {
-        message = 'LEGENDARY!';
-        className += ' legendary';
-    } else if (streak >= STREAK.UNSTOPPABLE) {
-        message = 'UNSTOPPABLE!';
-        className += ' unstoppable';
-    } else if (streak >= STREAK.ON_FIRE) {
-        message = 'ON FIRE!';
-        className += ' on-fire';
-    } else if (streak >= STREAK.NICE) {
-        message = 'Nice streak!';
-        className += ' nice';
-    } else {
-        message = `${streak} in a row`;
-    }
-    
-    return `
-        <div class="${className}">
-            <span class="streak-flames">${fires}</span>
-            <span class="streak-message">${message}</span>
-            <span class="streak-number">${streak}</span>
-        </div>
-    `;
 }
 
 function renderQuestionNav(total, current) {

@@ -1,5 +1,5 @@
 /* Study Hub (was Library) - v3.0 with My Certs + My Quizzes tabs (Phase 2.2) */
-import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
+import { getState, setState, getInProgressQuizzesCached, getProfile } from '../state.js';
 import { logout, deleteQuiz, updateQuizSettings } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
@@ -461,7 +461,7 @@ function renderQuizRow(quiz, progressList) {
     `;
 }
 
-function renderStudyModal(quiz) {
+export function renderStudyModal(quiz) {
     if (!quiz) return '';
     const count = quiz.questions?.length || 0;
     const isOwned = quiz.is_owned !== 0 && quiz.is_owned !== false;
@@ -653,12 +653,16 @@ export function setViewMode(mode) {
 
 export function openStudyModal(quizId) {
     showStudyModal = quizId;
-    setState({ view: 'study' });
+    setState({});
 }
 
 export function closeStudyModal() {
     showStudyModal = null;
-    setState({ communityQuizPreview: null, view: 'study' });
+    setState({ communityQuizPreview: null });
+}
+
+export function getStudyModalQuizId() {
+    return showStudyModal;
 }
 
 export function toggleCardMenu(quizId, btnEl) {
