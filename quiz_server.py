@@ -2497,40 +2497,49 @@ def get_session_plan():
             block_priority += 1
 
     # 5. Check if user is ready for a simulation
-    show_simulation = False
     if primary_cert:
         cert_id = primary_cert['certification_id']
-        # Check: user has answered questions in >= 60% of domains
         covered = sum(1 for d in weak_domains if d['seen'] >= 5)
         total_domains = len(weak_domains) if weak_domains else 1
         coverage = covered / total_domains
 
-        if coverage >= 0.6:
-            # Check if they haven't done a sim in a while (or ever)
-            c.execute('''SELECT MAX(created_at) as last_sim FROM exam_simulations
-                WHERE user_id = ? AND certification_id = ?''', (request.user_id, cert_id))
-            last_sim_row = c.fetchone()
-            last_sim = last_sim_row['last_sim'] if last_sim_row else None
-            days_since_sim = None
-            if last_sim:
-                try:
-                    last_sim_dt = datetime.strptime(last_sim[:19], '%Y-%m-%d %H:%M:%S')
-                    days_since_sim = (datetime.now() - last_sim_dt).days
-                except (ValueError, TypeError):
-                    pass
+        # Check when user last completed a simulation (or if ever)
+        c.execute('''SELECT MAX(created_at) as last_sim FROM exam_simulations
+            WHERE user_id = ? AND certification_id = ?''', (request.user_id, cert_id))
+        last_sim_row = c.fetchone()
+        last_sim = last_sim_row['last_sim'] if last_sim_row else None
+        days_since_sim = None
+        if last_sim:
+            try:
+                last_sim_dt = datetime.strptime(last_sim[:19], '%Y-%m-%d %H:%M:%S')
+                days_since_sim = (datetime.now() - last_sim_dt).days
+            except (ValueError, TypeError):
+                pass
 
-            if not last_sim or (days_since_sim is not None and days_since_sim >= 3):
-                overall = sum(d['score'] * d['weight'] for d in weak_domains) / max(sum(d['weight'] for d in weak_domains), 1) if weak_domains else 0
-                blocks.append({
-                    'type': 'simulation_prompt',
-                    'priority': 50,
-                    'title': f'Practice Exam: {primary_cert["name"]}',
-                    'subtitle': f'You\'ve covered {round(coverage * 100)}% of domains. Time to test under exam conditions.',
-                    'certification_id': cert_id,
-                    'action': 'startSimulation',
-                    'action_data': {'certId': cert_id},
-                    'readiness_pct': round(overall),
-                })
+        # Always offer diagnostic if user has never taken a simulation,
+        # otherwise offer when they've covered 60%+ of domains and it's been 3+ days
+        offer_sim = False
+        if not last_sim:
+            offer_sim = True
+        elif coverage >= 0.6 and days_since_sim is not None and days_since_sim >= 3:
+            offer_sim = True
+
+        if offer_sim:
+            overall = sum(d['score'] * d['weight'] for d in weak_domains) / max(sum(d['weight'] for d in weak_domains), 1) if weak_domains else 0
+            if not last_sim:
+                sim_subtitle = 'Take your first diagnostic to identify weak areas and build your study plan.'
+            else:
+                sim_subtitle = f'You\'ve covered {round(coverage * 100)}% of domains. Time to test under exam conditions.'
+            blocks.append({
+                'type': 'simulation_prompt',
+                'priority': 50,
+                'title': f'Practice Exam: {primary_cert["name"]}',
+                'subtitle': sim_subtitle,
+                'certification_id': cert_id,
+                'action': 'startSimulation',
+                'action_data': {'certId': cert_id},
+                'readiness_pct': round(overall),
+            })
 
     # 6. Overall readiness for header context
     overall_readiness = 0

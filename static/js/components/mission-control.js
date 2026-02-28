@@ -154,19 +154,23 @@ function renderMCContent() {
     const certs = state.userCertifications || [];
 
     return `
-        ${renderContextHeader(ctx, certs)}
+        ${renderContextHeader(ctx, certs, blocks.length > 0)}
         ${renderSessionStream(blocks, ctx)}
     `;
 }
 
 /**
  * Context header — the "Day X of Y" + readiness summary.
+ * Hidden entirely for first-time users (no history) — the empty state handles that.
  */
-function renderContextHeader(ctx, certs) {
+function renderContextHeader(ctx, certs, hasBlocks) {
     const cert = ctx.certification;
     const days = ctx.days_remaining;
     const readiness = ctx.overall_readiness || 0;
     const hours = ctx.study_hours_30d || 0;
+
+    // Don't show stats header when user has no history yet
+    if (!hasBlocks && readiness === 0) return '';
 
     let headline = '';
     if (cert && days !== null && days !== undefined) {
@@ -178,27 +182,31 @@ function renderContextHeader(ctx, certs) {
             headline = `<span class="mc-headline">${days} days to ${escapeHtml(cert.name || cert.code)}.</span>`;
         }
     } else if (cert) {
-        headline = `<span class="mc-headline">${escapeHtml(cert.name || cert.code)} prep.</span>`;
+        headline = `<span class="mc-headline">${escapeHtml(cert.name || cert.code)}</span>`;
     } else {
         headline = `<span class="mc-headline">Your study session.</span>`;
     }
 
-    // Domain mini-bars (top-level readiness at a glance)
+    // Domain mini-bars — only show when at least one domain has been attempted
     const domains = ctx.domains || [];
-    const domainBars = domains.length > 0 ? `
-        <div class="mc-domain-bars">
-            ${domains.map(d => {
-                const statusClass = d.status === 'strong' ? 'mc-bar-strong' :
-                                    d.status === 'moderate' ? 'mc-bar-moderate' :
-                                    d.status === 'weak' ? 'mc-bar-weak' : 'mc-bar-unseen';
-                return `
-                <div class="mc-domain-bar-item" title="${escapeHtml(d.name)}: ${d.score}%">
-                    <div class="mc-domain-bar-track">
-                        <div class="mc-domain-bar-fill ${statusClass}" style="width: ${d.score}%"></div>
-                    </div>
-                    <span class="mc-domain-bar-label">${escapeHtml((d.code || d.name || '').split(' ')[0])}</span>
-                </div>`;
-            }).join('')}
+    const hasAnyData = domains.some(d => d.score > 0);
+    const domainBars = domains.length > 0 && hasAnyData ? `
+        <div class="mc-domain-section">
+            <span class="mc-domain-heading">Domain Readiness</span>
+            <div class="mc-domain-bars">
+                ${domains.map(d => {
+                    const statusClass = d.status === 'strong' ? 'mc-bar-strong' :
+                                        d.status === 'moderate' ? 'mc-bar-moderate' :
+                                        d.status === 'weak' ? 'mc-bar-weak' : 'mc-bar-unseen';
+                    return `
+                    <div class="mc-domain-bar-item" title="${escapeHtml(d.name)}: ${d.score}%">
+                        <div class="mc-domain-bar-track">
+                            <div class="mc-domain-bar-fill ${statusClass}" style="width: ${d.score}%"></div>
+                        </div>
+                        <span class="mc-domain-bar-label">${escapeHtml(d.name)}</span>
+                    </div>`;
+                }).join('')}
+            </div>
         </div>
     ` : '';
 
@@ -235,6 +243,7 @@ function renderSessionStream(blocks, ctx) {
 
     return `
         <div class="mc-stream">
+            <span class="mc-stream-heading">Your study plan</span>
             ${blocks.map((block, i) => renderBlock(block, i)).join('')}
         </div>
     `;
@@ -313,24 +322,26 @@ function renderSimBlock(block, index) {
 
 /**
  * Empty state — no blocks, guide the user.
+ * When a cert is selected: immersive entry point with diagnostic invitation.
+ * When no cert: simple prompt to pick one.
  */
 function renderNoBlocks(ctx) {
-    const hasCert = ctx.certification;
+    const cert = ctx.certification;
+    if (cert) {
+        return `
+            <div class="mc-entry">
+                <h1 class="mc-entry-cert">${escapeHtml(cert.name || cert.code)}</h1>
+                <p class="mc-entry-text">Start your diagnostic exam to build your personalised study plan.</p>
+                <button class="mc-primary-btn" onclick="window.app.startSimulation(${cert.id})">Begin Diagnostic</button>
+            </div>
+        `;
+    }
     return `
         <div class="mc-empty">
-            ${hasCert ? `
-                <p class="mc-empty-text">No study blocks ready yet. Start a practice exam from your certification workspace to identify weak areas.</p>
-                <div class="mc-empty-actions">
-                    <button class="mc-primary-btn" onclick="window.app.navigate('readiness')">Open Workspace</button>
-                    <button class="mc-secondary-btn" onclick="window.app.navigate('community')">Browse Community</button>
-                </div>
-            ` : `
-                <p class="mc-empty-text">Pick a certification to get started. We'll build your sessions around it.</p>
-                <div class="mc-empty-actions">
-                    <button class="mc-primary-btn" onclick="window.app.showCertPicker()">Add Certification</button>
-                    <button class="mc-secondary-btn" onclick="window.app.navigate('study')">Explore My Quizzes</button>
-                </div>
-            `}
+            <p class="mc-empty-text">Pick a certification to get started.</p>
+            <div class="mc-empty-actions">
+                <button class="mc-primary-btn" onclick="window.app.showCertPicker()">Add Certification</button>
+            </div>
         </div>
     `;
 }
