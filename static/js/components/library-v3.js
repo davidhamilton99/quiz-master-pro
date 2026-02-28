@@ -3,7 +3,7 @@ import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInf
 import { logout, deleteQuiz, updateQuizSettings } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
-import { renderNav } from '../utils/nav.js';
+
 import { showToast } from '../utils/toast.js';
 
 // View mode
@@ -34,8 +34,6 @@ export function renderLibrary() {
         .slice(0, 3);
 
     return `
-    ${renderNav('study')}
-
     <!-- Study Hub Tabs -->
     <div class="study-hub-tabs-bar">
         <div class="container">
@@ -69,7 +67,6 @@ export function renderLibrary() {
     <!-- Study Mode Modal -->
     ${showStudyModal ? renderStudyModal(state.quizzes.find(q => q.id === showStudyModal) || (state.communityQuizPreview?.id === showStudyModal ? state.communityQuizPreview : null)) : ''}
 
-    <div class="mobile-tab-spacer"></div>
     `;
 }
 
@@ -357,7 +354,6 @@ function renderEmptyState() {
 }
 
 // Keep the original renderMyQuizzesTab name for this section
-// (old header was inside renderLibrary, now handled by renderNav)
 
 function renderContinueCard(quiz) {
     const progress = quiz.progress;

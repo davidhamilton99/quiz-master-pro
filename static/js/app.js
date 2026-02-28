@@ -14,7 +14,7 @@ import {
     showShareSettings, setStudyTab
 } from './components/library-v3.js';
 import { renderHome, resetHomeCache } from './components/home.js';
-import { renderMissionControl, resetMissionControl, refreshSession } from './components/mission-control.js';
+import { renderMissionControl, renderMCNav, resetMissionControl, refreshSession } from './components/mission-control.js';
 import { renderOnboardingV2, needsImmersiveOnboarding, onboardingSearch, onboardingSelectCert, onboardingSetDate, onboardingSkipDate, onboardingFinish, onboardingSkipAll, resetOnboardingV2 } from './components/onboarding-v2.js';
 import { startDomainQuiz as sessionStartDomainQuiz, invalidateSession } from './components/session.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
@@ -270,8 +270,10 @@ function render() {
 function renderInternal() {
     const state = getState();
     let content = '';
+    let wrapInShell = false; // true → wrap in mc-page shell with MC nav
 
     switch (state.view) {
+        // ── Unauthenticated views (no shell) ──
         case 'landing':
             content = renderLanding();
             break;
@@ -279,31 +281,8 @@ function renderInternal() {
         case 'register':
             content = renderAuth();
             break;
-        case 'home':
-            content = renderHome();
-            break;
-        case 'mission-control':
-            content = renderMissionControl();
-            break;
-        case 'onboarding-v2':
-            content = renderOnboardingV2();
-            break;
-        case 'profile':
-            content = renderProfile();
-            break;
-        case 'library':
-        case 'study':
-            content = renderLibrary();
-            break;
-        case 'readiness':
-            content = renderReadiness();
-            break;
-        case 'community':
-            content = renderCommunity();
-            break;
-        case 'wizard':
-            content = renderWizard();
-            break;
+
+        // ── Full-screen immersive views (own navigation) ──
         case 'quiz':
             content = renderQuiz();
             setTimeout(() => {
@@ -322,6 +301,9 @@ function renderInternal() {
         case 'create':
             content = renderCreate();
             break;
+        case 'wizard':
+            content = renderWizard();
+            break;
         case 'studyGuide':
             content = renderStudyGuide();
             setTimeout(initStudyGuideDragDrop, 50);
@@ -332,11 +314,51 @@ function renderInternal() {
         case 'srsReview':
             content = renderSrsReview();
             break;
+        case 'onboarding-v2':
+            content = renderOnboardingV2();
+            break;
+
+        // ── Shell views (wrapped in mc-page with hamburger nav) ──
+        case 'home':
+            content = renderHome();
+            wrapInShell = true;
+            break;
+        case 'mission-control':
+            content = renderMissionControl();
+            wrapInShell = true;
+            break;
+        case 'profile':
+            content = renderProfile();
+            wrapInShell = true;
+            break;
+        case 'library':
+        case 'study':
+            content = renderLibrary();
+            wrapInShell = true;
+            break;
+        case 'readiness':
+            content = renderReadiness();
+            wrapInShell = true;
+            break;
+        case 'community':
+            content = renderCommunity();
+            wrapInShell = true;
+            break;
         case 'dashboard':
             content = renderDashboard();
+            wrapInShell = true;
             break;
         default:
-            content = state.isAuthenticated ? renderMissionControl() : renderLanding();
+            if (state.isAuthenticated) {
+                content = renderMissionControl();
+                wrapInShell = true;
+            } else {
+                content = renderLanding();
+            }
+    }
+
+    if (wrapInShell) {
+        content = `<div class="mc-page">${renderMCNav(state.view)}${content}</div>`;
     }
 
     app.innerHTML = content + renderOnboarding();
