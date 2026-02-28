@@ -67,22 +67,24 @@ export function renderMissionControl() {
     }
 
     return `
-        <div class="mc-page">
-            ${renderMCNav()}
-            <main class="mc-main">
-                <div class="mc-container" id="mc-root">
-                    ${renderMCContent()}
-                </div>
-            </main>
-        </div>
+        <main class="mc-main">
+            <div class="mc-container" id="mc-root">
+                ${renderMCContent()}
+            </div>
+        </main>
     `;
 }
 
 /**
- * Minimal nav — just a menu toggle and user avatar.
+ * Shared app nav — hamburger menu, brand, user avatar.
+ * Exported so every authenticated view can use the same shell.
+ * @param {string} [currentView] - The active view name for highlighting the menu item.
  */
-function renderMCNav() {
+export function renderMCNav(currentView) {
     const state = getState();
+    const v = currentView || state.view || '';
+    const isActive = (name) => v === name ? 'active' : '';
+
     return `
     <header class="mc-header">
         <button class="mc-menu-btn" onclick="window.app.toggleMCMenu()" title="Menu">
@@ -121,16 +123,16 @@ function renderMCNav() {
                 <button class="btn btn-ghost btn-icon" onclick="window.app.closeMCMenu()">${icon('x')}</button>
             </div>
             <div class="mc-menu-items">
-                <button class="mc-menu-item active" onclick="window.app.closeMCMenu(); window.app.navigate('mission-control')">
+                <button class="mc-menu-item ${isActive('mission-control')}" onclick="window.app.closeMCMenu(); window.app.navigate('mission-control')">
                     ${icon('home')} <span>Session</span>
                 </button>
-                <button class="mc-menu-item" onclick="window.app.closeMCMenu(); window.app.navigate('study')">
+                <button class="mc-menu-item ${isActive('study') || isActive('library') ? 'active' : ''}" onclick="window.app.closeMCMenu(); window.app.navigate('study')">
                     ${icon('library')} <span>My Quizzes</span>
                 </button>
-                <button class="mc-menu-item" onclick="window.app.closeMCMenu(); window.app.navigate('readiness')">
+                <button class="mc-menu-item ${isActive('readiness')}" onclick="window.app.closeMCMenu(); window.app.navigate('readiness')">
                     ${icon('barChart')} <span>Readiness Details</span>
                 </button>
-                <button class="mc-menu-item" onclick="window.app.closeMCMenu(); window.app.navigate('community')">
+                <button class="mc-menu-item ${isActive('community')}" onclick="window.app.closeMCMenu(); window.app.navigate('community')">
                     ${icon('globe')} <span>Community</span>
                 </button>
                 <button class="mc-menu-item" onclick="window.app.closeMCMenu(); window.app.showCreateOptions()">
@@ -173,10 +175,10 @@ function renderContextHeader(ctx, certs) {
         } else if (days === 1) {
             headline = `<span class="mc-headline">Tomorrow.</span>`;
         } else {
-            headline = `<span class="mc-headline">${days} days to ${escapeHtml(cert.code)}.</span>`;
+            headline = `<span class="mc-headline">${days} days to ${escapeHtml(cert.name || cert.code)}.</span>`;
         }
     } else if (cert) {
-        headline = `<span class="mc-headline">${escapeHtml(cert.code)} prep.</span>`;
+        headline = `<span class="mc-headline">${escapeHtml(cert.name || cert.code)} prep.</span>`;
     } else {
         headline = `<span class="mc-headline">Your study session.</span>`;
     }

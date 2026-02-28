@@ -2,7 +2,7 @@
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
-import { renderNav } from '../utils/nav.js';
+
 import { apiCall } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
 
@@ -67,8 +67,6 @@ export function renderCommunity() {
     const isLoading = _communityLoading && _communityQuizzes === null;
 
     return `
-    ${renderNav('community')}
-
     <main class="comm-main">
         <div class="container">
 
@@ -132,7 +130,6 @@ export function renderCommunity() {
         </div>
     </main>
 
-    <div class="mobile-tab-spacer"></div>
     `;
 }
 

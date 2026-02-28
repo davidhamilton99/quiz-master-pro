@@ -2,7 +2,7 @@
 import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
-import { renderNav } from '../utils/nav.js';
+
 import { getWeakQuestions, getCertReadiness, getSrsStats, createSampleQuiz, loadQuizzes } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
 
@@ -70,8 +70,6 @@ export function renderHome() {
     const readinessScore = _homeReadiness?.overall_score ?? null;
 
     return `
-    ${renderNav('home')}
-
     <main class="home-main">
         <div class="container home-container">
 
@@ -284,8 +282,5 @@ export function renderHome() {
 
         </div>
     </main>
-
-    <!-- Spacer for mobile tab bar -->
-    <div class="mobile-tab-spacer"></div>
     `;
 }

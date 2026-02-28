@@ -2,7 +2,7 @@
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
-import { renderNav } from '../utils/nav.js';
+
 import {
     getUserCertifications, getCertPerformance, getCertTrends,
     getWeakQuestions, getCertReadiness,
@@ -130,7 +130,6 @@ export function renderReadiness() {
 
     if (certs.length === 0) {
         return `
-        ${renderNav('readiness')}
         <main class="readiness-main">
             <div class="container">
                 <div class="readiness-no-certs">
@@ -143,7 +142,6 @@ export function renderReadiness() {
                 </div>
             </div>
         </main>
-        <div class="mobile-tab-spacer"></div>
         `;
     }
 
@@ -152,8 +150,6 @@ export function renderReadiness() {
     const gaugeClass = readinessScore >= 70 ? 'gauge-good' : readinessScore >= 40 ? 'gauge-ok' : 'gauge-low';
 
     return `
-    ${renderNav('readiness')}
-
     <main class="readiness-main">
         <div class="container">
 
@@ -162,7 +158,7 @@ export function renderReadiness() {
                 ${certs.map(c => `
                     <button class="cert-pill ${c.certification_id === _activeCertId ? 'active' : ''}"
                             onclick="window.app.selectReadinessCert(${c.certification_id})">
-                        ${escapeHtml(c.code || c.name || 'Cert')}
+                        ${escapeHtml(c.name || c.code || 'Cert')}
                     </button>
                 `).join('')}
                 <button class="cert-pill cert-pill-add" onclick="window.app.showCertPicker()">
@@ -170,28 +166,21 @@ export function renderReadiness() {
                 </button>
             </div>
 
-            <!-- Cert heading + readiness gauge -->
+            <!-- Cert heading + readiness -->
             <div class="readiness-hero">
-                <div class="readiness-gauge-wrap">
-                    <svg viewBox="0 0 36 36" class="readiness-gauge-svg">
-                        <path class="gauge-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                        <path class="gauge-arc ${gaugeClass}"
-                              stroke-dasharray="${_dataLoaded ? readinessScore : 0}, 100"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    </svg>
-                    <div class="readiness-gauge-label">
-                        <div class="gauge-big-num">${_dataLoaded ? readinessScore + '%' : '...'}</div>
-                        <div class="gauge-caption text-muted">Readiness</div>
+                <div class="readiness-hero-left">
+                    <h2 class="readiness-cert-name">${escapeHtml(activeCert.name || 'Certification')}</h2>
+                    <div class="readiness-hero-meta">
+                        ${activeCert.target_date ? `<span class="readiness-target-date">Target: ${new Date(activeCert.target_date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}</span>` : ''}
+                        <button class="btn-link readiness-remove-btn"
+                                onclick="window.app.unenrollCert(${activeCert.certification_id}, '${escapeHtml(activeCert.name || '')}')">
+                            Remove
+                        </button>
                     </div>
                 </div>
-                <div class="readiness-hero-info">
-                    <h2>${escapeHtml(activeCert.name || 'Certification')}</h2>
-                    <p class="text-muted">${escapeHtml(activeCert.code || '')}</p>
-                    ${activeCert.target_date ? `<p class="readiness-target-date">${icon('crosshair')} Target: ${new Date(activeCert.target_date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}</p>` : ''}
-                    <button class="btn btn-ghost btn-sm readiness-remove-btn"
-                            onclick="window.app.unenrollCert(${activeCert.certification_id}, '${escapeHtml(activeCert.name || '')}')">
-                        Remove
-                    </button>
+                <div class="readiness-hero-score">
+                    <span class="readiness-big-num ${gaugeClass}">${_dataLoaded ? readinessScore : '—'}<span class="readiness-pct">%</span></span>
+                    <span class="readiness-score-label">readiness</span>
                 </div>
             </div>
 
@@ -215,7 +204,6 @@ export function renderReadiness() {
 
         </div>
     </main>
-    <div class="mobile-tab-spacer"></div>
     `;
 }
 
@@ -230,97 +218,76 @@ function renderWorkspaceGrid(cert) {
     return `
     <div class="workspace-grid">
 
-        <!-- ROW 1: Primary study tools -->
-        <div class="ws-block ws-block-primary" onclick="window.app.setWorkspaceView('practice-exams')">
-            <div class="ws-block-icon ws-icon-exams">${icon('penLine')}</div>
+        <div class="ws-block" onclick="window.app.setWorkspaceView('practice-exams')">
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Practice Exams</h3>
-                <p class="ws-block-desc">Timed simulations under real exam conditions with domain-weighted question selection</p>
-                ${simCount > 0 ? `<div class="ws-block-stat">${simCount} attempt${simCount !== 1 ? 's' : ''} completed</div>` : `<div class="ws-block-stat ws-stat-ready">Ready to start</div>`}
+                <p class="ws-block-desc">Timed simulations under real exam conditions</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status ${simCount > 0 ? '' : 'ws-status-ready'}">${simCount > 0 ? simCount + ' completed' : 'Ready'}</span>
         </div>
 
-        <div class="ws-block ws-block-primary" onclick="window.app.setWorkspaceView('domain-readiness')">
-            <div class="ws-block-icon ws-icon-domains">${icon('layers')}</div>
+        <div class="ws-block" onclick="window.app.setWorkspaceView('domain-readiness')">
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Domain Readiness</h3>
-                <p class="ws-block-desc">Performance breakdown by exam domain with readiness prediction and study time tracking</p>
-                ${domainCount > 0 ? `<div class="ws-block-stat">${domainCount} domains tracked</div>` : `<div class="ws-block-stat ws-stat-empty">No data yet</div>`}
+                <p class="ws-block-desc">Performance breakdown by exam domain</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status">${domainCount > 0 ? domainCount + ' domains' : 'No data yet'}</span>
         </div>
 
-        <div class="ws-block ws-block-primary" onclick="window.app.setWorkspaceView('pbq')">
-            <div class="ws-block-icon ws-icon-pbq">${icon('terminal')}</div>
-            <div class="ws-block-body">
-                <h3 class="ws-block-title">PBQ Simulations</h3>
-                <p class="ws-block-desc">Performance-based question labs with interactive scenarios, drag-and-drop, and CLI simulations</p>
-                <div class="ws-block-stat ws-stat-coming">Coming soon</div>
-            </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
-        </div>
-
-        <!-- ROW 2: Study & review tools -->
         <div class="ws-block" onclick="window.app.setWorkspaceView('objectives')">
-            <div class="ws-block-icon ws-icon-objectives">${icon('listChecks')}</div>
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Exam Objectives</h3>
-                <p class="ws-block-desc">Track your self-assessed confidence on every exam objective and sub-objective</p>
-                <div class="ws-block-stat">${_objectivesLoaded && _objectives.length > 0 ? `${_objectives.length} domains` : 'Self-assessment tracker'}</div>
+                <p class="ws-block-desc">Self-assess confidence on every objective</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status">${_objectivesLoaded && _objectives.length > 0 ? _objectives.length + ' domains' : 'Tracker'}</span>
+        </div>
+
+        <div class="ws-block" onclick="window.app.setWorkspaceView('weak-points')">
+            <div class="ws-block-body">
+                <h3 class="ws-block-title">Weak Points</h3>
+                <p class="ws-block-desc">Questions ranked by error rate</p>
+            </div>
+            <span class="ws-block-status ${weakCount > 0 ? 'ws-status-alert' : ''}">${weakCount > 0 ? weakCount + ' to review' : 'None found'}</span>
+        </div>
+
+        <div class="ws-block" onclick="window.app.setWorkspaceView('pbq')">
+            <div class="ws-block-body">
+                <h3 class="ws-block-title">PBQ Simulations</h3>
+                <p class="ws-block-desc">Interactive scenario labs and CLI simulations</p>
+            </div>
+            <span class="ws-block-status ws-status-coming">Coming soon</span>
         </div>
 
         <div class="ws-block" onclick="window.app.setWorkspaceView('study-guides')">
-            <div class="ws-block-icon ws-icon-guides">${icon('bookOpen')}</div>
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Study Guides</h3>
-                <p class="ws-block-desc">Curated study material organized by domain with key concepts, mnemonics, and reference tables</p>
-                <div class="ws-block-stat ws-stat-coming">Coming soon</div>
+                <p class="ws-block-desc">Key concepts and reference tables by domain</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status ws-status-coming">Coming soon</span>
         </div>
 
         <div class="ws-block" onclick="window.app.setWorkspaceView('flashcards')">
-            <div class="ws-block-icon ws-icon-flashcards">${icon('copy')}</div>
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Flashcards</h3>
-                <p class="ws-block-desc">Spaced-repetition flashcard decks organized by exam domain for rapid knowledge retention</p>
-                <div class="ws-block-stat ws-stat-coming">Coming soon</div>
+                <p class="ws-block-desc">Spaced-repetition decks by exam domain</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
-        </div>
-
-        <!-- ROW 3: Supplemental tools -->
-        <div class="ws-block" onclick="window.app.setWorkspaceView('weak-points')">
-            <div class="ws-block-icon ws-icon-weak">${icon('sparkles')}</div>
-            <div class="ws-block-body">
-                <h3 class="ws-block-title">Weak Points</h3>
-                <p class="ws-block-desc">Questions you struggle with most, ranked by error rate to target your weakest areas</p>
-                ${weakCount > 0 ? `<div class="ws-block-stat ws-stat-alert">${weakCount} area${weakCount !== 1 ? 's' : ''} to review</div>` : `<div class="ws-block-stat ws-stat-empty">No weak spots identified</div>`}
-            </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status ws-status-coming">Coming soon</span>
         </div>
 
         <div class="ws-block" onclick="window.app.setWorkspaceView('quick-notes')">
-            <div class="ws-block-icon ws-icon-notes">${icon('edit')}</div>
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Quick Notes</h3>
-                <p class="ws-block-desc">Personal notes, cheat sheets, and reference material you build as you study</p>
-                <div class="ws-block-stat ws-stat-coming">Coming soon</div>
+                <p class="ws-block-desc">Personal notes and cheat sheets</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status ws-status-coming">Coming soon</span>
         </div>
 
         <div class="ws-block" onclick="window.app.setWorkspaceView('mini-games')">
-            <div class="ws-block-icon ws-icon-games">${icon('gamepad')}</div>
             <div class="ws-block-body">
                 <h3 class="ws-block-title">Mini Games</h3>
-                <p class="ws-block-desc">Gamified drills — term matching, speed rounds, and domain challenges to reinforce learning</p>
-                <div class="ws-block-stat ws-stat-coming">Coming soon</div>
+                <p class="ws-block-desc">Term matching and speed drills</p>
             </div>
-            <div class="ws-block-arrow">${icon('chevronRight')}</div>
+            <span class="ws-block-status ws-status-coming">Coming soon</span>
         </div>
 
     </div>
