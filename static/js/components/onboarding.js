@@ -38,7 +38,7 @@ const STEPS = [
         body: `The app tracks everything for you:<br><br>
                <span class="ob-bullet">${icon('barChart')} <strong>Readiness Score</strong> — See how prepared you are per topic</span>
                <span class="ob-bullet">${icon('brain')} <strong>Spaced Repetition</strong> — Missed questions come back at the right time</span>
-               <span class="ob-bullet">${icon('trophy')} <strong>XP & Streaks</strong> — Stay motivated with daily goals</span><br>
+               <span class="ob-bullet">${icon('trophy')} <strong>Daily Streaks</strong> — Stay motivated with daily goals</span><br>
                Check the <strong>Home</strong> and <strong>Readiness</strong> tabs to see your stats.`,
         icon: 'barChart',
         cta: 'Next',

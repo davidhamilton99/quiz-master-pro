@@ -1,8 +1,7 @@
 /* Quiz Component */
 import {
     getState, setState, saveQuizProgress, loadQuizProgress, clearQuizProgress,
-    recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak,
-    getLevelInfo
+    recordCorrectAnswer, recordWrongAnswer, recordQuizComplete, updateDailyStreak
 } from '../state.js';
 import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, removeBookmark, startStudySession, endStudySession, logEvent } from '../services/api.js';
 import { invalidateSession } from './session.js';

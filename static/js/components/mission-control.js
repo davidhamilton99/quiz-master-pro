@@ -1,5 +1,5 @@
 /* Mission Control — the immersive session-based home view */
-import { getState, setState, getLevelInfo } from '../state.js';
+import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { getSessionPlan, invalidateSession } from './session.js';

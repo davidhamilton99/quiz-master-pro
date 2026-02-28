@@ -2,11 +2,9 @@
 import { getState } from '../state.js';
 import { escapeHtml } from './dom.js';
 import { icon } from './icons.js';
-import { getLevelInfo } from '../state.js';
 
 export function renderNav(activeView) {
     const state = getState();
-    const levelInfo = getLevelInfo();
 
     return `
     <header class="app-header">
@@ -49,7 +47,6 @@ export function renderNav(activeView) {
                         <div id="user-menu" class="dropdown-menu hidden">
                             <div class="dropdown-header">
                                 <div class="dropdown-user-name">${escapeHtml(state.user?.username || 'User')}</div>
-                                <div class="dropdown-user-level">Level ${levelInfo.level || 1}</div>
                             </div>
                             <div class="dropdown-divider"></div>
                             <button class="dropdown-item" onclick="window.app.navigate('profile')">

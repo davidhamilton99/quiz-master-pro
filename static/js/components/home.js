@@ -1,5 +1,5 @@
 /* Home Screen - Personalised dashboard (Phase 2.1) */
-import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
+import { getState, setState, getInProgressQuizzesCached, getProfile } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 
@@ -40,7 +40,6 @@ export function resetHomeCache() {
 export function renderHome() {
     const state = getState();
     const profile = getProfile();
-    const levelInfo = getLevelInfo();
     const progressList = getInProgressQuizzesCached();
     const certs = state.userCertifications || [];
     const primaryCert = certs[0] || null;
@@ -87,9 +86,6 @@ export function renderHome() {
                     <div class="streak-pill">
                         <strong>${(state.quizzes || []).length}</strong>
                         <span class="text-muted">sets</span>
-                    </div>
-                    <div class="streak-pill">
-                        <strong>Lv ${levelInfo.level || 1}</strong>
                     </div>
                 </div>
             </div>

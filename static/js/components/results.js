@@ -1,5 +1,5 @@
 /* Results Component */
-import { getState, setState, getLevelInfo, getUnlockedAchievements } from '../state.js';
+import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 
@@ -9,8 +9,6 @@ export function renderResults() {
             isSimulation, passed, domainScores, certName,
             passingScore, timeTaken } = state.quizResults || {};
     const quiz = state.currentQuiz;
-    const profile = state.playerProfile;
-    const levelInfo = getLevelInfo(profile.xp);
 
     if (!quiz) {
         return `<div class="results-page container">
@@ -22,10 +20,6 @@ export function renderResults() {
     }
 
     const message = getMessage(percentage);
-    const tierColors = {
-        bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700',
-        platinum: '#e5e4e2', diamond: '#b9f2ff', legendary: '#ff6b6b'
-    };
 
     return `
         <div class="results-page">
@@ -70,30 +64,6 @@ export function renderResults() {
                     </div>
 
                     ${isSimulation && domainScores ? renderDomainBreakdown(domainScores) : ''}
-
-                    <!-- XP & Progress Section -->
-                    <div class="results-progress card">
-                        <div class="progress-header">
-                            <div class="level-info">
-                                <div class="level-badge-small" style="--tier-color: ${tierColors[levelInfo.tier]}">
-                                    ${levelInfo.level}
-                                </div>
-                                <div>
-                                    <div class="level-title">${escapeHtml(levelInfo.title)}</div>
-                                    <div class="xp-text-small">${profile.xp} XP</div>
-                                </div>
-                            </div>
-                            <div class="streak-info">
-                                ${profile.dailyStreak > 0 ? `
-                                    <span class="streak-badge">${icon('flame')} ${profile.dailyStreak} day streak</span>
-                                ` : ''}
-                            </div>
-                        </div>
-                        <div class="xp-bar-large">
-                            <div class="xp-bar-fill" style="width: ${levelInfo.progress * 100}%"></div>
-                            <span class="xp-bar-text">${levelInfo.xpInLevel} / ${levelInfo.xpForNext} XP to level ${levelInfo.level + 1}</span>
-                        </div>
-                    </div>
 
                     <div class="results-actions">
                         <button class="btn btn-primary btn-lg" onclick="window.app.retryQuiz()">

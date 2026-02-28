@@ -7,15 +7,6 @@ import { loadProfile } from '../services/api.js';
 let _cache = null;
 let _loading = false;
 
-function xpProgress(xp, level) {
-    // xpForLevel(n) = 100 * n * (n - 1)
-    const xpAtLevel = 100 * level * (level - 1);
-    const xpForNext = 200 * level;               // xpForLevel(level+1) - xpForLevel(level)
-    const inLevel = Math.max(0, xp - xpAtLevel);
-    const pct = Math.min(100, Math.round((inLevel / xpForNext) * 100));
-    return { inLevel, xpForNext, pct };
-}
-
 function memberSince(dateStr) {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -54,9 +45,6 @@ export function renderProfile() {
 
     const user    = data.user    || {};
     const profile = data.profile || {};
-    const level   = profile.level  || 1;
-    const xp      = profile.xp     || 0;
-    const { inLevel, xpForNext, pct } = xpProgress(xp, level);
     const accuracy = profile.total_answered > 0
         ? Math.round((profile.total_correct / profile.total_answered) * 100)
         : 0;
@@ -74,23 +62,9 @@ export function renderProfile() {
             <div>
                 <div class="profile-username">${escapeHtml(user.username || 'User')}</div>
                 <div class="profile-meta text-muted">
-                    <span class="badge badge-primary">Level ${level}</span>
                     ${user.created_at ? `<span>Member since ${memberSince(user.created_at)}</span>` : ''}
                 </div>
             </div>
-        </div>
-
-        <!-- XP / Level Progress -->
-        <div class="profile-card">
-            <div class="profile-card-title">Level Progress</div>
-            <div class="profile-level-row">
-                <span class="text-muted">Lv ${level}</span>
-                <div class="xp-bar-track" style="flex:1; margin: 0 0.75rem;">
-                    <div class="xp-bar-fill" style="width: ${pct}%"></div>
-                </div>
-                <span class="text-muted">Lv ${level + 1}</span>
-            </div>
-            <div class="text-muted text-sm text-center mt-1">${inLevel.toLocaleString()} / ${xpForNext.toLocaleString()} XP</div>
         </div>
 
         <!-- Stats -->
@@ -130,10 +104,6 @@ export function renderProfile() {
                 <div>
                     <div class="profile-stat-val">${(profile.gems || 0).toLocaleString()}</div>
                     <div class="profile-stat-lbl">Gems</div>
-                </div>
-                <div>
-                    <div class="profile-stat-val">${xp.toLocaleString()}</div>
-                    <div class="profile-stat-lbl">Total XP</div>
                 </div>
             </div>
         </div>

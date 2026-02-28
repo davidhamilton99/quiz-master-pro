@@ -62,8 +62,6 @@ let state = {
     showFormatHelp: false,
     
     // Profile stats (synced to server)
-    xp: 0,
-    level: 1,
     dailyStreak: 0,
     lastActiveDate: null,
     totalAnswered: 0,
@@ -103,8 +101,6 @@ export function getState() {
     return {
         ...state,
         playerProfile: {
-            xp: state.xp,
-            level: state.level,
             dailyStreak: state.dailyStreak,
             totalAnswered: state.totalAnswered,
             totalCorrect: state.totalCorrect,
@@ -193,8 +189,6 @@ export async function loadProfile() {
         if (data.profile) {
             const p = data.profile;
             setState({
-                xp: p.xp || 0,
-                level: p.level || 1,
                 dailyStreak: p.daily_streak || 0,
                 lastActiveDate: p.last_active_date || null,
                 totalAnswered: p.total_answered || 0,
@@ -221,8 +215,6 @@ export function saveProfile() {
         try {
             const s = getState();
             await saveProfileToServer({
-                xp: s.xp,
-                level: getLevelInfo(s.xp).level,
                 daily_streak: s.dailyStreak,
                 last_active_date: s.lastActiveDate,
                 total_answered: s.totalAnswered,
@@ -241,45 +233,6 @@ export function loadSettings() {}
 export function saveSettings() {}
 export function getProfile() { return getState().playerProfile || {}; }
 
-/**
- * Calculate level info from XP.
- * Each level requires 100 * level XP (e.g. Level 1→2 = 100 XP, Level 2→3 = 200 XP).
- */
-export function getLevelInfo(xpOverride) {
-    const xp = xpOverride ?? getState().xp ?? 0;
-    let level = 1;
-    let remaining = xp;
-    while (remaining >= level * 100) {
-        remaining -= level * 100;
-        level++;
-    }
-    const xpForNext = level * 100;
-    const progress = xpForNext > 0 ? remaining / xpForNext : 0;
-
-    let tier = 'bronze';
-    if (level >= 26) tier = 'platinum';
-    else if (level >= 16) tier = 'gold';
-    else if (level >= 6) tier = 'silver';
-
-    const titles = {
-        bronze: 'Apprentice', silver: 'Scholar', gold: 'Expert',
-        platinum: 'Master', diamond: 'Grandmaster', legendary: 'Legend'
-    };
-
-    return {
-        level, xp, tier,
-        title: titles[tier] || 'Apprentice',
-        progress,
-        xpInLevel: remaining,
-        xpForNext,
-    };
-}
-
-export function getTierColor() {
-    const info = getLevelInfo();
-    const colors = { bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700', platinum: '#e5e4e2', diamond: '#b9f2ff', legendary: '#ff6b6b' };
-    return colors[info.tier] || '#9ca3af';
-}
 export function checkAchievements() {}
 export function unlockAchievement() {}
 export function getUnlockedAchievements() { return []; }
@@ -476,18 +429,9 @@ export function recordWrongAnswer() {
 
 export function recordQuizComplete(correct, total) {
     const s = getState();
-    const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
     const isPerfect = correct === total;
 
-    // Calculate XP earned
-    let xpGained = 50; // base quiz completion bonus
-    xpGained += correct * 10; // per correct answer
-    if (isPerfect) xpGained += 100; // perfect score bonus
-
-    const newXp = (s.xp || 0) + xpGained;
     const updates = {
-        xp: newXp,
-        level: getLevelInfo(newXp).level,
         quizzesCompleted: s.quizzesCompleted + 1,
     };
     if (isPerfect) updates.perfectScores = (s.perfectScores || 0) + 1;

@@ -1,5 +1,5 @@
 /* Study Hub (was Library) - v3.0 with My Certs + My Quizzes tabs (Phase 2.2) */
-import { getState, setState, getInProgressQuizzesCached, getProfile, getLevelInfo } from '../state.js';
+import { getState, setState, getInProgressQuizzesCached, getProfile } from '../state.js';
 import { logout, deleteQuiz, updateQuizSettings } from '../services/api.js';
 import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
