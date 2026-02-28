@@ -15,7 +15,7 @@ import {
 } from './components/library-v3.js';
 import { renderHome, resetHomeCache } from './components/home.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
-import { renderReadiness, setReadinessTab, selectReadinessCert, setObjectiveConfidence, toggleObjectiveDomain } from './components/readiness.js';
+import { renderReadiness, setReadinessTab, setWorkspaceView, selectReadinessCert, setObjectiveConfidence, toggleObjectiveDomain } from './components/readiness.js';
 import {
     renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect,
     nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
@@ -27,7 +27,7 @@ import {
     renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz,
     openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt,
     toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
-    saveField, changeType, savePair, saveOption, linkCertification, setQuestionDomain,
+    saveField, changeType, savePair, saveOption,
     removeOpt, previewImage, clearImage, toggleOptionExplanations, saveOptionExplanation
 } from './components/create.js';
 import {
@@ -471,6 +471,7 @@ window.app = {
 
     // Readiness
     setReadinessTab,
+    setWorkspaceView,
     selectReadinessCert,
     setObjectiveConfidence,
     toggleObjectiveDomain,
@@ -566,9 +567,7 @@ window.app = {
     clearImage,
     toggleOptionExplanations,
     saveOptionExplanation,
-    linkCertification,
-    setQuestionDomain,
-    
+
     // Study Guide Builder
     sgHandleFile,
     sgClearFile,
@@ -708,7 +707,7 @@ window.app = {
                         <button class="btn btn-ghost btn-icon" data-action="cancel">${icon('x')}</button>
                     </div>
                     <div class="modal-body">
-                        <p>Remove <strong>${certName}</strong> from your dashboard? Your quiz history won't be affected.</p>
+                        <p>Remove <strong>${certName}</strong> from your dashboard? Your study progress won't be affected.</p>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-secondary" data-action="cancel">Cancel</button>
@@ -743,7 +742,7 @@ window.app = {
             const sim = await apiStartSimulation(certId);
             if (!sim || !sim.questions || sim.questions.length === 0) {
                 hideLoading();
-                showToast('No questions available for simulation. Add questions tagged with this certification first.', 'warning');
+                showToast('No questions available for simulation yet. The certification question bank is still being built.', 'warning');
                 return;
             }
             startQuiz(null, {
