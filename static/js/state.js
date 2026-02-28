@@ -84,6 +84,11 @@ let state = {
     // Bookmarks
     bookmarkedQuestions: new Set(),  // Set<int> of question IDs (used by quiz header button)
     bookmarks: [],                    // full bookmark records (used by Saved tab)
+
+    // Session (immersive experience)
+    sessionBlocks: [],
+    sessionContext: null,
+    sessionReturnView: null,  // where to go after quiz completion in session flow
 };
 
 const listeners = [];
@@ -139,7 +144,7 @@ export function loadAuth() {
         if (token && userStr && userStr !== 'undefined' && userStr !== 'null') {
             const user = JSON.parse(userStr);
             if (user && typeof user === 'object') {
-                setState({ isAuthenticated: true, user, token, view: 'home' }, true);
+                setState({ isAuthenticated: true, user, token, view: 'mission-control' }, true);
                 return true;
             }
         }

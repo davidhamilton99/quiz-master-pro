@@ -102,8 +102,8 @@ export function renderResults() {
                         <button class="btn btn-secondary" onclick="window.app.reviewQuiz()">
                             ${icon('fileText')} Review Answers
                         </button>
-                        <button class="btn btn-ghost" onclick="window.app.navigate('${isSimulation ? 'readiness' : 'library'}')">
-                            ${icon('arrowLeft')} ${isSimulation ? 'Back to Readiness' : 'Back to Library'}
+                        <button class="btn btn-ghost" onclick="window.app.navigate('${isSimulation ? 'readiness' : 'mission-control'}')">
+                            ${icon('arrowLeft')} ${isSimulation ? 'Back to Readiness' : 'Back to Session'}
                         </button>
                     </div>
                 </div>
@@ -359,10 +359,10 @@ function getMessage(percentage) {
 }
 
 function getScoreColor(percentage) {
-    if (percentage >= 90) return '#10b981';
-    if (percentage >= 70) return '#8b5cf6';
-    if (percentage >= 50) return '#f59e0b';
-    return '#ef4444';
+    if (percentage >= 90) return '#16a34a';
+    if (percentage >= 70) return '#2563eb';
+    if (percentage >= 50) return '#d97706';
+    return '#dc2626';
 }
 
 // Animate score counter

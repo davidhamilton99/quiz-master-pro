@@ -42,7 +42,7 @@ export function renderProfile() {
     if (!data) {
         return `
         <div class="profile-page">
-            <button class="btn btn-ghost mb-4" onclick="window.app.navigate('home')">
+            <button class="btn btn-ghost mb-4" onclick="window.app.navigate('mission-control')">
                 ${icon('arrowLeft')} Back
             </button>
             <div class="empty-state">
@@ -64,7 +64,7 @@ export function renderProfile() {
 
     return `
     <div class="profile-page">
-        <button class="btn btn-ghost mb-4" onclick="window.app.navigate('home')">
+        <button class="btn btn-ghost mb-4" onclick="window.app.navigate('mission-control')">
             ${icon('arrowLeft')} Back
         </button>
 
@@ -110,7 +110,7 @@ export function renderProfile() {
                     <div class="profile-stat-lbl">Accuracy</div>
                 </div>
                 <div>
-                    <div class="profile-stat-val">${profile.daily_streak || 0} ${profile.daily_streak ? '🔥' : ''}</div>
+                    <div class="profile-stat-val">${profile.daily_streak || 0}</div>
                     <div class="profile-stat-lbl">Day Streak</div>
                 </div>
             </div>
@@ -129,7 +129,7 @@ export function renderProfile() {
                 </div>
                 <div>
                     <div class="profile-stat-val">${(profile.gems || 0).toLocaleString()}</div>
-                    <div class="profile-stat-lbl">Gems 💎</div>
+                    <div class="profile-stat-lbl">Gems</div>
                 </div>
                 <div>
                     <div class="profile-stat-val">${xp.toLocaleString()}</div>

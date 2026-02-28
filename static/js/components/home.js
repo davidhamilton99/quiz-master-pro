@@ -83,9 +83,8 @@ export function renderHome() {
                 </div>
                 <div class="home-streak-bar">
                     <div class="streak-pill">
-                        <span>🔥</span>
                         <strong>${profile.dailyStreak || 0}</strong>
-                        <span class="text-muted">streak</span>
+                        <span class="text-muted">day streak</span>
                     </div>
                     <div class="streak-pill">
                         <strong>${(state.quizzes || []).length}</strong>

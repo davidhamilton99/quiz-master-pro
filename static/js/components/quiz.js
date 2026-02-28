@@ -5,6 +5,7 @@ import {
     getLevelInfo
 } from '../state.js';
 import { getQuiz, saveAttempt, recordSimulation, addToReview, addBookmark, removeBookmark, startStudySession, endStudySession, logEvent } from '../services/api.js';
+import { invalidateSession } from './session.js';
 import { escapeHtml, shuffleArray, showLoading, hideLoading } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
 import { TIME, STREAK, QUIZ } from '../utils/constants.js';
@@ -1223,6 +1224,7 @@ export async function startQuiz(quizId, options = {}) {
 
     try {
         const isSimulation = !!options.simulation;
+        const isDomainQuiz = !!options.domainQuiz;
         let quiz;
 
         if (isSimulation) {
@@ -1233,12 +1235,15 @@ export async function startQuiz(quizId, options = {}) {
                 title: sim.certification.name + ' Practice Exam',
                 questions: sim.questions,
             };
+        } else if (isDomainQuiz) {
+            // Domain quiz from session engine — quiz object already built
+            quiz = options.domainQuiz;
         } else {
             quiz = await getQuiz(quizId);
         }
 
         let savedProgress = null;
-        if (!options.restart && !isSimulation) {
+        if (!options.restart && !isSimulation && !isDomainQuiz) {
             savedProgress = await loadQuizProgress(quizId);
         }
 
@@ -1514,6 +1519,9 @@ export async function submitQuiz() {
             console.error('Failed to end study session:', e);
         }
     }
+
+    // Invalidate session cache so mission control refreshes with new data
+    invalidateSession();
 }
 
 export function exitQuiz() {
@@ -1535,5 +1543,5 @@ export function exitQuiz() {
         setState({ activeStudySessionId: null }, true);
     }
 
-    setState({ view: 'library', currentQuiz: null });
+    setState({ view: 'mission-control', currentQuiz: null });
 }

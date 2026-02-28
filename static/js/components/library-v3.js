@@ -448,7 +448,7 @@ function renderQuizRow(quiz, progressList) {
 
     return `
     <div class="quiz-row" onclick="window.app.openStudyModal(${quiz.id})">
-        <div class="quiz-row-color" style="background: ${quiz.color || '#6366f1'}"></div>
+        <div class="quiz-row-color" style="background: ${quiz.color || '#2563eb'}"></div>
         <div class="quiz-row-info">
             <div class="quiz-row-title">${escapeHtml(quiz.title)}</div>
             <div class="quiz-row-meta">
@@ -527,15 +527,15 @@ function renderStudyModal(quiz) {
 }
 
 function getStableGradient(quizId) {
-    const gradients = [
-        'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-        'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-        'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-        'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-        'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    const colors = [
+        '#2563eb',
+        '#16a34a',
+        '#d97706',
+        '#0891b2',
+        '#7c3aed',
+        '#dc2626',
     ];
-    return gradients[(quizId || 0) % gradients.length];
+    return colors[(quizId || 0) % colors.length];
 }
 function getFilteredQuizzes(state) {
     // If state not passed, get it

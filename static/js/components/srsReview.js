@@ -3,6 +3,7 @@ import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { getDueCards, submitReview, getSrsStats } from '../services/api.js';
+import { invalidateSession } from './session.js';
 import { showToast } from '../utils/toast.js';
 
 let srs = {
@@ -194,8 +195,8 @@ function renderEmptyState() {
             </div>
             ` : ''}
             <p class="text-muted" style="margin-top:1rem;">Cards are automatically added when you get quiz questions wrong.</p>
-            <button class="btn btn-primary" onclick="window.app.navigate('home')">
-                ${icon('arrowLeft')} Back to Home
+            <button class="btn btn-primary" onclick="window.app.navigate('mission-control')">
+                ${icon('arrowLeft')} Back to Session
             </button>
         </div>
     </div>
@@ -235,8 +236,8 @@ function renderSessionComplete() {
             </div>
 
             <div class="srs-complete-actions">
-                <button class="btn btn-primary btn-lg" onclick="window.app.navigate('home')">
-                    ${icon('arrowLeft')} Back to Home
+                <button class="btn btn-primary btn-lg" onclick="window.app.navigate('mission-control')">
+                    ${icon('arrowLeft')} Back to Session
                 </button>
             </div>
         </div>
@@ -306,5 +307,6 @@ export async function srsRate(quality) {
 }
 
 export function exitSrsReview() {
-    setState({ view: 'home' });
+    invalidateSession();
+    setState({ view: 'mission-control' });
 }

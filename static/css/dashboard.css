@@ -1,6 +1,7 @@
 /* ============================================
    CERTIFICATION DASHBOARD
-   All dashboard styles live here — no inline <style> blocks.
+   Light theme rewrite — flat, clean, no gradients.
+   All dashboard styles live here.
    ============================================ */
 
 /* ==================== Layout ==================== */
@@ -21,7 +22,7 @@
 
 .dash-back {
     background: none;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border);
     color: var(--text-secondary);
     padding: 0.5rem 1rem;
     border-radius: 8px;
@@ -31,21 +32,21 @@
 }
 
 .dash-back:hover {
-    border-color: rgba(167, 139, 250, 0.5);
+    border-color: var(--primary);
     color: var(--text-primary);
 }
 
 .dash-title {
     font-size: 1.5rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-primary);
     flex: 1;
 }
 
 .dash-add-btn {
-    background: rgba(167, 139, 250, 0.12);
-    border: 1px solid rgba(167, 139, 250, 0.25);
-    color: #a78bfa;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    color: var(--primary);
     padding: 0.5rem 1.125rem;
     border-radius: 8px;
     cursor: pointer;
@@ -55,8 +56,8 @@
 }
 
 .dash-add-btn:hover {
-    background: rgba(167, 139, 250, 0.22);
-    border-color: rgba(167, 139, 250, 0.45);
+    background: rgba(37, 99, 235, 0.14);
+    border-color: rgba(37, 99, 235, 0.35);
 }
 
 /* ==================== Empty State ==================== */
@@ -77,19 +78,18 @@
     display: inline-block;
     margin-top: 1.25rem;
     padding: 0.75rem 2rem;
-    background: linear-gradient(135deg, #a78bfa, #67e8f9);
-    color: #0f0f14;
+    background: var(--primary);
+    color: #ffffff;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
     font-size: 1rem;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: background 0.15s ease;
 }
 
 .dash-empty-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-2px);
+    background: #1d4ed8;
 }
 
 /* ==================== 7-Day Global Stats ==================== */
@@ -102,13 +102,11 @@
 }
 
 .dash-stat-card {
-    background: rgba(14, 12, 28, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(16px);
-    border-radius: 12px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 1rem 1.25rem;
     text-align: center;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .dash-stat-value {
@@ -116,7 +114,7 @@
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 0.25rem;
-    font-family: var(--font-display);
+    font-family: var(--font-mono);
     letter-spacing: -0.02em;
 }
 
@@ -138,29 +136,23 @@
 }
 
 .dash-cert-card {
-    background: rgba(14, 12, 28, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(16px);
-    border-radius: 14px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 1.25rem;
     cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     position: relative;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: var(--shadow-sm);
 }
 
 .dash-cert-card:hover {
-    border-color: rgba(167, 139, 250, 0.3);
-    transform: translateY(-3px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border-color: var(--primary);
 }
 
 .dash-cert-card.active {
-    border-color: rgba(167, 139, 250, 0.6);
-    box-shadow:
-        0 0 0 1px rgba(167, 139, 250, 0.15),
-        0 8px 24px rgba(124, 92, 252, 0.18),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15), 0 2px 8px rgba(37, 99, 235, 0.1);
 }
 
 .dash-cert-vendor {
@@ -170,7 +162,6 @@
     color: var(--text-muted);
     margin-bottom: 0.3rem;
     font-weight: 600;
-    /* leave space for the remove button */
     padding-right: 1.5rem;
 }
 
@@ -188,7 +179,7 @@
     margin-bottom: 0.75rem;
 }
 
-/* Unenroll button — revealed on card hover */
+/* Unenroll button -- revealed on card hover */
 .dash-cert-remove {
     position: absolute;
     top: 0.75rem;
@@ -211,7 +202,7 @@
 
 .dash-cert-remove:hover {
     color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.08);
 }
 
 .dash-cert-actions {
@@ -223,9 +214,9 @@
 .dash-sim-btn {
     flex: 1;
     padding: 0.5rem;
-    background: rgba(167, 139, 250, 0.12);
-    border: 1px solid rgba(167, 139, 250, 0.25);
-    color: #a78bfa;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    color: var(--primary);
     border-radius: 8px;
     cursor: pointer;
     font-size: 0.8rem;
@@ -235,8 +226,8 @@
 }
 
 .dash-sim-btn:hover {
-    background: rgba(167, 139, 250, 0.22);
-    border-color: rgba(167, 139, 250, 0.45);
+    background: rgba(37, 99, 235, 0.14);
+    border-color: rgba(37, 99, 235, 0.35);
 }
 
 /* ==================== Detail Area ==================== */
@@ -249,9 +240,8 @@
     text-align: center;
     padding: 2.5rem 2rem;
     color: var(--text-muted);
-    background: rgba(14, 12, 28, 0.4);
-    border: 1px dashed rgba(255, 255, 255, 0.07);
-    border-radius: 14px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
     font-size: 0.9rem;
 }
 
@@ -271,13 +261,12 @@
 /* ==================== Exam Readiness Panel ==================== */
 
 .readiness-panel {
-    background: rgba(14, 12, 28, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px);
-    border-radius: 16px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1.25rem;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: var(--shadow-sm);
 }
 
 .readiness-panel-header {
@@ -344,22 +333,22 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.45rem 0.875rem;
-    border-radius: 999px;
+    border-radius: 9999px;
     font-size: 0.85rem;
     font-weight: 600;
     width: fit-content;
 }
 
 .prediction-badge--pass {
-    background: rgba(52, 211, 153, 0.12);
-    border: 1px solid rgba(52, 211, 153, 0.25);
-    color: #34d399;
+    background: rgba(22, 163, 74, 0.08);
+    border: 1px solid rgba(22, 163, 74, 0.25);
+    color: #16a34a;
 }
 
 .prediction-badge--fail {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    color: #f87171;
+    background: rgba(220, 38, 38, 0.07);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    color: #dc2626;
 }
 
 .prediction-badge-label {
@@ -388,7 +377,7 @@
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--text-primary);
-    font-family: var(--font-display);
+    font-family: var(--font-mono);
     letter-spacing: -0.02em;
     display: flex;
     align-items: center;
@@ -403,7 +392,7 @@
     font-weight: 600;
 }
 
-/* CSS trend arrows — no Unicode needed */
+/* CSS trend arrows */
 .trend-icon {
     display: inline-block;
     flex-shrink: 0;
@@ -414,7 +403,7 @@
     height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-bottom: 7px solid #34d399;
+    border-bottom: 7px solid #16a34a;
 }
 
 .trend-icon--down {
@@ -422,7 +411,7 @@
     height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-top: 7px solid #ef4444;
+    border-top: 7px solid #dc2626;
 }
 
 .trend-icon--stable {
@@ -434,11 +423,10 @@
 
 /* ==================== Domain Breakdown ==================== */
 
-/* Used with readiness domain data */
 .readiness-domains {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: 1px solid var(--border);
 }
 
 .readiness-domains-title {
@@ -476,50 +464,50 @@
     font-size: 0.65rem;
     font-weight: 700;
     padding: 0.15rem 0.55rem;
-    border-radius: 999px;
+    border-radius: 9999px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     flex-shrink: 0;
 }
 
 .readiness-domain-status--strong {
-    background: rgba(52, 211, 153, 0.12);
-    color: #34d399;
+    background: rgba(22, 163, 74, 0.08);
+    color: #16a34a;
 }
 
 .readiness-domain-status--moderate {
-    background: rgba(251, 191, 36, 0.12);
-    color: #fbbf24;
+    background: rgba(217, 119, 6, 0.08);
+    color: #d97706;
 }
 
 .readiness-domain-status--weak {
-    background: rgba(239, 68, 68, 0.1);
-    color: #f87171;
+    background: rgba(220, 38, 38, 0.07);
+    color: #dc2626;
 }
 
 .readiness-domain-status--unseen {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.04);
     color: var(--text-muted);
 }
 
 .domain-bar {
-    height: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 5px;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 3px;
     overflow: hidden;
     margin-bottom: 0.35rem;
 }
 
 .domain-bar-fill {
     height: 100%;
-    border-radius: 5px;
+    border-radius: 3px;
     transition: width 0.65s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.domain-bar--strong   { background: linear-gradient(90deg, #10b981, #34d399); }
-.domain-bar--moderate { background: linear-gradient(90deg, #d97706, #fbbf24); }
-.domain-bar--weak     { background: linear-gradient(90deg, #dc2626, #ef4444); }
-.domain-bar--unseen   { background: rgba(255, 255, 255, 0.1); }
+.domain-bar--strong   { background: #16a34a; }
+.domain-bar--moderate { background: #d97706; }
+.domain-bar--weak     { background: #dc2626; }
+.domain-bar--unseen   { background: rgba(0, 0, 0, 0.08); }
 
 .readiness-domain-meta {
     display: flex;
@@ -528,7 +516,8 @@
     color: var(--text-muted);
 }
 
-/* Fallback domain list (from certPerformance endpoint) */
+/* ==================== Fallback Domain List ==================== */
+
 .dash-domain-list {
     display: flex;
     flex-direction: column;
@@ -536,12 +525,10 @@
 }
 
 .dash-domain {
-    background: rgba(14, 12, 28, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(12px);
-    border-radius: 12px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 1rem 1.25rem;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .dash-domain-header {
@@ -566,20 +553,20 @@
 .dash-domain-accuracy {
     font-size: 0.9rem;
     font-weight: 700;
-    font-family: var(--font-display);
+    font-family: var(--font-mono);
 }
 
 .dash-domain-bar {
-    height: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 5px;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 3px;
     overflow: hidden;
     margin-bottom: 0.45rem;
 }
 
 .dash-domain-fill {
     height: 100%;
-    border-radius: 5px;
+    border-radius: 3px;
     transition: width 0.65s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -602,9 +589,9 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: rgba(14, 12, 28, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 0.875rem 1.25rem;
 }
 
@@ -621,13 +608,13 @@
 }
 
 .dash-sim-pass.pass {
-    background: rgba(52, 211, 153, 0.12);
-    color: #34d399;
+    background: rgba(22, 163, 74, 0.08);
+    color: #16a34a;
 }
 
 .dash-sim-pass.fail {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
+    background: rgba(220, 38, 38, 0.07);
+    color: #dc2626;
 }
 
 .dash-sim-info {
@@ -649,7 +636,7 @@
 .dash-sim-pct {
     font-size: 1.1rem;
     font-weight: 700;
-    font-family: var(--font-display);
+    font-family: var(--font-mono);
     letter-spacing: -0.02em;
 }
 
@@ -665,18 +652,18 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: rgba(14, 12, 28, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 0.875rem 1.25rem;
 }
 
 .dash-weak-rate {
     font-size: 0.85rem;
     font-weight: 700;
-    color: #ef4444;
+    color: #dc2626;
     min-width: 45px;
-    font-family: var(--font-display);
+    font-family: var(--font-mono);
 }
 
 .dash-weak-text {
@@ -697,9 +684,9 @@
 /* ==================== Skeleton Loader ==================== */
 
 .dash-skeleton {
-    background: rgba(14, 12, 28, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 16px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1.25rem;
 }
@@ -707,14 +694,8 @@
 .skel-line {
     height: 11px;
     border-radius: 6px;
-    background: linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0.04) 25%,
-        rgba(255, 255, 255, 0.09) 50%,
-        rgba(255, 255, 255, 0.04) 75%
-    );
-    background-size: 200% 100%;
-    animation: skelShimmer 1.4s ease-in-out infinite;
+    background: rgba(0, 0, 0, 0.06);
+    animation: skelPulse 1.4s ease-in-out infinite;
     margin-bottom: 0.75rem;
 }
 
@@ -731,19 +712,13 @@
     height: 120px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0.04) 25%,
-        rgba(255, 255, 255, 0.09) 50%,
-        rgba(255, 255, 255, 0.04) 75%
-    );
-    background-size: 200% 100%;
-    animation: skelShimmer 1.4s ease-in-out infinite;
+    background: rgba(0, 0, 0, 0.06);
+    animation: skelPulse 1.4s ease-in-out infinite;
 }
 
-@keyframes skelShimmer {
-    0%   { background-position: 200% center; }
-    100% { background-position: -200% center; }
+@keyframes skelPulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 0.7; }
 }
 
 /* ==================== Responsive ==================== */

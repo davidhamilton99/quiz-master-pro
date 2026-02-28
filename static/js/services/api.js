@@ -108,7 +108,7 @@ export async function login(username, password) {
                 token: data.token,
                 user: data.user,
                 isAuthenticated: true,
-                view: 'home'
+                view: 'mission-control'
             });
         }
 
@@ -141,13 +141,13 @@ export async function register(username, password, email = null) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Update state via callback
+        // Update state via callback — new users go to immersive onboarding
         if (stateUpdater) {
             stateUpdater({
                 token: data.token,
                 user: data.user,
                 isAuthenticated: true,
-                view: 'home'
+                view: 'onboarding-v2'
             });
         }
 
