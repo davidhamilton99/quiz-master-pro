@@ -250,13 +250,13 @@ function renderReviewAnswer(q, userAnswer, isCorrect) {
             `;
             
         default:
-            const isMulti = Array.isArray(q.correct);
+            const isMulti = Array.isArray(q.correct) && q.correct.length > 1;
             return `
                 <div class="review-options">
                     ${q.options.map((opt, i) => {
                         const letter = String.fromCharCode(65 + i);
-                        const isSelected = isMulti ? (userAnswer || []).includes(i) : userAnswer === i;
-                        const isCorrectOpt = isMulti ? q.correct.includes(i) : q.correct === i;
+                        const isSelected = isMulti ? (Array.isArray(userAnswer) ? userAnswer : []).includes(i) : userAnswer === i;
+                        const isCorrectOpt = isMulti ? q.correct.includes(i) : (Array.isArray(q.correct) ? q.correct[0] === i : q.correct === i);
                         
                         let cls = 'review-opt';
                         if (isCorrectOpt) cls += ' correct';
@@ -304,12 +304,13 @@ function checkIfCorrect(answer, question) {
             if (!answer) return false;
             return answer.every((item, idx) => item.origIndex === idx);
         default:
-            if (Array.isArray(question.correct)) {
-                const ans = answer || [];
-                return question.correct.length === ans.length && 
+            if (Array.isArray(question.correct) && question.correct.length > 1) {
+                const ans = Array.isArray(answer) ? answer : [];
+                return question.correct.length === ans.length &&
                        question.correct.every(c => ans.includes(c));
             }
-            return answer === question.correct;
+            const correctIdx = Array.isArray(question.correct) ? question.correct[0] : question.correct;
+            return answer === correctIdx;
     }
 }
 
