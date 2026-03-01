@@ -1071,33 +1071,43 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
     model avoids generating duplicates when called multiple times on the same material.
     """
     type_descriptions = {
-        'choice': 'Multiple Choice (one correct answer from 4 options, "type": "choice")',
-        'multiselect': 'Multi-Select (2+ correct answers from 4-5 options, "type": "choice" with multiple indices in "correct")',
-        'truefalse': 'True/False (statement with True or False answer, "type": "truefalse")',
-        'matching': 'Matching (4 term-definition pairs, "type": "matching")',
-        'ordering': 'Ordering (4 items in correct sequence, "type": "ordering")',
+        'choice':      ('Multiple Choice', '"type": "choice", one correct answer from 4 options, "correct": [single_index]'),
+        'multiselect': ('Multi-Select',    '"type": "choice", 2+ correct answers, "correct": [index1, index2, ...]  — use multiple indices to signal multi-select'),
+        'truefalse':   ('True/False',      '"type": "truefalse", options must be ["True","False"], "correct": [0] for True or [1] for False'),
+        'matching':    ('Matching',        '"type": "matching", populate "pairs" with 4 {left,right} term-definition pairs'),
+        'ordering':    ('Ordering',        '"type": "ordering", "options" lists 4 items in their CORRECT order, "correct": [0,1,2,3]'),
     }
-    requested_types = [type_descriptions[t] for t in question_types if t in type_descriptions]
-    types_str = '\n'.join(f'- {t}' for t in requested_types)
+
+    # Calculate exact per-type counts so the model can't default to one type.
+    # Spread the remainder across the first N types (one extra each).
+    valid_types = [t for t in question_types if t in type_descriptions]
+    n = len(valid_types)
+    base, remainder = divmod(question_count, n)
+    counts = [base + (1 if i < remainder else 0) for i in range(n)]
+
+    type_lines = []
+    for qt, count in zip(valid_types, counts):
+        label, fmt = type_descriptions[qt]
+        type_lines.append(f"- {label} × {count}  →  {fmt}")
+    types_str = '\n'.join(type_lines)
 
     code_instruction = ""
     if include_code:
         code_instruction = """
-When relevant to the material, include code snippets directly in the question text.
-Format code questions like: "What does the following code output?" followed by the code in the question field.
-Place the code in the "code" field and specify the language in "codeLanguage"."""
+When relevant to the material, include code snippets in the question.
+Place the code in the "code" field and its language in "codeLanguage"."""
 
     avoid_block = ""
     if already_asked:
-        stems = '\n'.join(f'- {q}' for q in already_asked[:100])  # cap to avoid blowing input tokens
+        stems = '\n'.join(f'- {q}' for q in already_asked[:100])
         avoid_block = f"""
-IMPORTANT — do NOT repeat or rephrase any of the following questions already generated:
+Do NOT repeat or rephrase any question already generated:
 {stems}
 """
 
     return f"""Generate exactly {question_count} quiz questions from the study material below.
 
-QUESTION TYPES TO USE (distribute roughly evenly, but prioritize types that fit the material):
+YOU MUST produce EXACTLY this many of each question type — do not substitute one type for another:
 {types_str}
 {code_instruction}
 {f'Subject area: {category}' if category else ''}
@@ -1118,8 +1128,8 @@ def _build_ai_json_schema(question_types):
             },
             "type": {
                 "type": "string",
-                "enum": ["choice", "truefalse", "matching", "ordering"],
-                "description": "Question type"
+                "enum": ["choice", "multiselect", "truefalse", "matching", "ordering"],
+                "description": "Question type. Use 'multiselect' when there are 2+ correct answers."
             },
             "options": {
                 "type": "array",
@@ -1213,7 +1223,7 @@ def _validate_generated_questions(questions):
                 continue
             q['correct'] = list(range(len(options)))
 
-        else:  # choice / multiselect
+        else:  # choice / multiselect (multiselect now has its own type value but same validation)
             options = q.get('options', [])
             correct = q.get('correct', [])
             if len(options) < 2:
