@@ -13,6 +13,7 @@ import hashlib
 import secrets
 import json
 import os
+import random
 import re
 import io
 import tempfile
@@ -1220,11 +1221,18 @@ def _validate_generated_questions(questions):
                 continue
             if not correct:
                 warnings.append(f"Question {q_num}: no correct answer marked, defaulting to first option")
-                q['correct'] = [0]
+                correct = [0]
             # Validate correct indices are in range
-            q['correct'] = [c for c in correct if 0 <= c < len(options)]
-            if not q['correct']:
-                q['correct'] = [0]
+            correct = [c for c in correct if 0 <= c < len(options)]
+            if not correct:
+                correct = [0]
+
+            # Shuffle options so the correct answer isn't always option A.
+            # Build (option_text, is_correct) pairs, shuffle, then remap indices.
+            tagged = [(opt, idx in correct) for idx, opt in enumerate(options)]
+            random.shuffle(tagged)
+            q['options'] = [t[0] for t in tagged]
+            q['correct'] = [i for i, t in enumerate(tagged) if t[1]]
 
         # Clean up null fields to match frontend expectations
         if not q.get('pairs'):
