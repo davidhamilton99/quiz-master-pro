@@ -536,7 +536,10 @@ window.app = {
     showImportModal,
     exportAs,
     handleImport,
-    
+
+    // Profile
+    showChangePassword: () => showToast('Password change coming soon', 'info'),
+
     // Quiz
     showQuizOptions,
     launchQuiz,
