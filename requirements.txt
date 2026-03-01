@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-limiter
+
+# File upload text extraction
+PyPDF2
+python-docx
+
+# AI quiz generation
+openai
