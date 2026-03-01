@@ -15,7 +15,9 @@ let _step = 1; // 1 = pick cert, 2 = pick date, 3 = ready
  */
 export function needsImmersiveOnboarding() {
     const state = getState();
-    const certs = state.userCertifications || [];
+    const certs = state.userCertifications;
+    // undefined = cert data not yet loaded; don't trigger onboarding until confirmed empty
+    if (!Array.isArray(certs)) return false;
     return certs.length === 0;
 }
 
