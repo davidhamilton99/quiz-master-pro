@@ -93,6 +93,7 @@ export function renderMCNav(currentView) {
         <div class="mc-brand" onclick="window.app.navigate('mission-control')" style="cursor:pointer">
             <span class="mc-brand-mark">Q</span>
         </div>
+        <div class="user-menu">
         <button class="mc-avatar-btn" onclick="window.app.toggleMenu()">
             <span class="mc-avatar">${state.user?.username?.charAt(0).toUpperCase() || 'U'}</span>
         </button>
@@ -112,6 +113,7 @@ export function renderMCNav(currentView) {
             <button class="dropdown-item text-danger" onclick="window.app.logout()">
                 ${icon('logOut')} Sign Out
             </button>
+        </div>
         </div>
     </header>
 
