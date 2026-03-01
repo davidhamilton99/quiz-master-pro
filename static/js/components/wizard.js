@@ -1,6 +1,6 @@
 /* AI Wizard - Two-step AI-powered quiz creation */
 import { getState, setState } from '../state.js';
-import { createQuiz, generateQuizAI } from '../services/api.js';
+import { createQuiz, generateQuizAI, uploadMaterial } from '../services/api.js';
 import { parseQuizData } from '../utils/parser.js';
 import { showToast } from '../utils/toast.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -25,6 +25,9 @@ let wizardState = {
     questionCount: 15,
     includeCode: false,
     studyMaterial: '',
+    // File upload
+    uploadedFileName: null,
+    isUploading: false,
     // Step 2: review
     generatedQuestions: [],
     generateError: null,
@@ -48,6 +51,8 @@ export function resetWizard() {
         questionCount: 15,
         includeCode: false,
         studyMaterial: '',
+        uploadedFileName: null,
+        isUploading: false,
         generatedQuestions: [],
         generateError: null,
         isGenerating: false,
@@ -142,13 +147,41 @@ function renderStep1() {
 
             <div class="form-group">
                 <label class="label">Study Material</label>
+
+                <div class="upload-drop-zone" id="upload-drop-zone"
+                     ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                     ondragleave="this.classList.remove('drag-over')"
+                     ondrop="event.preventDefault(); this.classList.remove('drag-over'); window.app.wizardUploadFile(event.dataTransfer.files[0])">
+                    <input type="file" id="wizard-file-input" style="display:none"
+                           accept=".pdf,.docx,.doc,.txt,.md,.csv,.rtf"
+                           onchange="if(this.files[0]) window.app.wizardUploadFile(this.files[0])">
+                    ${s.isUploading ? `
+                        <div class="upload-loading">
+                            <div class="ai-generating-spinner" style="width:28px;height:28px;border-width:3px;margin-bottom:0.5rem"></div>
+                            <span>Extracting text...</span>
+                        </div>
+                    ` : s.uploadedFileName ? `
+                        <div class="upload-success">
+                            <span class="upload-file-badge">${icon('fileText')} ${escapeHtml(s.uploadedFileName)}</span>
+                            <button class="btn btn-ghost btn-sm" onclick="window.app.wizardClearUpload()">Remove</button>
+                        </div>
+                    ` : `
+                        <div class="upload-prompt" onclick="document.getElementById('wizard-file-input').click()">
+                            ${icon('fileText')}
+                            <span><strong>Upload a file</strong> or drag and drop</span>
+                            <span class="upload-formats">PDF, DOCX, TXT, MD, CSV (max 10MB)</span>
+                        </div>
+                    `}
+                </div>
+
+                <div class="upload-divider"><span>or paste text directly</span></div>
+
                 <textarea
                     class="textarea textarea-lg"
-                    rows="8"
-                    placeholder="Paste your notes, textbook content, or study material here...
-
-The more detailed your material, the better the questions. Include definitions, key concepts, processes, and important facts."
+                    rows="6"
+                    placeholder="Paste your notes, textbook content, or study material here..."
                     oninput="window.app.wizardSetStudyMaterial(this.value)"
+                    id="wizard-study-textarea"
                 >${escapeHtml(s.studyMaterial)}</textarea>
                 <p class="helper-text">${materialLength > 0 ? `${materialLength} characters` : 'Minimum 100 characters'}${materialLength > 0 && materialLength < 100 ? ` (need ${100 - materialLength} more)` : ''}</p>
             </div>
@@ -627,6 +660,46 @@ function updateGenerateButtonState() {
             hint.style.display = 'none';
         }
     }
+}
+
+export async function wizardUploadFile(file) {
+    if (!file) return;
+
+    wizardState.isUploading = true;
+    wizardState.uploadedFileName = null;
+    setState({ view: 'wizard' });
+
+    try {
+        const result = await uploadMaterial(file);
+        wizardState.isUploading = false;
+        wizardState.uploadedFileName = result.filename || file.name;
+
+        // Append extracted text to existing material (or replace if empty)
+        if (wizardState.studyMaterial.trim()) {
+            wizardState.studyMaterial += '\n\n' + result.text;
+        } else {
+            wizardState.studyMaterial = result.text;
+        }
+
+        if (result.truncated) {
+            showToast('File was large — text was truncated to fit.', 'warning');
+        } else {
+            showToast(`Extracted ${result.char_count.toLocaleString()} characters from ${result.filename}`, 'success');
+        }
+
+        setState({ view: 'wizard' });
+    } catch (err) {
+        wizardState.isUploading = false;
+        wizardState.uploadedFileName = null;
+        showToast(err.message || 'Failed to process file', 'error');
+        setState({ view: 'wizard' });
+    }
+}
+
+export function wizardClearUpload() {
+    wizardState.uploadedFileName = null;
+    // Don't clear study material — user may want to keep it
+    setState({ view: 'wizard' });
 }
 
 export function wizardToggleType(type) {

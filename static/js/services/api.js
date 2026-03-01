@@ -246,6 +246,51 @@ export async function generateQuizAI(params) {
 }
 
 /**
+ * Upload a file and extract text for study material
+ */
+export async function uploadMaterial(file) {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API.REQUEST_TIMEOUT_MS || 30000);
+
+    try {
+        const res = await fetch(`${API_URL}/upload-material`, {
+            method: 'POST',
+            headers,
+            body: formData,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            if (res.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                if (authClearer) authClearer();
+                showToast('Session expired - please log in again', 'error');
+            }
+            throw new Error(data.error || `Upload failed (${res.status})`);
+        }
+
+        return data;
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Upload timed out. Try a smaller file.');
+        }
+        throw err;
+    }
+}
+
+/**
  * Create new quiz
  */
 export async function createQuiz(payload) {

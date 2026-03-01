@@ -14,6 +14,8 @@ import secrets
 import json
 import os
 import re
+import io
+import tempfile
 import threading
 from datetime import datetime, timedelta
 from functools import wraps
@@ -845,6 +847,98 @@ def create_quiz():
     conn.commit()
     conn.close()
     return jsonify({'message': 'Created', 'quiz_id': quiz_id}), 201
+
+
+# === File Upload — Extract text from uploaded documents ===
+
+UPLOAD_MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'txt', 'md', 'rtf', 'csv'}
+
+def _extract_text_from_file(file_storage):
+    """Extract text from an uploaded file.  Returns (text, error)."""
+    filename = (file_storage.filename or '').lower()
+    ext = filename.rsplit('.', 1)[-1] if '.' in filename else ''
+
+    if ext not in ALLOWED_EXTENSIONS:
+        return None, f'Unsupported file type: .{ext}. Supported: {", ".join(sorted(ALLOWED_EXTENSIONS))}'
+
+    raw = file_storage.read()
+    if len(raw) > UPLOAD_MAX_SIZE:
+        return None, f'File too large ({len(raw) // (1024*1024)}MB). Maximum is 10MB.'
+
+    # Plain text variants
+    if ext in ('txt', 'md', 'csv', 'rtf'):
+        try:
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                text = raw.decode('latin-1')
+            except Exception:
+                return None, 'Could not decode text file.'
+        return text.strip(), None
+
+    # PDF
+    if ext == 'pdf':
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(io.BytesIO(raw))
+            pages = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    pages.append(t)
+            if not pages:
+                return None, 'Could not extract text from PDF. The file may be scanned/image-based.'
+            return '\n\n'.join(pages).strip(), None
+        except ImportError:
+            return None, 'PDF support is not installed on the server.'
+        except Exception as e:
+            return None, f'Failed to read PDF: {str(e)}'
+
+    # DOCX
+    if ext in ('docx', 'doc'):
+        try:
+            from docx import Document
+            doc = Document(io.BytesIO(raw))
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            if not paragraphs:
+                return None, 'No text found in document.'
+            return '\n\n'.join(paragraphs).strip(), None
+        except ImportError:
+            return None, 'DOCX support is not installed on the server.'
+        except Exception as e:
+            return None, f'Failed to read document: {str(e)}'
+
+    return None, 'Unsupported format.'
+
+
+@app.route('/api/upload-material', methods=['POST'])
+@token_required
+def upload_material():
+    """Extract text from uploaded file and return it for use in the wizard."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'No file selected'}), 400
+
+    text, error = _extract_text_from_file(f)
+    if error:
+        return jsonify({'error': error}), 400
+
+    # Truncate very large texts to avoid overwhelming the AI (keep first ~80k chars)
+    max_chars = 80_000
+    truncated = len(text) > max_chars
+    if truncated:
+        text = text[:max_chars]
+
+    return jsonify({
+        'text': text,
+        'char_count': len(text),
+        'truncated': truncated,
+        'filename': f.filename
+    })
 
 
 # === AI Quiz Generation ===

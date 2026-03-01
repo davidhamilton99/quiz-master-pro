@@ -989,6 +989,27 @@ h3 {
     box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
 }
 
+/* File Upload */
+.upload-drop-zone {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(14, 12, 28, 0.3);
+}
+
+.upload-drop-zone:hover {
+    border-color: var(--primary);
+    background: rgba(124, 92, 252, 0.06);
+}
+
+.upload-drop-zone.drag-over {
+    border-color: var(--primary);
+    background: rgba(124, 92, 252, 0.12);
+}
+
+.upload-file-badge {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
 /* AI Generation & Review */
 .ai-generating-spinner {
     border-color: rgba(255, 255, 255, 0.1);
