@@ -374,16 +374,6 @@ code, pre, kbd, samp {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: 4px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-4px);
-    transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
-}
-
-.dropdown-menu.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
 }
 
 .dropdown-item {
