@@ -66,11 +66,8 @@ import {
 } from './components/onboarding.js';
 import {
     renderWizard, resetWizard, wizardSetTitle, wizardSetCategory, wizardToggleType,
-    wizardToggleCode, wizardSetCount, wizardAdjustCount, wizardBack,
-    wizardSetContent, wizardPreviewContent, wizardFinish, exitWizard,
-    wizardSetStudyMaterial, wizardGenerate, wizardRemoveQuestion,
-    wizardEnterManualMode, wizardExitManualMode, wizardFinishManual,
-    wizardUploadFile, wizardClearUpload
+    wizardToggleCode, wizardSetCount, wizardAdjustCount, wizardNext, wizardBack,
+    wizardSetContent, wizardPreviewContent, wizardCopyPrompt, wizardFinish, exitWizard
 } from './components/wizard.js';
 
 // Lightweight animation utils (shake/pulse only - gamification removed)
@@ -522,19 +519,13 @@ window.app = {
     wizardToggleCode,
     wizardSetCount,
     wizardAdjustCount,
+    wizardNext,
     wizardBack,
     wizardSetContent,
     wizardPreviewContent,
+    wizardCopyPrompt,
     wizardFinish,
     exitWizard,
-    wizardSetStudyMaterial,
-    wizardGenerate,
-    wizardRemoveQuestion,
-    wizardEnterManualMode,
-    wizardExitManualMode,
-    wizardFinishManual,
-    wizardUploadFile,
-    wizardClearUpload,
     
     // Export/Import
     showExportModal: (quizId) => {
