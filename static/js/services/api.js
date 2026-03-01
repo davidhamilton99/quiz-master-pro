@@ -200,6 +200,52 @@ export async function getQuiz(id) {
 }
 
 /**
+ * Generate quiz questions from study material using AI
+ * Uses a longer timeout since generation can take 5-30 seconds
+ */
+export async function generateQuizAI(params) {
+    const token = localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API.AI_GENERATION_TIMEOUT_MS || 90000);
+
+    try {
+        const res = await fetch(`${API_URL}/generate-quiz`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(params),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            if (res.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                if (authClearer) authClearer();
+                showToast('Session expired - please log in again', 'error');
+            }
+            const err = new Error(data.error || `Generation failed (${res.status})`);
+            err.status = res.status;
+            err.retryAfter = data.retry_after;
+            throw err;
+        }
+
+        return data;
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Generation timed out. Try reducing the number of questions or shortening your material.');
+        }
+        throw err;
+    }
+}
+
+/**
  * Create new quiz
  */
 export async function createQuiz(payload) {
