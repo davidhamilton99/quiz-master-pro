@@ -78,6 +78,7 @@
 html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    color-scheme: light;
 }
 
 body {
@@ -1395,7 +1396,10 @@ code, pre, kbd, samp {
     outline: none;
 }
 
-.question-jump-input:focus { border-color: var(--primary); }
+.question-jump-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-muted);
+}
 
 .question-nav-total {
     font-size: 0.875rem;
