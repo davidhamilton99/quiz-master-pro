@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'static'))
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload limit
 CORS(app)
 
 # Ensure all HTTP error responses come back as JSON, not HTML.
@@ -30,8 +31,8 @@ def bad_request_handler(e):
     return jsonify({'error': str(e)}), 400
 
 @app.errorhandler(413)
-def request_too_large_handler(e):
-    return jsonify({'error': 'File too large for the server to accept.'}), 413
+def too_large(e):
+    return jsonify({'error': 'File too large. Maximum upload size is 16MB.'}), 413
 
 DATABASE = os.path.join(BASE_DIR, 'quiz_master.db')
 
