@@ -995,7 +995,7 @@ def upload_material():
 
 # Rate limit: max generations per user per hour
 AI_RATE_LIMIT = 10
-AI_MAX_QUESTIONS_PER_REQUEST = 300
+AI_MAX_QUESTIONS_PER_REQUEST = 100
 # gpt-4.1-nano output cap is 32 768 tokens; ~150 tokens/question → ~200 max.
 # 100 per batch comfortably fits (~15 000 tokens out of 32 768 available).
 AI_BATCH_SIZE = 100
