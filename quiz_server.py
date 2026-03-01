@@ -1297,8 +1297,8 @@ def generate_quiz_ai():
 
     # ---- Batch generation ------------------------------------------------
     # gpt-4.1-nano's output cap is ~32 768 tokens. At ~150 tokens/question
-    # we can fit ~200 questions, but we use AI_BATCH_SIZE=50 to be safe and
-    # to give the model focused context for each batch.
+    # we can fit ~200 questions, but we use AI_BATCH_SIZE=100 to keep each
+    # call focused while still handling the full 100-question cap in one shot.
     all_questions = []
     total_input_tokens = 0
     total_output_tokens = 0
