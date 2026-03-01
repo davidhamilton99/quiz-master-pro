@@ -995,7 +995,10 @@ def upload_material():
 
 # Rate limit: max generations per user per hour
 AI_RATE_LIMIT = 10
-AI_MAX_QUESTIONS_PER_REQUEST = 300
+AI_MAX_QUESTIONS_PER_REQUEST = 100
+# gpt-4.1-nano output cap is 32 768 tokens; ~150 tokens/question → ~200 max.
+# 100 per batch comfortably fits (~15 000 tokens out of 32 768 available).
+AI_BATCH_SIZE = 100
 AI_MIN_MATERIAL_LENGTH = 100
 
 def _check_ai_rate_limit(user_id):
@@ -1059,8 +1062,13 @@ QUESTION QUALITY RULES:
 
 You must output valid JSON matching the provided schema exactly. Do not include any text outside the JSON object."""
 
-def _build_ai_user_prompt(study_material, question_count, question_types, category, include_code):
-    """Build the user prompt with study material and preferences."""
+def _build_ai_user_prompt(study_material, question_count, question_types, category, include_code,
+                          already_asked=None):
+    """Build the user prompt with study material and preferences.
+
+    already_asked: optional list of question stems from previous batches, so the
+    model avoids generating duplicates when called multiple times on the same material.
+    """
     type_descriptions = {
         'choice': 'Multiple Choice (one correct answer from 4 options, "type": "choice")',
         'multiselect': 'Multi-Select (2+ correct answers from 4-5 options, "type": "choice" with multiple indices in "correct")',
@@ -1078,13 +1086,21 @@ When relevant to the material, include code snippets directly in the question te
 Format code questions like: "What does the following code output?" followed by the code in the question field.
 Place the code in the "code" field and specify the language in "codeLanguage"."""
 
+    avoid_block = ""
+    if already_asked:
+        stems = '\n'.join(f'- {q}' for q in already_asked[:100])  # cap to avoid blowing input tokens
+        avoid_block = f"""
+IMPORTANT — do NOT repeat or rephrase any of the following questions already generated:
+{stems}
+"""
+
     return f"""Generate exactly {question_count} quiz questions from the study material below.
 
 QUESTION TYPES TO USE (distribute roughly evenly, but prioritize types that fit the material):
 {types_str}
 {code_instruction}
 {f'Subject area: {category}' if category else ''}
-
+{avoid_block}
 STUDY MATERIAL:
 ---
 {study_material}
@@ -1265,80 +1281,114 @@ def generate_quiz_ai():
     if not question_types:
         question_types = ['choice']
 
-    # Build prompts
+    # Build shared prompts/schema
     system_prompt = _build_ai_system_prompt()
-    user_prompt = _build_ai_user_prompt(study_material, question_count, question_types, category, include_code)
     json_schema = _build_ai_json_schema(question_types)
 
-    # Call OpenAI API
     try:
         import openai
     except ImportError:
         return jsonify({'error': 'AI generation is not configured. The openai package is not installed.'}), 503
 
     model = 'gpt-4.1-nano'
+    # max_retries=0: don't let the openai client retry 429/5xx internally —
+    # that holds the WSGI worker open until PythonAnywhere's harakiri kills it (502).
+    client = openai.OpenAI(api_key=api_key, max_retries=0)
 
-    try:
-        # max_retries=0 prevents the client retrying on 429/5xx, which would hold
-        # the WSGI worker open until PythonAnywhere's harakiri timeout kills it (502).
-        # We handle retries by telling the user to try again instead.
-        client = openai.OpenAI(api_key=api_key, max_retries=0)
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": json_schema
-            },
-            max_tokens=question_count * 300,
-            temperature=0.7,
+    # ---- Batch generation ------------------------------------------------
+    # gpt-4.1-nano's output cap is ~32 768 tokens. At ~150 tokens/question
+    # we can fit ~200 questions, but we use AI_BATCH_SIZE=100 to keep each
+    # call focused while still handling the full 100-question cap in one shot.
+    all_questions = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+    truncated = False  # set True if a mid-run rate-limit cut batches short
+    already_asked = []  # question stems passed to each batch to avoid duplicates
+
+    remaining_questions = question_count
+    while remaining_questions > 0:
+        batch_size = min(remaining_questions, AI_BATCH_SIZE)
+        # ~160 tokens/question + buffer; gpt-4.1-nano hard cap is 32 768
+        batch_max_tokens = min(batch_size * 160 + 500, 28000)
+        user_prompt = _build_ai_user_prompt(
+            study_material, batch_size, question_types, category, include_code,
+            already_asked=already_asked if already_asked else None
         )
-    except openai.AuthenticationError:
-        return jsonify({'error': 'AI service authentication failed. Check your API key configuration.'}), 503
-    except openai.RateLimitError:
-        return jsonify({'error': 'AI service is temporarily busy. Please try again in a moment.'}), 503
-    except openai.BadRequestError as e:
-        msg = str(e)
-        print(f"[AI] OpenAI bad request for user {request.user_id}: {msg}", flush=True)
-        if 'context_length' in msg or 'max_tokens' in msg or 'token' in msg.lower():
-            return jsonify({'error': 'Request too large for the AI model. Try fewer questions or shorter study material.'}), 400
-        return jsonify({'error': f'AI rejected the request: {msg}'}), 400
-    except openai.APITimeoutError:
-        return jsonify({'error': 'AI generation timed out. Try fewer questions or shorter study material.'}), 504
-    except openai.APIConnectionError:
-        return jsonify({'error': 'Could not connect to AI service. Please try again.'}), 503
-    except openai.APIError as e:
-        print(f"[AI] OpenAI API error for user {request.user_id}: {e}", flush=True)
-        return jsonify({'error': 'AI service encountered an error. Please try again.'}), 503
 
-    # Parse response
-    choice = response.choices[0]
-    finish_reason = choice.finish_reason
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_schema", "json_schema": json_schema},
+                max_tokens=batch_max_tokens,
+                temperature=0.7,
+            )
+        except openai.AuthenticationError:
+            return jsonify({'error': 'AI service authentication failed. Check your API key configuration.'}), 503
+        except openai.RateLimitError:
+            if all_questions:
+                # Return however many questions we managed to generate
+                truncated = True
+                break
+            return jsonify({'error': 'AI service is temporarily busy. Please try again in a moment.'}), 503
+        except openai.BadRequestError as e:
+            msg = str(e)
+            print(f"[AI] OpenAI bad request for user {request.user_id}: {msg}", flush=True)
+            if all_questions:
+                truncated = True
+                break
+            return jsonify({'error': 'AI rejected the request. Try fewer questions or shorter study material.'}), 400
+        except openai.APITimeoutError:
+            if all_questions:
+                truncated = True
+                break
+            return jsonify({'error': 'AI generation timed out. Try fewer questions or shorter study material.'}), 504
+        except openai.APIConnectionError:
+            return jsonify({'error': 'Could not connect to AI service. Please try again.'}), 503
+        except openai.APIError as e:
+            print(f"[AI] OpenAI API error for user {request.user_id}: {e}", flush=True)
+            if all_questions:
+                truncated = True
+                break
+            return jsonify({'error': 'AI service encountered an error. Please try again.'}), 503
 
-    try:
-        result = json.loads(choice.message.content)
-        questions = result.get('questions', [])
-    except (json.JSONDecodeError, TypeError, AttributeError):
-        return jsonify({'error': 'AI returned an invalid response. Please try again.'}), 502
+        usage = response.usage
+        total_input_tokens += usage.prompt_tokens if usage else 0
+        total_output_tokens += usage.completion_tokens if usage else 0
 
-    # Track token usage
-    usage = response.usage
-    input_tokens = usage.prompt_tokens if usage else 0
-    output_tokens = usage.completion_tokens if usage else 0
+        try:
+            result = json.loads(response.choices[0].message.content)
+            batch_questions = result.get('questions', [])
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            batch_questions = []
 
-    # Validate generated questions
-    valid_questions, warnings = _validate_generated_questions(questions)
+        all_questions.extend(batch_questions)
+        # Collect stems so the next batch knows what's already been generated
+        already_asked.extend(q.get('question', '')[:120] for q in batch_questions if q.get('question'))
+        remaining_questions -= batch_size
+    # ---- End batch loop --------------------------------------------------
+
+    input_tokens = total_input_tokens
+    output_tokens = total_output_tokens
+
+    # Validate all collected questions
+    valid_questions, warnings = _validate_generated_questions(all_questions)
 
     if not valid_questions:
-        # Log usage even on failure so rate limit stays accurate
         _log_ai_usage(request.user_id, input_tokens, output_tokens, 0, model)
         return jsonify({
             'error': 'AI could not generate valid questions from this material. Try adding more detailed notes or definitions.',
             'warnings': warnings
         }), 422
+
+    if truncated:
+        warnings.append(
+            f'Generation was cut short due to an API limit. '
+            f'Returning {len(valid_questions)} of {question_count} requested questions.'
+        )
 
     # Log successful usage
     _log_ai_usage(request.user_id, input_tokens, output_tokens, len(valid_questions), model)
@@ -1360,12 +1410,6 @@ def generate_quiz_ai():
 
     if warnings:
         response_data['warnings'] = warnings
-
-    if finish_reason == 'length':
-        response_data['truncated'] = True
-        response_data['warnings'] = response_data.get('warnings', []) + [
-            'Response was truncated due to length. Some questions may be missing.'
-        ]
 
     return jsonify(response_data), 200
 
