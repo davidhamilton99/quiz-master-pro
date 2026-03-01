@@ -1085,8 +1085,11 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
     base, remainder = divmod(question_count, n)
     counts = [base + (1 if i < remainder else 0) for i in range(n)]
 
+    # Drop types that got 0 questions (happens when question_count < n_types)
     type_lines = []
     for qt, count in zip(valid_types, counts):
+        if count == 0:
+            continue
         label, fmt = type_descriptions[qt]
         type_lines.append(f"- {label} × {count}  →  {fmt}")
     types_str = '\n'.join(type_lines)
