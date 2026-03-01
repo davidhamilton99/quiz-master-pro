@@ -1062,8 +1062,13 @@ QUESTION QUALITY RULES:
 
 You must output valid JSON matching the provided schema exactly. Do not include any text outside the JSON object."""
 
-def _build_ai_user_prompt(study_material, question_count, question_types, category, include_code):
-    """Build the user prompt with study material and preferences."""
+def _build_ai_user_prompt(study_material, question_count, question_types, category, include_code,
+                          already_asked=None):
+    """Build the user prompt with study material and preferences.
+
+    already_asked: optional list of question stems from previous batches, so the
+    model avoids generating duplicates when called multiple times on the same material.
+    """
     type_descriptions = {
         'choice': 'Multiple Choice (one correct answer from 4 options, "type": "choice")',
         'multiselect': 'Multi-Select (2+ correct answers from 4-5 options, "type": "choice" with multiple indices in "correct")',
@@ -1081,13 +1086,21 @@ When relevant to the material, include code snippets directly in the question te
 Format code questions like: "What does the following code output?" followed by the code in the question field.
 Place the code in the "code" field and specify the language in "codeLanguage"."""
 
+    avoid_block = ""
+    if already_asked:
+        stems = '\n'.join(f'- {q}' for q in already_asked[:100])  # cap to avoid blowing input tokens
+        avoid_block = f"""
+IMPORTANT — do NOT repeat or rephrase any of the following questions already generated:
+{stems}
+"""
+
     return f"""Generate exactly {question_count} quiz questions from the study material below.
 
 QUESTION TYPES TO USE (distribute roughly evenly, but prioritize types that fit the material):
 {types_str}
 {code_instruction}
 {f'Subject area: {category}' if category else ''}
-
+{avoid_block}
 STUDY MATERIAL:
 ---
 {study_material}
@@ -1290,6 +1303,7 @@ def generate_quiz_ai():
     total_input_tokens = 0
     total_output_tokens = 0
     truncated = False  # set True if a mid-run rate-limit cut batches short
+    already_asked = []  # question stems passed to each batch to avoid duplicates
 
     remaining_questions = question_count
     while remaining_questions > 0:
@@ -1297,7 +1311,8 @@ def generate_quiz_ai():
         # ~160 tokens per question + small buffer; stay well under the model cap
         batch_max_tokens = min(batch_size * 160 + 500, 16000)
         user_prompt = _build_ai_user_prompt(
-            study_material, batch_size, question_types, category, include_code
+            study_material, batch_size, question_types, category, include_code,
+            already_asked=already_asked if already_asked else None
         )
 
         try:
@@ -1351,6 +1366,8 @@ def generate_quiz_ai():
             batch_questions = []
 
         all_questions.extend(batch_questions)
+        # Collect stems so the next batch knows what's already been generated
+        already_asked.extend(q.get('question', '')[:120] for q in batch_questions if q.get('question'))
         remaining_questions -= batch_size
     # ---- End batch loop --------------------------------------------------
 
