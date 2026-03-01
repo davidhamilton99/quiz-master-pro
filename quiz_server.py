@@ -997,8 +997,8 @@ def upload_material():
 AI_RATE_LIMIT = 10
 AI_MAX_QUESTIONS_PER_REQUEST = 300
 # gpt-4.1-nano output cap is 32 768 tokens; ~150 tokens/question → ~200 max.
-# 50 per batch is conservative and leaves headroom for verbose questions.
-AI_BATCH_SIZE = 50
+# 100 per batch comfortably fits (~15 000 tokens out of 32 768 available).
+AI_BATCH_SIZE = 100
 AI_MIN_MATERIAL_LENGTH = 100
 
 def _check_ai_rate_limit(user_id):
@@ -1308,8 +1308,8 @@ def generate_quiz_ai():
     remaining_questions = question_count
     while remaining_questions > 0:
         batch_size = min(remaining_questions, AI_BATCH_SIZE)
-        # ~160 tokens per question + small buffer; stay well under the model cap
-        batch_max_tokens = min(batch_size * 160 + 500, 16000)
+        # ~160 tokens/question + buffer; gpt-4.1-nano hard cap is 32 768
+        batch_max_tokens = min(batch_size * 160 + 500, 28000)
         user_prompt = _build_ai_user_prompt(
             study_material, batch_size, question_types, category, include_code,
             already_asked=already_asked if already_asked else None
