@@ -1279,7 +1279,10 @@ def generate_quiz_ai():
     model = 'gpt-4.1-nano'
 
     try:
-        client = openai.OpenAI(api_key=api_key)
+        # max_retries=0 prevents the client retrying on 429/5xx, which would hold
+        # the WSGI worker open until PythonAnywhere's harakiri timeout kills it (502).
+        # We handle retries by telling the user to try again instead.
+        client = openai.OpenAI(api_key=api_key, max_retries=0)
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -1297,13 +1300,19 @@ def generate_quiz_ai():
         return jsonify({'error': 'AI service authentication failed. Check your API key configuration.'}), 503
     except openai.RateLimitError:
         return jsonify({'error': 'AI service is temporarily busy. Please try again in a moment.'}), 503
+    except openai.BadRequestError as e:
+        msg = str(e)
+        print(f"[AI] OpenAI bad request for user {request.user_id}: {msg}", flush=True)
+        if 'context_length' in msg or 'max_tokens' in msg or 'token' in msg.lower():
+            return jsonify({'error': 'Request too large for the AI model. Try fewer questions or shorter study material.'}), 400
+        return jsonify({'error': f'AI rejected the request: {msg}'}), 400
     except openai.APITimeoutError:
-        return jsonify({'error': 'AI generation timed out. Try reducing the number of questions or shortening your material.'}), 504
+        return jsonify({'error': 'AI generation timed out. Try fewer questions or shorter study material.'}), 504
     except openai.APIConnectionError:
         return jsonify({'error': 'Could not connect to AI service. Please try again.'}), 503
     except openai.APIError as e:
         print(f"[AI] OpenAI API error for user {request.user_id}: {e}", flush=True)
-        return jsonify({'error': 'AI service encountered an error. Please try again.'}), 502
+        return jsonify({'error': 'AI service encountered an error. Please try again.'}), 503
 
     # Parse response
     choice = response.choices[0]
