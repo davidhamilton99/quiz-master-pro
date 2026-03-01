@@ -1112,6 +1112,14 @@ Do NOT repeat or rephrase any question already generated:
 {stems}
 """
 
+    avoid_block = ""
+    if already_asked:
+        stems = '\n'.join(f'- {q}' for q in already_asked[:100])  # cap to avoid blowing input tokens
+        avoid_block = f"""
+IMPORTANT — do NOT repeat or rephrase any of the following questions already generated:
+{stems}
+"""
+
     return f"""Generate exactly {question_count} quiz questions from the study material below.
 
 QUESTION TYPES:
