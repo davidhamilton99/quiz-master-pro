@@ -14,6 +14,7 @@ import secrets
 import json
 import os
 import random
+import math
 import re
 import io
 import tempfile
@@ -1040,6 +1041,15 @@ def _build_ai_system_prompt():
     """Return the system prompt for quiz generation. Cached across requests."""
     return """You are a quiz question generator for educational study material.
 
+COUNT RULE (mandatory):
+- You MUST output EXACTLY the number of questions specified. No more, no less.
+- Do not stop early. If you have covered the obvious topics, continue with variations, different angles, application scenarios, edge cases, or different difficulty levels until you reach the exact count.
+
+QUESTION TYPE RULES (mandatory):
+- You MUST use every question type listed in the prompt. Do not default to multiple choice only.
+- Follow the minimum counts specified for each type — they are hard requirements, not suggestions.
+- For remaining questions beyond the minimums, choose the type that best fits the content.
+
 DISTRACTOR DESIGN RULES (critical):
 - Every wrong answer must be a real concept from the same domain as the correct answer
 - Wrong answers should represent common misconceptions, adjacent facts, or plausible confusions
@@ -1081,19 +1091,26 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
     valid_types = [t for t in question_types if t in type_descriptions]
 
     if len(valid_types) == 1:
-        # Only one type selected — no choice needed, keep it simple
         schema_val, guidance = type_descriptions[valid_types[0]]
         types_str = f"All questions must use {schema_val} ({guidance})."
     else:
+        # Give each type a hard minimum floor so the model can't skip types entirely.
+        # Floor = roughly 1 per type per 4 questions, minimum 1.
+        min_per_type = max(1, math.ceil(question_count / (len(valid_types) * 4)))
+        total_floor = min_per_type * len(valid_types)
+        free = max(0, question_count - total_floor)
+
         type_lines = []
         for qt in valid_types:
             schema_val, guidance = type_descriptions[qt]
-            type_lines.append(f"  {schema_val} — {guidance}")
+            type_lines.append(f"  {schema_val} — AT LEAST {min_per_type} questions — {guidance}")
+
         types_str = (
-            "For each question, choose the type that BEST FITS the content:\n"
+            f"REQUIRED MINIMUMS (hard requirement — you must meet every minimum):\n"
             + '\n'.join(type_lines) + "\n"
-            "Use your judgment — don't force a type that doesn't fit. "
-            "Aim for variety across the set."
+            + (f"Remaining {free} questions: use whichever type best fits each piece of content.\n"
+               if free > 0 else "")
+            + "Do not skip any type."
         )
 
     if include_code:
@@ -1107,20 +1124,9 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
     avoid_block = ""
     if already_asked:
         stems = '\n'.join(f'- {q}' for q in already_asked[:100])
-        avoid_block = f"""
-Do NOT repeat or rephrase any question already generated:
-{stems}
-"""
+        avoid_block = f"Do NOT repeat or rephrase any question already generated:\n{stems}\n"
 
-    avoid_block = ""
-    if already_asked:
-        stems = '\n'.join(f'- {q}' for q in already_asked[:100])  # cap to avoid blowing input tokens
-        avoid_block = f"""
-IMPORTANT — do NOT repeat or rephrase any of the following questions already generated:
-{stems}
-"""
-
-    return f"""Generate exactly {question_count} quiz questions from the study material below.
+    return f"""You MUST output EXACTLY {question_count} questions — not fewer. Fill the full count.
 
 QUESTION TYPES:
 {types_str}
