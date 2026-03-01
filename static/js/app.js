@@ -69,7 +69,8 @@ import {
     wizardToggleCode, wizardSetCount, wizardAdjustCount, wizardBack,
     wizardSetContent, wizardPreviewContent, wizardFinish, exitWizard,
     wizardSetStudyMaterial, wizardGenerate, wizardRemoveQuestion,
-    wizardEnterManualMode, wizardExitManualMode, wizardFinishManual
+    wizardEnterManualMode, wizardExitManualMode, wizardFinishManual,
+    wizardUploadFile, wizardClearUpload
 } from './components/wizard.js';
 
 // Lightweight animation utils (shake/pulse only - gamification removed)
@@ -532,6 +533,8 @@ window.app = {
     wizardEnterManualMode,
     wizardExitManualMode,
     wizardFinishManual,
+    wizardUploadFile,
+    wizardClearUpload,
     
     // Export/Import
     showExportModal: (quizId) => {
