@@ -13,6 +13,7 @@ import hashlib
 import secrets
 import json
 import os
+import random
 import re
 import io
 import tempfile
@@ -1070,21 +1071,46 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
     model avoids generating duplicates when called multiple times on the same material.
     """
     type_descriptions = {
-        'choice': 'Multiple Choice (one correct answer from 4 options, "type": "choice")',
-        'multiselect': 'Multi-Select (2+ correct answers from 4-5 options, "type": "choice" with multiple indices in "correct")',
-        'truefalse': 'True/False (statement with True or False answer, "type": "truefalse")',
-        'matching': 'Matching (4 term-definition pairs, "type": "matching")',
-        'ordering': 'Ordering (4 items in correct sequence, "type": "ordering")',
+        'choice':      ('"type": "choice"',      'one correct answer from 4 options — best for factual recall, definitions, or "which of these" questions'),
+        'multiselect': ('"type": "multiselect"', '2+ correct answers from 4-5 options — best when multiple things are true simultaneously'),
+        'truefalse':   ('"type": "truefalse"',   'options must be ["True","False"] — best for clear factual statements, common misconceptions'),
+        'matching':    ('"type": "matching"',    'populate "pairs" with 4 {left,right} objects — best for term-definition pairs, cause-effect, or category mapping'),
+        'ordering':    ('"type": "ordering"',    '"options" lists items in their CORRECT order — best for steps in a process, chronology, or ranked sequences'),
     }
-    requested_types = [type_descriptions[t] for t in question_types if t in type_descriptions]
-    types_str = '\n'.join(f'- {t}' for t in requested_types)
 
-    code_instruction = ""
+    valid_types = [t for t in question_types if t in type_descriptions]
+
+    if len(valid_types) == 1:
+        # Only one type selected — no choice needed, keep it simple
+        schema_val, guidance = type_descriptions[valid_types[0]]
+        types_str = f"All questions must use {schema_val} ({guidance})."
+    else:
+        type_lines = []
+        for qt in valid_types:
+            schema_val, guidance = type_descriptions[qt]
+            type_lines.append(f"  {schema_val} — {guidance}")
+        types_str = (
+            "For each question, choose the type that BEST FITS the content:\n"
+            + '\n'.join(type_lines) + "\n"
+            "Use your judgment — don't force a type that doesn't fit. "
+            "Aim for variety across the set."
+        )
+
     if include_code:
-        code_instruction = """
-When relevant to the material, include code snippets directly in the question text.
-Format code questions like: "What does the following code output?" followed by the code in the question field.
-Place the code in the "code" field and specify the language in "codeLanguage"."""
+        types_str += (
+            "\n  code snippets — any question type can include a code snippet when the concept "
+            "is best illustrated with code (e.g. 'What does this output?', 'spot the bug', "
+            "'fill in the blank'). Set the \"code\" field and \"codeLanguage\" when used; "
+            "leave both null otherwise. Use code only where it genuinely aids understanding."
+        )
+
+    avoid_block = ""
+    if already_asked:
+        stems = '\n'.join(f'- {q}' for q in already_asked[:100])
+        avoid_block = f"""
+Do NOT repeat or rephrase any question already generated:
+{stems}
+"""
 
     avoid_block = ""
     if already_asked:
@@ -1096,9 +1122,8 @@ IMPORTANT — do NOT repeat or rephrase any of the following questions already g
 
     return f"""Generate exactly {question_count} quiz questions from the study material below.
 
-QUESTION TYPES TO USE (distribute roughly evenly, but prioritize types that fit the material):
+QUESTION TYPES:
 {types_str}
-{code_instruction}
 {f'Subject area: {category}' if category else ''}
 {avoid_block}
 STUDY MATERIAL:
@@ -1117,8 +1142,8 @@ def _build_ai_json_schema(question_types):
             },
             "type": {
                 "type": "string",
-                "enum": ["choice", "truefalse", "matching", "ordering"],
-                "description": "Question type"
+                "enum": ["choice", "multiselect", "truefalse", "matching", "ordering"],
+                "description": "Question type. Use 'multiselect' when there are 2+ correct answers."
             },
             "options": {
                 "type": "array",
@@ -1212,7 +1237,7 @@ def _validate_generated_questions(questions):
                 continue
             q['correct'] = list(range(len(options)))
 
-        else:  # choice / multiselect
+        else:  # choice / multiselect (multiselect now has its own type value but same validation)
             options = q.get('options', [])
             correct = q.get('correct', [])
             if len(options) < 2:
@@ -1220,11 +1245,18 @@ def _validate_generated_questions(questions):
                 continue
             if not correct:
                 warnings.append(f"Question {q_num}: no correct answer marked, defaulting to first option")
-                q['correct'] = [0]
+                correct = [0]
             # Validate correct indices are in range
-            q['correct'] = [c for c in correct if 0 <= c < len(options)]
-            if not q['correct']:
-                q['correct'] = [0]
+            correct = [c for c in correct if 0 <= c < len(options)]
+            if not correct:
+                correct = [0]
+
+            # Shuffle options so the correct answer isn't always option A.
+            # Build (option_text, is_correct) pairs, shuffle, then remap indices.
+            tagged = [(opt, idx in correct) for idx, opt in enumerate(options)]
+            random.shuffle(tagged)
+            q['options'] = [t[0] for t in tagged]
+            q['correct'] = [i for i, t in enumerate(tagged) if t[1]]
 
         # Clean up null fields to match frontend expectations
         if not q.get('pairs'):
