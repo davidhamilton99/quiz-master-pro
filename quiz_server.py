@@ -369,6 +369,19 @@ def init_db():
     )''')
     c.execute('CREATE INDEX IF NOT EXISTS idx_study_res_cert ON study_resources(certification_id)')
 
+    # AI quiz generation usage tracking & rate limiting
+    c.execute('''CREATE TABLE IF NOT EXISTS ai_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        question_count INTEGER DEFAULT 0,
+        model TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_ai_usage_user_created ON ai_usage(user_id, created_at)')
+
     # Phase 7.4 - Usage analytics event log
     c.execute('''CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -832,6 +845,377 @@ def create_quiz():
     conn.commit()
     conn.close()
     return jsonify({'message': 'Created', 'quiz_id': quiz_id}), 201
+
+
+# === AI Quiz Generation ===
+
+# Rate limit: max generations per user per hour
+AI_RATE_LIMIT = 10
+AI_MAX_QUESTIONS_PER_REQUEST = 50
+AI_MIN_MATERIAL_LENGTH = 100
+
+def _check_ai_rate_limit(user_id):
+    """Return (allowed, remaining, retry_after_seconds)."""
+    conn = get_db()
+    c = conn.cursor()
+    one_hour_ago = datetime.now() - timedelta(hours=1)
+    c.execute('SELECT COUNT(*) as cnt FROM ai_usage WHERE user_id = ? AND created_at > ?',
+              (user_id, one_hour_ago))
+    count = c.fetchone()['cnt']
+    conn.close()
+    if count >= AI_RATE_LIMIT:
+        # Find oldest record in window to calculate retry-after
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT MIN(created_at) as oldest FROM ai_usage WHERE user_id = ? AND created_at > ?',
+                  (user_id, one_hour_ago))
+        oldest = c.fetchone()['oldest']
+        conn.close()
+        if oldest:
+            oldest_dt = datetime.fromisoformat(oldest)
+            retry_after = int((oldest_dt + timedelta(hours=1) - datetime.now()).total_seconds()) + 1
+            return False, 0, max(retry_after, 1)
+        return False, 0, 3600
+    return True, AI_RATE_LIMIT - count, 0
+
+def _log_ai_usage(user_id, input_tokens, output_tokens, question_count, model):
+    """Record an AI generation in the usage table."""
+    conn = get_db()
+    c = conn.cursor()
+    with _db_write_lock:
+        c.execute('INSERT INTO ai_usage (user_id, input_tokens, output_tokens, question_count, model) VALUES (?, ?, ?, ?, ?)',
+                  (user_id, input_tokens, output_tokens, question_count, model))
+        conn.commit()
+    conn.close()
+
+def _build_ai_system_prompt():
+    """Return the system prompt for quiz generation. Cached across requests."""
+    return """You are a quiz question generator for educational study material.
+
+DISTRACTOR DESIGN RULES (critical):
+- Every wrong answer must be a real concept from the same domain as the correct answer
+- Wrong answers should represent common misconceptions, adjacent facts, or plausible confusions
+- If the correct answer is a specific term, wrong answers should be related terms from the same field — never absurd or obviously wrong options
+- For numerical answers, wrong options should be plausible numbers (neighboring values, common confusions, off-by-one errors)
+- Never include "All of the above" or "None of the above" as an option
+- Each wrong answer should be wrong for a DIFFERENT reason — do not repeat the same type of mistake across distractors
+
+EXPLANATION RULES:
+- Every question MUST have an explanation
+- The explanation should teach the underlying concept, not just restate the answer
+- Explain WHY the correct answer is right
+- Briefly note why each distractor is wrong
+
+QUESTION QUALITY RULES:
+- Derive questions strictly from the provided study material — do not invent facts
+- Write clear, unambiguous question stems
+- Ensure there is exactly one defensibly correct answer for single-choice questions
+- Test understanding and application, not just recall
+- Vary question difficulty naturally based on the complexity of the source material
+
+You must output valid JSON matching the provided schema exactly. Do not include any text outside the JSON object."""
+
+def _build_ai_user_prompt(study_material, question_count, question_types, category, include_code):
+    """Build the user prompt with study material and preferences."""
+    type_descriptions = {
+        'choice': 'Multiple Choice (one correct answer from 4 options, "type": "choice")',
+        'multiselect': 'Multi-Select (2+ correct answers from 4-5 options, "type": "choice" with multiple indices in "correct")',
+        'truefalse': 'True/False (statement with True or False answer, "type": "truefalse")',
+        'matching': 'Matching (4 term-definition pairs, "type": "matching")',
+        'ordering': 'Ordering (4 items in correct sequence, "type": "ordering")',
+    }
+    requested_types = [type_descriptions[t] for t in question_types if t in type_descriptions]
+    types_str = '\n'.join(f'- {t}' for t in requested_types)
+
+    code_instruction = ""
+    if include_code:
+        code_instruction = """
+When relevant to the material, include code snippets directly in the question text.
+Format code questions like: "What does the following code output?" followed by the code in the question field.
+Place the code in the "code" field and specify the language in "codeLanguage"."""
+
+    return f"""Generate exactly {question_count} quiz questions from the study material below.
+
+QUESTION TYPES TO USE (distribute roughly evenly, but prioritize types that fit the material):
+{types_str}
+{code_instruction}
+{f'Subject area: {category}' if category else ''}
+
+STUDY MATERIAL:
+---
+{study_material}
+---"""
+
+def _build_ai_json_schema(question_types):
+    """Build the JSON schema for OpenAI Structured Outputs based on requested question types."""
+    question_schema = {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "The question text"
+            },
+            "type": {
+                "type": "string",
+                "enum": ["choice", "truefalse", "matching", "ordering"],
+                "description": "Question type"
+            },
+            "options": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Answer options. For truefalse: ['True', 'False']. For choice: 4 options. For ordering: items in correct order."
+            },
+            "correct": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "Indices of correct options (0-based). Single-choice: one index. Multi-select: multiple. True/False: [0] for True, [1] for False. Ordering: sequential [0,1,2,3]."
+            },
+            "explanation": {
+                "type": "string",
+                "description": "Explanation of the correct answer and why distractors are wrong"
+            },
+            "pairs": {
+                "type": ["array", "null"],
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "left": {"type": "string"},
+                        "right": {"type": "string"}
+                    },
+                    "required": ["left", "right"],
+                    "additionalProperties": False
+                },
+                "description": "Only for matching type: array of {left, right} pairs. null for other types."
+            },
+            "code": {
+                "type": ["string", "null"],
+                "description": "Code snippet if the question involves code. null otherwise."
+            },
+            "codeLanguage": {
+                "type": ["string", "null"],
+                "description": "Programming language of the code snippet (python, javascript, sql, etc). null if no code."
+            }
+        },
+        "required": ["question", "type", "options", "correct", "explanation", "pairs", "code", "codeLanguage"],
+        "additionalProperties": False
+    }
+
+    return {
+        "name": "quiz_questions",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "items": question_schema
+                }
+            },
+            "required": ["questions"],
+            "additionalProperties": False
+        }
+    }
+
+def _validate_generated_questions(questions):
+    """Validate AI-generated questions, returning (valid_questions, warnings)."""
+    valid = []
+    warnings = []
+
+    for i, q in enumerate(questions):
+        q_num = i + 1
+        q_type = q.get('type', 'choice')
+        q_text = q.get('question', '').strip()
+
+        if not q_text:
+            warnings.append(f"Question {q_num}: empty question text, skipped")
+            continue
+
+        if q_type == 'matching':
+            pairs = q.get('pairs')
+            if not pairs or len(pairs) < 2:
+                warnings.append(f"Question {q_num}: matching question needs at least 2 pairs, skipped")
+                continue
+            # Ensure options and correct are set from pairs
+            q['options'] = [p['right'] for p in pairs]
+            q['correct'] = list(range(len(pairs)))
+
+        elif q_type == 'truefalse':
+            q['options'] = ['True', 'False']
+            correct = q.get('correct', [0])
+            if not correct or correct[0] not in (0, 1):
+                q['correct'] = [0]
+
+        elif q_type == 'ordering':
+            options = q.get('options', [])
+            if len(options) < 2:
+                warnings.append(f"Question {q_num}: ordering question needs at least 2 items, skipped")
+                continue
+            q['correct'] = list(range(len(options)))
+
+        else:  # choice / multiselect
+            options = q.get('options', [])
+            correct = q.get('correct', [])
+            if len(options) < 2:
+                warnings.append(f"Question {q_num}: needs at least 2 options, skipped")
+                continue
+            if not correct:
+                warnings.append(f"Question {q_num}: no correct answer marked, defaulting to first option")
+                q['correct'] = [0]
+            # Validate correct indices are in range
+            q['correct'] = [c for c in correct if 0 <= c < len(options)]
+            if not q['correct']:
+                q['correct'] = [0]
+
+        # Clean up null fields to match frontend expectations
+        if not q.get('pairs'):
+            q.pop('pairs', None)
+        if not q.get('code'):
+            q.pop('code', None)
+            q.pop('codeLanguage', None)
+
+        valid.append(q)
+
+    return valid, warnings
+
+
+@app.route('/api/generate-quiz', methods=['POST'])
+@token_required
+def generate_quiz_ai():
+    """Generate quiz questions from study material using AI."""
+
+    # Check if OpenAI API key is configured
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'AI generation is not configured. Set the OPENAI_API_KEY environment variable.'}), 503
+
+    # Check rate limit
+    allowed, remaining, retry_after = _check_ai_rate_limit(request.user_id)
+    if not allowed:
+        return jsonify({
+            'error': f'Rate limit exceeded. You can generate up to {AI_RATE_LIMIT} quizzes per hour.',
+            'retry_after': retry_after
+        }), 429
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body required'}), 400
+
+    study_material = data.get('study_material', '').strip()
+    question_count = data.get('question_count', 15)
+    question_types = data.get('question_types', ['choice'])
+    category = data.get('category', '').strip()
+    include_code = data.get('include_code', False)
+
+    # Validate study material
+    if len(study_material) < AI_MIN_MATERIAL_LENGTH:
+        return jsonify({
+            'error': f'Study material is too short. Please provide at least {AI_MIN_MATERIAL_LENGTH} characters of content.'
+        }), 400
+
+    # Clamp question count
+    question_count = max(1, min(question_count, AI_MAX_QUESTIONS_PER_REQUEST))
+
+    # Filter to valid question types
+    valid_types = {'choice', 'multiselect', 'truefalse', 'matching', 'ordering'}
+    question_types = [t for t in question_types if t in valid_types]
+    if not question_types:
+        question_types = ['choice']
+
+    # Build prompts
+    system_prompt = _build_ai_system_prompt()
+    user_prompt = _build_ai_user_prompt(study_material, question_count, question_types, category, include_code)
+    json_schema = _build_ai_json_schema(question_types)
+
+    # Call OpenAI API
+    try:
+        import openai
+    except ImportError:
+        return jsonify({'error': 'AI generation is not configured. The openai package is not installed.'}), 503
+
+    model = 'gpt-4.1-nano'
+
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": json_schema
+            },
+            max_tokens=question_count * 300,
+            temperature=0.7,
+        )
+    except openai.AuthenticationError:
+        return jsonify({'error': 'AI service authentication failed. Check your API key configuration.'}), 503
+    except openai.RateLimitError:
+        return jsonify({'error': 'AI service is temporarily busy. Please try again in a moment.'}), 503
+    except openai.APITimeoutError:
+        return jsonify({'error': 'AI generation timed out. Try reducing the number of questions or shortening your material.'}), 504
+    except openai.APIConnectionError:
+        return jsonify({'error': 'Could not connect to AI service. Please try again.'}), 503
+    except openai.APIError as e:
+        print(f"[AI] OpenAI API error for user {request.user_id}: {e}", flush=True)
+        return jsonify({'error': 'AI service encountered an error. Please try again.'}), 502
+
+    # Parse response
+    choice = response.choices[0]
+    finish_reason = choice.finish_reason
+
+    try:
+        result = json.loads(choice.message.content)
+        questions = result.get('questions', [])
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return jsonify({'error': 'AI returned an invalid response. Please try again.'}), 502
+
+    # Track token usage
+    usage = response.usage
+    input_tokens = usage.prompt_tokens if usage else 0
+    output_tokens = usage.completion_tokens if usage else 0
+
+    # Validate generated questions
+    valid_questions, warnings = _validate_generated_questions(questions)
+
+    if not valid_questions:
+        # Log usage even on failure so rate limit stays accurate
+        _log_ai_usage(request.user_id, input_tokens, output_tokens, 0, model)
+        return jsonify({
+            'error': 'AI could not generate valid questions from this material. Try adding more detailed notes or definitions.',
+            'warnings': warnings
+        }), 422
+
+    # Log successful usage
+    _log_ai_usage(request.user_id, input_tokens, output_tokens, len(valid_questions), model)
+
+    response_data = {
+        'questions': valid_questions,
+        'count': len(valid_questions),
+        'requested_count': question_count,
+        'model': model,
+        'usage': {
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens
+        },
+        'rate_limit': {
+            'remaining': remaining - 1,
+            'limit': AI_RATE_LIMIT,
+        }
+    }
+
+    if warnings:
+        response_data['warnings'] = warnings
+
+    if finish_reason == 'length':
+        response_data['truncated'] = True
+        response_data['warnings'] = response_data.get('warnings', []) + [
+            'Response was truncated due to length. Some questions may be missing.'
+        ]
+
+    return jsonify(response_data), 200
+
 
 @app.route('/api/quizzes/<int:id>', methods=['GET'])
 @token_required
