@@ -1096,11 +1096,13 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
             "Aim for variety across the set."
         )
 
-    code_instruction = ""
     if include_code:
-        code_instruction = """
-When relevant to the material, include code snippets in the question.
-Place the code in the "code" field and its language in "codeLanguage"."""
+        types_str += (
+            "\n  code snippets — any question type can include a code snippet when the concept "
+            "is best illustrated with code (e.g. 'What does this output?', 'spot the bug', "
+            "'fill in the blank'). Set the \"code\" field and \"codeLanguage\" when used; "
+            "leave both null otherwise. Use code only where it genuinely aids understanding."
+        )
 
     avoid_block = ""
     if already_asked:
@@ -1114,7 +1116,6 @@ Do NOT repeat or rephrase any question already generated:
 
 QUESTION TYPES:
 {types_str}
-{code_instruction}
 {f'Subject area: {category}' if category else ''}
 {avoid_block}
 STUDY MATERIAL:
