@@ -989,6 +989,35 @@ h3 {
     box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
 }
 
+/* AI Generation & Review */
+.ai-generating-spinner {
+    border-color: rgba(255, 255, 255, 0.1);
+    border-top-color: var(--primary);
+}
+
+.review-question-card {
+    background: rgba(14, 12, 28, 0.5);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.review-code-block {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.review-option.review-correct {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.number-input-group {
+    background: rgba(14, 12, 28, 0.5);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.question-count-input {
+    color: var(--text-primary);
+}
+
 /* ============================================================
    CREATE / EDITOR - REFINED
    ============================================================ */

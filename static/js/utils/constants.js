@@ -88,6 +88,7 @@ export const API = {
     MAX_RETRIES: 2,
     RETRY_DELAY_MS: 1000,
     REQUEST_TIMEOUT_MS: 30000,
+    AI_GENERATION_TIMEOUT_MS: 90000,
 };
 
 // Local Storage Keys

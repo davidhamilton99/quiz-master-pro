@@ -1,10 +1,20 @@
-/* AI Wizard - Step-by-step guided quiz creation */
+/* AI Wizard - Two-step AI-powered quiz creation */
 import { getState, setState } from '../state.js';
-import { createQuiz } from '../services/api.js';
+import { createQuiz, generateQuizAI } from '../services/api.js';
 import { parseQuizData } from '../utils/parser.js';
 import { showToast } from '../utils/toast.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
+
+// Loading messages shown during AI generation
+const LOADING_MESSAGES = [
+    'Analyzing your study material...',
+    'Identifying key concepts...',
+    'Creating questions and answer options...',
+    'Crafting plausible distractors...',
+    'Writing explanations...',
+    'Finalizing your quiz...'
+];
 
 // Wizard state
 let wizardState = {
@@ -13,36 +23,63 @@ let wizardState = {
     category: '',
     questionTypes: ['choice', 'truefalse'],
     questionCount: 15,
-    difficulty: 'medium',
     includeCode: false,
+    studyMaterial: '',
+    // Step 2: review
+    generatedQuestions: [],
+    generateError: null,
+    isGenerating: false,
+    loadingMessageIndex: 0,
+    loadingInterval: null,
+    // Manual fallback
+    manualMode: false,
     pastedContent: '',
     parsedQuestions: [],
     parseError: null
 };
 
 export function resetWizard() {
+    clearLoadingInterval();
     wizardState = {
         step: 1,
         title: '',
         category: '',
         questionTypes: ['choice', 'truefalse'],
         questionCount: 15,
-        difficulty: 'medium',
         includeCode: false,
+        studyMaterial: '',
+        generatedQuestions: [],
+        generateError: null,
+        isGenerating: false,
+        loadingMessageIndex: 0,
+        loadingInterval: null,
+        manualMode: false,
         pastedContent: '',
         parsedQuestions: [],
         parseError: null
     };
 }
 
+function clearLoadingInterval() {
+    if (wizardState.loadingInterval) {
+        clearInterval(wizardState.loadingInterval);
+        wizardState.loadingInterval = null;
+    }
+}
+
 export function renderWizard() {
     const s = wizardState;
-    
+
+    // Manual fallback mode renders the old paste-based flow
+    if (s.manualMode) {
+        return renderManualMode();
+    }
+
     return `
     <div class="wizard-page">
         <header class="wizard-header">
             <button class="btn btn-ghost" onclick="window.app.exitWizard()">
-                ${icon('arrowLeft')} Back to Library
+                ${icon('arrowLeft')} Back
             </button>
             <div class="wizard-progress">
                 <div class="progress-step ${s.step >= 1 ? 'active' : ''} ${s.step > 1 ? 'completed' : ''}">
@@ -50,23 +87,17 @@ export function renderWizard() {
                     <span>Setup</span>
                 </div>
                 <div class="progress-line ${s.step > 1 ? 'completed' : ''}"></div>
-                <div class="progress-step ${s.step >= 2 ? 'active' : ''} ${s.step > 2 ? 'completed' : ''}">
+                <div class="progress-step ${s.step >= 2 ? 'active' : ''}">
                     <div class="step-dot">2</div>
-                    <span>AI Prompt</span>
-                </div>
-                <div class="progress-line ${s.step > 2 ? 'completed' : ''}"></div>
-                <div class="progress-step ${s.step >= 3 ? 'active' : ''}">
-                    <div class="step-dot">3</div>
-                    <span>Create</span>
+                    <span>Review</span>
                 </div>
             </div>
             <div style="width: 100px;"></div>
         </header>
-        
+
         <main class="wizard-main">
             ${s.step === 1 ? renderStep1() : ''}
             ${s.step === 2 ? renderStep2() : ''}
-            ${s.step === 3 ? renderStep3() : ''}
         </main>
     </div>
     `;
@@ -74,20 +105,22 @@ export function renderWizard() {
 
 function renderStep1() {
     const s = wizardState;
-    
+    const canGenerate = s.title.trim() && s.questionTypes.length > 0 && s.studyMaterial.trim().length >= 100;
+    const materialLength = s.studyMaterial.trim().length;
+
     return `
     <div class="wizard-card wizard-card-wide">
         <div class="wizard-card-header">
-            <h1>Let's Create Your Quiz</h1>
-            <p>First, tell us about what you're studying.</p>
+            <h1>Create Your Quiz</h1>
+            <p>Paste your study material and we'll generate questions instantly.</p>
         </div>
-        
+
         <div class="wizard-card-body">
             <div class="form-group">
                 <label class="label">Quiz Title</label>
-                <input 
-                    type="text" 
-                    class="input input-lg" 
+                <input
+                    type="text"
+                    class="input input-lg"
                     placeholder="e.g., Chapter 5 - Network Security"
                     value="${escapeHtml(s.title)}"
                     oninput="window.app.wizardSetTitle(this.value)"
@@ -95,25 +128,38 @@ function renderStep1() {
                 >
                 <p class="helper-text">Give your quiz a descriptive name</p>
             </div>
-            
+
             <div class="form-group">
                 <label class="label">Category <span class="optional">(optional)</span></label>
-                <input 
-                    type="text" 
-                    class="input" 
+                <input
+                    type="text"
+                    class="input"
                     placeholder="e.g., Networking, Biology, History"
                     value="${escapeHtml(s.category)}"
                     oninput="window.app.wizardSetCategory(this.value)"
                 >
             </div>
-            
+
+            <div class="form-group">
+                <label class="label">Study Material</label>
+                <textarea
+                    class="textarea textarea-lg"
+                    rows="8"
+                    placeholder="Paste your notes, textbook content, or study material here...
+
+The more detailed your material, the better the questions. Include definitions, key concepts, processes, and important facts."
+                    oninput="window.app.wizardSetStudyMaterial(this.value)"
+                >${escapeHtml(s.studyMaterial)}</textarea>
+                <p class="helper-text">${materialLength > 0 ? `${materialLength} characters` : 'Minimum 100 characters'}${materialLength > 0 && materialLength < 100 ? ` (need ${100 - materialLength} more)` : ''}</p>
+            </div>
+
             <div class="form-group">
                 <label class="label">Question Types</label>
                 <p class="helper-text mb-2">Select all types you want the AI to generate</p>
                 <div class="checkbox-group">
                     <label class="checkbox-label">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             ${s.questionTypes.includes('choice') ? 'checked' : ''}
                             onchange="window.app.wizardToggleType('choice')"
                         >
@@ -173,12 +219,12 @@ function renderStep1() {
                     </label>
                 </div>
             </div>
-            
+
             <div class="form-group">
                 <label class="label">Include Code Questions?</label>
                 <label class="checkbox-label">
-                    <input 
-                        type="checkbox" 
+                    <input
+                        type="checkbox"
                         ${s.includeCode ? 'checked' : ''}
                         onchange="window.app.wizardToggleCode()"
                     >
@@ -189,34 +235,39 @@ function renderStep1() {
                     <span class="checkbox-desc">Great for programming, scripting, or technical subjects</span>
                 </label>
             </div>
-            
+
             <div class="form-group">
                 <label class="label">Number of Questions</label>
                 <div class="number-input-group">
-                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-10)">−10</button>
-                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-1)">−</button>
-                    <input type="number" class="question-count-input" value="${s.questionCount}" 
-                           min="5" max="2000" id="question-count-input"
-                           onchange="window.app.wizardSetCount(Math.min(2000, Math.max(5, parseInt(this.value) || 15)))"
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-5)">-5</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-1)">-</button>
+                    <input type="number" class="question-count-input" value="${s.questionCount}"
+                           min="1" max="50" id="question-count-input"
+                           onchange="window.app.wizardSetCount(Math.min(50, Math.max(1, parseInt(this.value) || 15)))"
                            onclick="this.select()">
                     <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(1)">+</button>
-                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(10)">+10</button>
+                    <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(5)">+5</button>
                 </div>
-                <p class="helper-text">Type a number or use buttons (5-2000)</p>
+                <p class="helper-text">1-50 questions per generation</p>
             </div>
         </div>
-        
+
         <div class="wizard-card-footer">
-            <div></div>
-            <button 
-                class="btn btn-primary btn-lg" 
-                onclick="window.app.wizardNext()"
-                ${!s.title.trim() || s.questionTypes.length === 0 ? 'disabled' : ''}
+            <div>
+                <button class="btn btn-ghost btn-sm" onclick="window.app.wizardEnterManualMode()" style="opacity: 0.6; font-size: 0.85rem;">
+                    Create manually instead
+                </button>
+            </div>
+            <button
+                class="btn btn-primary btn-lg"
+                onclick="window.app.wizardGenerate()"
+                ${!canGenerate ? 'disabled' : ''}
+                id="wizard-generate-btn"
             >
-                Next: Get Your AI Prompt →
+                ${icon('sparkles')} Generate Quiz
             </button>
-            <p class="wizard-hint" style="${s.title.trim() && s.questionTypes.length > 0 ? 'display:none' : ''}">
-                ${!s.title.trim() ? 'Enter a quiz title to continue' : 'Select at least one question type'}
+            <p class="wizard-hint" style="${canGenerate ? 'display:none' : ''}" id="wizard-hint">
+                ${!s.title.trim() ? 'Enter a quiz title' : s.questionTypes.length === 0 ? 'Select at least one question type' : materialLength < 100 ? 'Add more study material' : ''}
             </p>
         </div>
     </div>
@@ -225,92 +276,217 @@ function renderStep1() {
 
 function renderStep2() {
     const s = wizardState;
-    const prompt = generatePrompt();
-    
+
+    // Loading state
+    if (s.isGenerating) {
+        return renderGenerating();
+    }
+
+    // Error state
+    if (s.generateError) {
+        return `
+        <div class="wizard-card wizard-card-wide">
+            <div class="wizard-card-header">
+                <h1>Generation Failed</h1>
+                <p>Something went wrong, but you can try again.</p>
+            </div>
+            <div class="wizard-card-body">
+                <div class="parse-preview error">
+                    <div class="preview-header">
+                        <span class="preview-icon">${icon('alertTriangle')}</span>
+                        <span class="preview-title">Error</span>
+                    </div>
+                    <p class="preview-message">${escapeHtml(s.generateError)}</p>
+                </div>
+            </div>
+            <div class="wizard-card-footer">
+                <button class="btn btn-secondary" onclick="window.app.wizardBack()">
+                    &#8592; Back to Setup
+                </button>
+                <button class="btn btn-primary btn-lg" onclick="window.app.wizardGenerate()">
+                    ${icon('sparkles')} Try Again
+                </button>
+            </div>
+        </div>
+        `;
+    }
+
+    // Review state — show generated questions
+    return renderReviewQuestions();
+}
+
+function renderGenerating() {
+    const msg = LOADING_MESSAGES[wizardState.loadingMessageIndex] || LOADING_MESSAGES[0];
+
     return `
     <div class="wizard-card wizard-card-wide">
-        <div class="wizard-card-header">
-            <h1>Copy This Prompt to Your AI</h1>
-            <p>Use ChatGPT, Claude, or any AI assistant to generate your questions.</p>
+        <div class="wizard-card-header" style="text-align: center;">
+            <h1>Generating Your Quiz</h1>
+            <p>${wizardState.questionCount} questions from your study material</p>
         </div>
-        
-        <div class="wizard-card-body">
-            <div class="prompt-section">
-                <div class="prompt-header">
-                    <span class="prompt-label">${icon('copy')} Your AI Prompt</span>
-                    <button class="btn btn-sm btn-primary" onclick="window.app.wizardCopyPrompt()">
-                        Copy Prompt
-                    </button>
-                </div>
-                <div class="prompt-box" id="ai-prompt">
-                    <pre>${escapeHtml(prompt)}</pre>
-                </div>
-            </div>
-            
-            <div class="instructions-section">
-                <h3>${icon('notepadText')} Instructions</h3>
-                <ol class="instruction-list">
-                    <li>
-                        <strong>Copy the prompt above</strong>
-                        <span>Click "Copy Prompt" or select all and copy</span>
-                    </li>
-                    <li>
-                        <strong>Open your AI assistant</strong>
-                        <span>ChatGPT, Claude, Gemini, or any other AI</span>
-                    </li>
-                    <li>
-                        <strong>Paste the prompt</strong>
-                        <span>Then add your study material below it</span>
-                    </li>
-                    <li>
-                        <strong>Send and wait</strong>
-                        <span>The AI will generate formatted questions</span>
-                    </li>
-                    <li>
-                        <strong>Copy the AI's response</strong>
-                        <span>Select all the questions it created</span>
-                    </li>
-                </ol>
-            </div>
-            
-            <div class="ai-tip">
-                <span class="tip-icon">${icon('lightbulb')}</span>
-                <div class="tip-content">
-                    <strong>Pro Tip:</strong> The more detailed your study material, the better the questions! 
-                    Include definitions, key concepts, and important facts.
-                </div>
-            </div>
-        </div>
-        
-        <div class="wizard-card-footer">
-            <button class="btn btn-secondary" onclick="window.app.wizardBack()">
-                ← Back
-            </button>
-            <button class="btn btn-primary btn-lg" onclick="window.app.wizardNext()">
-                I Have My Questions →
-            </button>
+        <div class="wizard-card-body" style="display: flex; flex-direction: column; align-items: center; padding: 3rem 2rem;">
+            <div class="ai-generating-spinner"></div>
+            <p class="ai-generating-message" id="ai-loading-msg">${escapeHtml(msg)}</p>
+            <p class="helper-text" style="margin-top: 1rem;">This usually takes 5-15 seconds</p>
         </div>
     </div>
     `;
 }
 
-function renderStep3() {
+function renderReviewQuestions() {
     const s = wizardState;
-    
+    const questions = s.generatedQuestions;
+
     return `
     <div class="wizard-card wizard-card-wide">
         <div class="wizard-card-header">
-            <h1>Paste Your Questions</h1>
-            <p>Paste the AI's response below and we'll create your quiz.</p>
+            <h1>Review Your Questions</h1>
+            <p>Generated ${questions.length}${questions.length < s.questionCount ? ` of ${s.questionCount} requested` : ''} questions. Review and save to your library.</p>
         </div>
-        
+
         <div class="wizard-card-body">
-            <div class="form-group">
-                <label class="label">AI-Generated Questions</label>
-                <textarea 
-                    class="textarea textarea-lg" 
-                    rows="12"
-                    placeholder="Paste the questions from ChatGPT/Claude here...
+            <div class="parse-preview success" style="margin-bottom: 1.5rem;">
+                <div class="preview-header">
+                    <span class="preview-icon">${icon('circleCheck')}</span>
+                    <span class="preview-title">${questions.length} questions ready</span>
+                </div>
+                <div class="preview-breakdown">
+                    ${getQuestionBreakdown(questions)}
+                </div>
+            </div>
+
+            <div class="wizard-review-list">
+                ${questions.map((q, i) => renderQuestionPreview(q, i)).join('')}
+            </div>
+        </div>
+
+        <div class="wizard-card-footer">
+            <button class="btn btn-secondary" onclick="window.app.wizardBack()">
+                &#8592; Back to Setup
+            </button>
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="window.app.wizardGenerate()">
+                    ${icon('sparkles')} Regenerate
+                </button>
+                <button
+                    class="btn btn-primary btn-lg"
+                    onclick="window.app.wizardFinish()"
+                    ${questions.length === 0 ? 'disabled' : ''}
+                >
+                    Save to Library (${questions.length})
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+function renderQuestionPreview(q, index) {
+    const typeLabels = {
+        choice: 'Multiple Choice',
+        truefalse: 'True/False',
+        matching: 'Matching',
+        ordering: 'Ordering'
+    };
+    const typeLabel = typeLabels[q.type] || 'Multiple Choice';
+
+    let optionsHtml = '';
+
+    if (q.type === 'matching' && q.pairs) {
+        optionsHtml = q.pairs.map((p, j) =>
+            `<div class="review-option review-pair">
+                <span class="pair-left">${escapeHtml(p.left)}</span>
+                <span class="pair-arrow">&#8594;</span>
+                <span class="pair-right">${escapeHtml(p.right)}</span>
+            </div>`
+        ).join('');
+    } else if (q.type === 'ordering' && q.options) {
+        optionsHtml = q.options.map((opt, j) =>
+            `<div class="review-option review-order">
+                <span class="order-num">${j + 1}.</span>
+                <span>${escapeHtml(opt)}</span>
+            </div>`
+        ).join('');
+    } else if (q.options) {
+        optionsHtml = q.options.map((opt, j) => {
+            const isCorrect = q.correct && q.correct.includes(j);
+            return `<div class="review-option ${isCorrect ? 'review-correct' : ''}">
+                <span class="option-letter">${String.fromCharCode(65 + j)}</span>
+                <span>${escapeHtml(opt)}</span>
+                ${isCorrect ? `<span class="correct-badge">${icon('circleCheck')}</span>` : ''}
+            </div>`;
+        }).join('');
+    }
+
+    return `
+    <div class="review-question-card">
+        <div class="review-question-header">
+            <span class="review-question-num">Q${index + 1}</span>
+            <span class="review-type-badge">${typeLabel}</span>
+            <button class="btn btn-ghost btn-sm review-delete-btn" onclick="window.app.wizardRemoveQuestion(${index})" title="Remove question">
+                ${icon('trash2')}
+            </button>
+        </div>
+        <p class="review-question-text">${escapeHtml(q.question)}</p>
+        ${q.code ? `<pre class="review-code-block"><code>${escapeHtml(q.code)}</code></pre>` : ''}
+        <div class="review-options">
+            ${optionsHtml}
+        </div>
+        ${q.explanation ? `
+        <details class="review-explanation">
+            <summary>Explanation</summary>
+            <p>${escapeHtml(q.explanation)}</p>
+        </details>
+        ` : ''}
+    </div>
+    `;
+}
+
+// === Manual fallback mode ===
+
+function renderManualMode() {
+    const s = wizardState;
+
+    return `
+    <div class="wizard-page">
+        <header class="wizard-header">
+            <button class="btn btn-ghost" onclick="window.app.wizardExitManualMode()">
+                ${icon('arrowLeft')} Back to AI Wizard
+            </button>
+            <div class="wizard-progress">
+                <div class="progress-step active">
+                    <div class="step-dot">1</div>
+                    <span>Paste Questions</span>
+                </div>
+            </div>
+            <div style="width: 100px;"></div>
+        </header>
+
+        <main class="wizard-main">
+            <div class="wizard-card wizard-card-wide">
+                <div class="wizard-card-header">
+                    <h1>Create Quiz Manually</h1>
+                    <p>Paste questions from any AI tool or write them yourself.</p>
+                </div>
+
+                <div class="wizard-card-body">
+                    <div class="form-group">
+                        <label class="label">Quiz Title</label>
+                        <input
+                            type="text"
+                            class="input input-lg"
+                            placeholder="e.g., Chapter 5 - Network Security"
+                            value="${escapeHtml(s.title)}"
+                            oninput="window.app.wizardSetTitle(this.value)"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label class="label">Questions</label>
+                        <textarea
+                            class="textarea textarea-lg"
+                            rows="12"
+                            placeholder="Paste your questions here...
 
 Example format:
 1. What is the capital of France?
@@ -321,219 +497,134 @@ D. Madrid
 
 2. [tf] The Earth is flat.
 False"
-                    onchange="window.app.wizardSetContent(this.value)"
-                    oninput="window.app.wizardPreviewContent(this.value)"
-                >${escapeHtml(s.pastedContent)}</textarea>
-            </div>
-            
-            ${s.parsedQuestions.length > 0 ? `
-            <div class="parse-preview success">
-                <div class="preview-header">
-                    <span class="preview-icon">${icon('circleCheck')}</span>
-                    <span class="preview-title">Found ${s.parsedQuestions.length} questions!</span>
+                            onchange="window.app.wizardSetContent(this.value)"
+                            oninput="window.app.wizardPreviewContent(this.value)"
+                        >${escapeHtml(s.pastedContent)}</textarea>
+                    </div>
+
+                    ${s.parsedQuestions.length > 0 ? `
+                    <div class="parse-preview success">
+                        <div class="preview-header">
+                            <span class="preview-icon">${icon('circleCheck')}</span>
+                            <span class="preview-title">Found ${s.parsedQuestions.length} questions!</span>
+                        </div>
+                        <div class="preview-breakdown">
+                            ${getQuestionBreakdown(s.parsedQuestions)}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    ${s.parseError ? `
+                    <div class="parse-preview error">
+                        <div class="preview-header">
+                            <span class="preview-icon">${icon('alertTriangle')}</span>
+                            <span class="preview-title">Couldn't parse questions</span>
+                        </div>
+                        <p class="preview-message">${escapeHtml(s.parseError)}</p>
+                        <p class="preview-help">Make sure the format uses numbered questions and lettered options.</p>
+                    </div>
+                    ` : ''}
+
+                    ${!s.pastedContent && !s.parseError ? `
+                    <div class="parse-preview waiting">
+                        <div class="preview-header">
+                            <span class="preview-icon">${icon('fileText')}</span>
+                            <span class="preview-title">Waiting for questions...</span>
+                        </div>
+                        <p class="preview-message">Paste your questions above</p>
+                    </div>
+                    ` : ''}
                 </div>
-                <div class="preview-breakdown">
-                    ${getQuestionBreakdown(s.parsedQuestions)}
+
+                <div class="wizard-card-footer">
+                    <div></div>
+                    <button
+                        class="btn btn-primary btn-lg"
+                        onclick="window.app.wizardFinishManual()"
+                        ${s.parsedQuestions.length === 0 || !s.title.trim() ? 'disabled' : ''}
+                    >
+                        ${icon('sparkles')} Create Quiz
+                    </button>
                 </div>
             </div>
-            ` : ''}
-            
-            ${s.parseError ? `
-            <div class="parse-preview error">
-                <div class="preview-header">
-                    <span class="preview-icon">${icon('alertTriangle')}</span>
-                    <span class="preview-title">Couldn't parse questions</span>
-                </div>
-                <p class="preview-message">${escapeHtml(s.parseError)}</p>
-                <p class="preview-help">Make sure the AI used the correct format with numbered questions and lettered options.</p>
-            </div>
-            ` : ''}
-            
-            ${!s.pastedContent && !s.parseError ? `
-            <div class="parse-preview waiting">
-                <div class="preview-header">
-                    <span class="preview-icon">${icon('fileText')}</span>
-                    <span class="preview-title">Waiting for questions...</span>
-                </div>
-                <p class="preview-message">Paste the AI's response above</p>
-            </div>
-            ` : ''}
-        </div>
-        
-        <div class="wizard-card-footer">
-            <button class="btn btn-secondary" onclick="window.app.wizardBack()">
-                ← Back
-            </button>
-            <button 
-                class="btn btn-primary btn-lg" 
-                onclick="window.app.wizardFinish()"
-                ${s.parsedQuestions.length === 0 ? 'disabled' : ''}
-            >
-                ${icon('sparkles')} Create Quiz
-            </button>
-        </div>
+        </main>
     </div>
     `;
 }
 
-function generatePrompt() {
-    const s = wizardState;
-    
-    const typeInstructions = [];
-    
-    if (s.questionTypes.includes('choice')) {
-        typeInstructions.push(`MULTIPLE CHOICE - Format:
-1. Question text here?
-A. Wrong answer
-B. Correct answer *
-C. Wrong answer
-D. Wrong answer
-[explanation: Explain why B is correct and why other options are wrong]`);
-    }
-    
-    if (s.questionTypes.includes('multiselect')) {
-        typeInstructions.push(`MULTI-SELECT (multiple correct answers) - Format:
-2. [multi] Which of the following are true? (Select all that apply)
-A. Correct answer *
-B. Wrong answer
-C. Correct answer *
-D. Wrong answer
-[explanation: Explain why A and C are correct]`);
-    }
-    
-    if (s.questionTypes.includes('truefalse')) {
-        typeInstructions.push(`TRUE/FALSE - Format:
-3. [tf] Statement that is true or false.
-True
-[explanation: Explain why this is true]
-
-4. [tf] Another statement.
-False
-[explanation: Explain why this is false and what the correct fact is]`);
-    }
-    
-    if (s.questionTypes.includes('matching')) {
-        typeInstructions.push(`MATCHING - Format:
-5. [match] Match the terms with their definitions:
-A. Term 1 => Definition 1
-B. Term 2 => Definition 2
-C. Term 3 => Definition 3
-D. Term 4 => Definition 4
-[explanation: Brief explanation of these relationships]`);
-    }
-    
-    if (s.questionTypes.includes('ordering')) {
-        typeInstructions.push(`ORDERING (put in correct sequence) - Format:
-6. [order] Arrange these steps in the correct order:
-1) First step (this is the correct position)
-2) Second step
-3) Third step
-4) Fourth step
-[explanation: Explain why this order is correct]`);
-    }
-    
-    // Code question example if relevant
-    const codeExample = s.includeCode ? `
-CODE-BASED QUESTION EXAMPLE:
-7. What does this code output?
-[code:python]
-x = [1, 2, 3]
-print(x[1])
-[/code]
-A. 1
-B. 2 *
-C. 3
-D. Error
-[explanation: Python lists are zero-indexed, so x[1] returns the second element, which is 2]` : '';
-    
-    return `Create ${s.questionCount} quiz questions from the study material I'll provide below.
-
-CRITICAL FORMAT RULES:
-- Number each question (1, 2, 3, etc.)
-- Mark correct answers with * at the end of the line
-- ALWAYS include [explanation: ...] after each question explaining the answer
-- For multi-select questions with multiple correct answers, mark ALL correct options with *
-
-QUESTION TYPE FORMATS:
-
-${typeInstructions.join('\n\n')}
-${codeExample}
-
-OPTIONAL ENHANCEMENTS (use when relevant):
-- Add images: [image: https://url.com/diagram.png | Description]
-- Add code blocks: [code:language]code here[/code]
-  Supported languages: python, javascript, powershell, bash, sql, java, csharp, html, css, json, yaml
-
-QUALITY GUIDELINES:
-- Write clear, unambiguous questions
-- Make wrong answers plausible (avoid obvious distractors)
-- Explanations should teach, not just state the answer
-- Cover different difficulty levels
-- Test understanding, not just memorization
-- For code questions, include realistic snippets
-
-Here is my study material:
----
-[PASTE YOUR NOTES/TEXTBOOK CONTENT HERE]
----`;
-}
+// === Helper functions ===
 
 function getQuestionBreakdown(questions) {
-    const counts = {
-        choice: 0,
-        truefalse: 0,
-        matching: 0,
-        ordering: 0,
-        multiselect: 0
-    };
-    
+    const counts = { choice: 0, truefalse: 0, matching: 0, ordering: 0 };
+
     questions.forEach(q => {
-        if (counts.hasOwnProperty(q.type)) {
-            counts[q.type]++;
-        } else {
-            counts.choice++;
+        const t = q.type || 'choice';
+        if (t in counts) counts[t]++;
+        else counts.choice++;
+    });
+
+    // Count multi-select (choice type with multiple correct answers)
+    let multiCount = 0;
+    questions.forEach(q => {
+        if ((q.type === 'choice' || !q.type) && q.correct && q.correct.length > 1) {
+            multiCount++;
+            counts.choice--;
         }
     });
-    
+
     const parts = [];
     if (counts.choice) parts.push(`${counts.choice} Multiple Choice`);
+    if (multiCount) parts.push(`${multiCount} Multi-Select`);
     if (counts.truefalse) parts.push(`${counts.truefalse} True/False`);
     if (counts.matching) parts.push(`${counts.matching} Matching`);
     if (counts.ordering) parts.push(`${counts.ordering} Ordering`);
-    if (counts.multiselect) parts.push(`${counts.multiselect} Multi-Select`);
-    
-    return parts.join(' • ');
+
+    return parts.join(' &bull; ');
 }
 
-// Wizard actions
+function getRandomColor() {
+    const colors = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#0891b2', '#7c3aed', '#c2410c', '#0d9488', '#4f46e5', '#059669'];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
+
+// === Exported wizard actions ===
+
 export function wizardSetTitle(title) {
     wizardState.title = title;
-    updateNextButtonState();
+    updateGenerateButtonState();
 }
 
 export function wizardSetCategory(category) {
     wizardState.category = category;
 }
 
-function updateNextButtonState() {
-    // Update button state without full re-render
-    const btn = document.querySelector('.wizard-card-footer .btn-primary');
-    const hint = document.querySelector('.wizard-hint');
-    
-    if (btn) {
-        const isValid = wizardState.title.trim() && wizardState.questionTypes.length > 0;
-        btn.disabled = !isValid;
-        
-        if (hint) {
-            if (!wizardState.title.trim()) {
-                hint.textContent = 'Enter a quiz title to continue';
-                hint.style.display = 'block';
-            } else if (wizardState.questionTypes.length === 0) {
-                hint.textContent = 'Select at least one question type';
-                hint.style.display = 'block';
-            } else {
-                hint.style.display = 'none';
-            }
+export function wizardSetStudyMaterial(text) {
+    wizardState.studyMaterial = text;
+    updateGenerateButtonState();
+}
+
+function updateGenerateButtonState() {
+    const btn = document.getElementById('wizard-generate-btn');
+    const hint = document.getElementById('wizard-hint');
+    if (!btn) return;
+
+    const s = wizardState;
+    const canGenerate = s.title.trim() && s.questionTypes.length > 0 && s.studyMaterial.trim().length >= 100;
+    btn.disabled = !canGenerate;
+
+    if (hint) {
+        if (!s.title.trim()) {
+            hint.textContent = 'Enter a quiz title';
+            hint.style.display = 'block';
+        } else if (s.questionTypes.length === 0) {
+            hint.textContent = 'Select at least one question type';
+            hint.style.display = 'block';
+        } else if (s.studyMaterial.trim().length < 100) {
+            const remaining = 100 - s.studyMaterial.trim().length;
+            hint.textContent = `Add more study material (${remaining} more characters needed)`;
+            hint.style.display = 'block';
+        } else {
+            hint.style.display = 'none';
         }
     }
 }
@@ -541,56 +632,142 @@ function updateNextButtonState() {
 export function wizardToggleType(type) {
     const types = wizardState.questionTypes;
     if (types.includes(type)) {
-        // Don't allow removing all types
         if (types.length > 1) {
             wizardState.questionTypes = types.filter(t => t !== type);
         }
     } else {
         wizardState.questionTypes = [...types, type];
     }
-    setState({ view: 'wizard' }); // Re-render
+    setState({ view: 'wizard' });
 }
 
 export function wizardToggleCode() {
     wizardState.includeCode = !wizardState.includeCode;
-    setState({ view: 'wizard' }); // Re-render
+    setState({ view: 'wizard' });
 }
 
 export function wizardSetCount(count) {
     wizardState.questionCount = count;
-    // Update just the input, not full re-render
     const input = document.getElementById('question-count-input');
     if (input) input.value = count;
 }
 
 export function wizardAdjustCount(delta) {
-    const newCount = Math.min(2000, Math.max(5, wizardState.questionCount + delta));
+    const newCount = Math.min(50, Math.max(1, wizardState.questionCount + delta));
     wizardState.questionCount = newCount;
     const input = document.getElementById('question-count-input');
     if (input) input.value = newCount;
 }
 
-export function wizardNext() {
-    if (wizardState.step < 3) {
-        wizardState.step++;
-        setState({ view: 'wizard' }); // Re-render
-    }
-}
-
 export function wizardBack() {
     if (wizardState.step > 1) {
-        wizardState.step--;
-        setState({ view: 'wizard' }); // Re-render
+        wizardState.step = 1;
+        wizardState.generateError = null;
+        wizardState.isGenerating = false;
+        clearLoadingInterval();
+        setState({ view: 'wizard' });
     }
 }
 
-export function wizardCopyPrompt() {
-    const prompt = generatePrompt();
-    navigator.clipboard.writeText(prompt).then(() => {
-        showToast('Prompt copied! Now paste it into ChatGPT or Claude.', 'success');
-    }).catch(() => {
-        showToast('Failed to copy. Please select and copy manually.', 'error');
-    });
+export async function wizardGenerate() {
+    const s = wizardState;
+
+    // Move to step 2 and show loading
+    s.step = 2;
+    s.isGenerating = true;
+    s.generateError = null;
+    s.generatedQuestions = [];
+    s.loadingMessageIndex = 0;
+    setState({ view: 'wizard' });
+
+    // Start cycling loading messages
+    clearLoadingInterval();
+    wizardState.loadingInterval = setInterval(() => {
+        wizardState.loadingMessageIndex = (wizardState.loadingMessageIndex + 1) % LOADING_MESSAGES.length;
+        const msgEl = document.getElementById('ai-loading-msg');
+        if (msgEl) {
+            msgEl.textContent = LOADING_MESSAGES[wizardState.loadingMessageIndex];
+        }
+    }, 2500);
+
+    try {
+        const result = await generateQuizAI({
+            study_material: s.studyMaterial,
+            question_count: s.questionCount,
+            question_types: s.questionTypes,
+            category: s.category,
+            include_code: s.includeCode
+        });
+
+        clearLoadingInterval();
+        wizardState.isGenerating = false;
+        wizardState.generatedQuestions = result.questions || [];
+
+        if (result.warnings && result.warnings.length > 0) {
+            console.warn('[AI Wizard] Generation warnings:', result.warnings);
+        }
+        if (result.truncated) {
+            showToast('Some questions may be missing due to response length limits.', 'warning');
+        }
+
+        setState({ view: 'wizard' });
+
+    } catch (err) {
+        clearLoadingInterval();
+        wizardState.isGenerating = false;
+        wizardState.generateError = err.message || 'An unexpected error occurred.';
+
+        if (err.status === 429 && err.retryAfter) {
+            const minutes = Math.ceil(err.retryAfter / 60);
+            wizardState.generateError = `Rate limit reached. Try again in ${minutes} minute${minutes > 1 ? 's' : ''}.`;
+        }
+
+        setState({ view: 'wizard' });
+    }
+}
+
+export function wizardRemoveQuestion(index) {
+    wizardState.generatedQuestions.splice(index, 1);
+    setState({ view: 'wizard' });
+}
+
+export async function wizardFinish() {
+    const questions = wizardState.generatedQuestions;
+    if (questions.length === 0) {
+        showToast('No questions to save!', 'error');
+        return;
+    }
+
+    try {
+        const quizData = {
+            title: wizardState.title || 'Untitled Quiz',
+            description: wizardState.category,
+            questions: questions,
+            color: getRandomColor()
+        };
+
+        await createQuiz(quizData);
+        showToast(`Quiz created with ${questions.length} questions!`, 'success');
+        resetWizard();
+        setState({ view: 'library' });
+    } catch (e) {
+        showToast('Failed to save quiz: ' + e.message, 'error');
+    }
+}
+
+// === Manual mode actions ===
+
+export function wizardEnterManualMode() {
+    wizardState.manualMode = true;
+    setState({ view: 'wizard' });
+}
+
+export function wizardExitManualMode() {
+    wizardState.manualMode = false;
+    wizardState.pastedContent = '';
+    wizardState.parsedQuestions = [];
+    wizardState.parseError = null;
+    setState({ view: 'wizard' });
 }
 
 export function wizardSetContent(content) {
@@ -600,14 +777,14 @@ export function wizardSetContent(content) {
 
 export function wizardPreviewContent(content) {
     wizardState.pastedContent = content;
-    
+
     if (!content.trim()) {
         wizardState.parsedQuestions = [];
         wizardState.parseError = null;
         setState({ view: 'wizard' });
         return;
     }
-    
+
     try {
         const questions = parseQuizData(content);
         if (questions && questions.length > 0) {
@@ -621,18 +798,18 @@ export function wizardPreviewContent(content) {
         wizardState.parsedQuestions = [];
         wizardState.parseError = e.message || 'Failed to parse questions.';
     }
-    
+
     setState({ view: 'wizard' });
 }
 
-export async function wizardFinish() {
+export async function wizardFinishManual() {
     const s = wizardState;
-    
+
     if (s.parsedQuestions.length === 0) {
         showToast('No questions to save!', 'error');
         return;
     }
-    
+
     try {
         const quizData = {
             title: s.title || 'Untitled Quiz',
@@ -640,7 +817,7 @@ export async function wizardFinish() {
             questions: s.parsedQuestions,
             color: getRandomColor()
         };
-        
+
         await createQuiz(quizData);
         showToast(`Quiz created with ${s.parsedQuestions.length} questions!`, 'success');
         resetWizard();
@@ -653,9 +830,4 @@ export async function wizardFinish() {
 export function exitWizard() {
     resetWizard();
     setState({ view: 'mission-control' });
-}
-
-function getRandomColor() {
-    const colors = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#0891b2', '#7c3aed', '#c2410c', '#0d9488', '#4f46e5', '#059669'];
-    return colors[Math.floor(Math.random() * colors.length)];
 }
