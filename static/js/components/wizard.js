@@ -275,8 +275,8 @@ function renderStep1() {
                     <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-5)">-5</button>
                     <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(-1)">-</button>
                     <input type="number" class="question-count-input" value="${s.questionCount}"
-                           min="1" max="50" id="question-count-input"
-                           onchange="window.app.wizardSetCount(Math.min(50, Math.max(1, parseInt(this.value) || 15)))"
+                           min="1" max="300" id="question-count-input"
+                           onchange="window.app.wizardSetCount(Math.min(300, Math.max(1, parseInt(this.value) || 15)))"
                            onclick="this.select()">
                     <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(1)">+</button>
                     <button class="btn btn-ghost" onclick="window.app.wizardAdjustCount(5)">+5</button>
@@ -726,7 +726,7 @@ export function wizardSetCount(count) {
 }
 
 export function wizardAdjustCount(delta) {
-    const newCount = Math.min(50, Math.max(1, wizardState.questionCount + delta));
+    const newCount = Math.min(300, Math.max(1, wizardState.questionCount + delta));
     wizardState.questionCount = newCount;
     const input = document.getElementById('question-count-input');
     if (input) input.value = newCount;

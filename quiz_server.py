@@ -995,7 +995,7 @@ def upload_material():
 
 # Rate limit: max generations per user per hour
 AI_RATE_LIMIT = 10
-AI_MAX_QUESTIONS_PER_REQUEST = 50
+AI_MAX_QUESTIONS_PER_REQUEST = 300
 AI_MIN_MATERIAL_LENGTH = 100
 
 def _check_ai_rate_limit(user_id):
