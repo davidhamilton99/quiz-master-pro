@@ -14,7 +14,7 @@ import {
     showShareSettings, setStudyTab
 } from './components/library-v3.js';
 import { renderHome, resetHomeCache } from './components/home.js';
-import { renderMissionControl, renderMCNav, resetMissionControl, refreshSession } from './components/mission-control.js';
+import { renderMissionControl, renderMCNav, resetMissionControl, refreshSession, switchSessionCert, showExamDateModal, saveExamDate } from './components/mission-control.js';
 import { renderOnboardingV2, needsImmersiveOnboarding, onboardingSearch, onboardingSelectCert, onboardingSetDate, onboardingSkipDate, onboardingFinish, onboardingSkipAll, resetOnboardingV2 } from './components/onboarding-v2.js';
 import { startDomainQuiz as sessionStartDomainQuiz, invalidateSession } from './components/session.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
@@ -647,6 +647,9 @@ window.app = {
 
     // Mission Control
     refreshSession,
+    switchSessionCert,
+    showExamDateModal,
+    saveExamDate,
     toggleMCMenu: () => {
         const overlay = document.getElementById('mc-menu-overlay');
         if (overlay) overlay.classList.toggle('hidden');
