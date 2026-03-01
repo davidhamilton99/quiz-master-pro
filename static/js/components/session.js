@@ -3,17 +3,20 @@ import { apiCall } from '../services/api.js';
 
 let _sessionCache = null;
 let _sessionLoadedAt = null;
+let _sessionCertId = null;
 const SESSION_TTL_MS = 5 * 60 * 1000; // refresh every 5 minutes
 
 /**
  * Fetch session plan from the server.
  * Returns { blocks: [], context: {} }
  */
-export async function fetchSessionPlan() {
+export async function fetchSessionPlan(certId = null) {
     try {
-        const data = await apiCall('/session/plan');
+        const qs = certId ? `?cert_id=${certId}` : '';
+        const data = await apiCall(`/session/plan${qs}`);
         _sessionCache = data.session;
         _sessionLoadedAt = Date.now();
+        _sessionCertId = certId;
         return _sessionCache;
     } catch (e) {
         console.warn('Session plan fetch failed:', e);
@@ -24,12 +27,13 @@ export async function fetchSessionPlan() {
 /**
  * Get cached session or fetch fresh one.
  */
-export async function getSessionPlan(forceRefresh = false) {
+export async function getSessionPlan(forceRefresh = false, certId = null) {
     if (!forceRefresh && _sessionCache && _sessionLoadedAt &&
+        _sessionCertId === certId &&
         (Date.now() - _sessionLoadedAt) < SESSION_TTL_MS) {
         return _sessionCache;
     }
-    return fetchSessionPlan();
+    return fetchSessionPlan(certId);
 }
 
 /**
@@ -38,6 +42,7 @@ export async function getSessionPlan(forceRefresh = false) {
 export function invalidateSession() {
     _sessionCache = null;
     _sessionLoadedAt = null;
+    _sessionCertId = null;
 }
 
 /**

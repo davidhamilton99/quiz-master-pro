@@ -1,12 +1,15 @@
-/* Mission Control — the immersive session-based home view */
+/* Mission Control — the immersive certification session screen */
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 import { getSessionPlan, invalidateSession } from './session.js';
+import { enrollCertification, getUserCertifications } from '../services/api.js';
+import { showToast } from '../utils/toast.js';
 
 let _sessionData = null;
 let _loading = true;
 let _error = false;
+let _activeCertId = null;
 
 /**
  * Reset mission control cache (call when navigating away or after quiz).
@@ -26,7 +29,7 @@ export async function refreshSession() {
     _error = false;
     rerenderMC();
     try {
-        _sessionData = await getSessionPlan(true);
+        _sessionData = await getSessionPlan(true, _activeCertId);
         _loading = false;
     } catch (e) {
         _loading = false;
@@ -35,23 +38,113 @@ export async function refreshSession() {
     rerenderMC();
 }
 
+/**
+ * Switch to a different certification tab.
+ */
+export async function switchSessionCert(certId) {
+    if (certId === _activeCertId && _sessionData) return;
+    _activeCertId = certId;
+    _loading = true;
+    _error = false;
+    _sessionData = null;
+    rerenderMC();
+    try {
+        _sessionData = await getSessionPlan(true, certId);
+        _loading = false;
+    } catch (e) {
+        _loading = false;
+        _error = true;
+    }
+    rerenderMC();
+}
+
+/**
+ * Show a modal to set or update the exam date for a certification.
+ */
+export function showExamDateModal(certId) {
+    const existing = document.getElementById('exam-date-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'exam-date-modal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" style="max-width:380px">
+            <div class="modal-header">
+                <h2>Set Exam Date</h2>
+                <button class="btn btn-ghost btn-icon" onclick="document.getElementById('exam-date-modal').remove()">${icon('x')}</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="margin-bottom:1rem">When is your exam scheduled?</p>
+                <input type="date" id="exam-date-input" class="input" style="width:100%"
+                       min="${new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="document.getElementById('exam-date-modal').remove()">Cancel</button>
+                <button class="btn btn-primary" onclick="window.app.saveExamDate(${certId})">Save</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+}
+
+/**
+ * Save exam date from the modal.
+ */
+export async function saveExamDate(certId) {
+    const input = document.getElementById('exam-date-input');
+    const date = input?.value;
+    if (!date) {
+        showToast('Please select a date', 'error');
+        return;
+    }
+    const modal = document.getElementById('exam-date-modal');
+    if (modal) modal.remove();
+
+    try {
+        await enrollCertification(certId, date);
+        const userCerts = await getUserCertifications();
+        setState({ userCertifications: userCerts });
+        invalidateSession();
+        _loading = true;
+        _sessionData = null;
+        rerenderMC();
+        _sessionData = await getSessionPlan(true, _activeCertId);
+        _loading = false;
+        rerenderMC();
+        showToast('Exam date saved', 'success');
+    } catch (e) {
+        showToast('Failed to save exam date', 'error');
+    }
+}
+
 function rerenderMC() {
     const container = document.getElementById('mc-root');
     if (container) {
         container.innerHTML = renderMCContent();
-        // Re-attach any listeners if needed
     }
 }
+
+// ==================== MAIN RENDER ====================
 
 /**
  * Main render function for mission control.
  */
 export function renderMissionControl() {
     const state = getState();
+    const certs = state.userCertifications;
+
+    // Set initial active cert if not set
+    if (!_activeCertId && Array.isArray(certs) && certs.length > 0) {
+        _activeCertId = certs[0].certification_id;
+    }
 
     // Kick off async session load
     if (_loading && !_sessionData) {
-        getSessionPlan().then(session => {
+        getSessionPlan(false, _activeCertId).then(session => {
             _sessionData = session;
             _loading = false;
             if (getState().view === 'mission-control') {
@@ -77,8 +170,6 @@ export function renderMissionControl() {
 
 /**
  * Shared app nav — hamburger menu, brand, user avatar.
- * Exported so every authenticated view can use the same shell.
- * @param {string} [currentView] - The active view name for highlighting the menu item.
  */
 export function renderMCNav(currentView) {
     const state = getState();
@@ -147,271 +238,345 @@ export function renderMCNav(currentView) {
     `;
 }
 
-function renderMCContent() {
-    if (_loading) return renderSkeleton();
-    if (_error && !_sessionData) return renderEmpty();
+// ==================== CONTENT RENDERING ====================
 
-    const ctx = _sessionData?.context || {};
-    const blocks = _sessionData?.blocks || [];
+function renderMCContent() {
     const state = getState();
     const certs = state.userCertifications;
 
-    // undefined = cert API call hasn't returned yet; keep showing skeleton
-    // rather than flashing "Pick a certification to get started"
+    // undefined = cert API call hasn't returned yet
     if (!Array.isArray(certs)) return renderSkeleton();
 
+    if (certs.length === 0) return renderNoCerts();
+
+    const certTabsHtml = renderCertTabs(certs);
+
+    if (_loading) return certTabsHtml + renderSkeleton();
+    if (_error && !_sessionData) return certTabsHtml + renderErrorState();
+
+    const ctx = _sessionData?.context || {};
+    const blocks = _sessionData?.blocks || [];
+
     return `
-        ${renderContextHeader(ctx, certs, blocks.length > 0)}
-        ${renderSessionStream(blocks, ctx)}
+        ${certTabsHtml}
+        ${renderCertHeader(ctx)}
+        ${ctx.has_history ? renderReturningUserView(ctx, blocks) : renderNewUserView(ctx)}
     `;
 }
 
-/**
- * Context header — the "Day X of Y" + readiness summary.
- * Hidden entirely for first-time users (no history) — the empty state handles that.
- */
-function renderContextHeader(ctx, certs, hasBlocks) {
+// ==================== CERT TABS ====================
+
+function renderCertTabs(certs) {
+    return `
+    <div class="mc-cert-tabs">
+        ${certs.map(c => `
+            <button class="mc-cert-tab ${c.certification_id === _activeCertId ? 'active' : ''}"
+                    onclick="window.app.switchSessionCert(${c.certification_id})">
+                ${escapeHtml(c.name || c.code || 'Cert')}
+            </button>
+        `).join('')}
+        <button class="mc-cert-tab mc-cert-tab--add" onclick="window.app.showCertPicker()">
+            + Add cert
+        </button>
+    </div>
+    `;
+}
+
+// ==================== CERTIFICATION HEADER ====================
+
+function renderCertHeader(ctx) {
     const cert = ctx.certification;
-    const days = ctx.days_remaining;
+    if (!cert) return '';
+
     const readiness = ctx.overall_readiness || 0;
-    const hours = ctx.study_hours_30d || 0;
+    const answered = ctx.total_questions_answered || 0;
+    const accuracy = ctx.overall_accuracy || 0;
 
-    // Don't show stats header when user has no history yet
-    if (!hasBlocks && readiness === 0) return '';
-
-    let headline = '';
-    if (cert && days !== null && days !== undefined) {
-        if (days === 0) {
-            headline = `<span class="mc-headline">Exam day.</span>`;
-        } else if (days === 1) {
-            headline = `<span class="mc-headline">Tomorrow.</span>`;
-        } else {
-            headline = `<span class="mc-headline">${days} days to ${escapeHtml(cert.name || cert.code)}.</span>`;
-        }
-    } else if (cert) {
-        headline = `<span class="mc-headline">${escapeHtml(cert.name || cert.code)}</span>`;
-    } else {
-        headline = `<span class="mc-headline">Your study session.</span>`;
-    }
-
-    // Domain mini-bars — only show when at least one domain has been attempted
-    const domains = ctx.domains || [];
-    const hasAnyData = domains.some(d => d.score > 0);
-    const domainBars = domains.length > 0 && hasAnyData ? `
-        <div class="mc-domain-section">
-            <span class="mc-domain-heading">Domain Readiness</span>
-            <div class="mc-domain-bars">
-                ${domains.map(d => {
-                    const statusClass = d.status === 'strong' ? 'mc-bar-strong' :
-                                        d.status === 'moderate' ? 'mc-bar-moderate' :
-                                        d.status === 'weak' ? 'mc-bar-weak' : 'mc-bar-unseen';
-                    return `
-                    <div class="mc-domain-bar-item" title="${escapeHtml(d.name)}: ${d.score}%">
-                        <div class="mc-domain-bar-track">
-                            <div class="mc-domain-bar-fill ${statusClass}" style="width: ${d.score}%"></div>
-                        </div>
-                        <span class="mc-domain-bar-label">${escapeHtml(d.name)}</span>
-                    </div>`;
-                }).join('')}
-            </div>
-        </div>
-    ` : '';
-
-    return `
-        <div class="mc-context-header">
-            <div class="mc-headline-row">
-                ${headline}
-            </div>
-            ${cert ? `
-                <div class="mc-readiness-row">
-                    <div class="mc-readiness-score">
-                        <span class="mc-readiness-num">${readiness}%</span>
-                        <span class="mc-readiness-label">readiness</span>
-                    </div>
-                    ${hours > 0 ? `
-                    <div class="mc-stat">
-                        <span class="mc-stat-num">${hours}h</span>
-                        <span class="mc-stat-label">studied (30d)</span>
-                    </div>` : ''}
-                </div>
-                ${domainBars}
-            ` : ''}
-        </div>
-    `;
-}
-
-/**
- * The session stream — ordered blocks of what to do next.
- */
-function renderSessionStream(blocks, ctx) {
-    if (blocks.length === 0) {
-        return renderNoBlocks(ctx);
-    }
-
-    return `
-        <div class="mc-stream">
-            <span class="mc-stream-heading">Your study plan</span>
-            ${blocks.map((block, i) => renderBlock(block, i)).join('')}
-        </div>
-    `;
-}
-
-/**
- * Render a single session block.
- */
-function renderBlock(block, index) {
-    switch (block.type) {
-        case 'srs_review': return renderSrsBlock(block, index);
-        case 'domain_quiz': return renderDomainBlock(block, index);
-        case 'simulation_prompt': return renderSimBlock(block, index);
-        default: return '';
-    }
-}
-
-function renderSrsBlock(block, index) {
-    return `
-        <div class="mc-block mc-block-srs" onclick="window.app.startSrsReview()" style="cursor:pointer">
-            <div class="mc-block-order">${index + 1}</div>
-            <div class="mc-block-body">
-                <div class="mc-block-title">${escapeHtml(block.title)}</div>
-                <div class="mc-block-subtitle">${escapeHtml(block.subtitle)}</div>
-            </div>
-            <div class="mc-block-meta">
-                <span class="mc-block-estimate">${block.estimate_minutes} min</span>
-                <span class="mc-block-action">${icon('arrowRight')}</span>
-            </div>
-        </div>
-    `;
-}
-
-function renderDomainBlock(block, index) {
-    const statusBadge = block.domain_status === 'unseen' ? 'New' :
-                        block.domain_status === 'weak' ? `${block.domain_score}%` :
-                        `${block.domain_score}%`;
-    const statusClass = block.domain_status === 'unseen' ? 'mc-badge-unseen' :
-                        block.domain_status === 'weak' ? 'mc-badge-weak' :
-                        'mc-badge-moderate';
-
-    return `
-        <div class="mc-block mc-block-domain" onclick="window.app.startSessionDomainQuiz(${block.action_data?.domainId}, ${block.question_count})" style="cursor:pointer">
-            <div class="mc-block-order">${index + 1}</div>
-            <div class="mc-block-body">
-                <div class="mc-block-title">${escapeHtml(block.title)}</div>
-                <div class="mc-block-subtitle">${escapeHtml(block.subtitle)}</div>
-            </div>
-            <div class="mc-block-meta">
-                <span class="mc-block-badge ${statusClass}">${statusBadge}</span>
-                <span class="mc-block-estimate">${block.question_count}q / ${block.estimate_minutes} min</span>
-                <span class="mc-block-action">${icon('arrowRight')}</span>
-            </div>
-        </div>
-    `;
-}
-
-function renderSimBlock(block, index) {
-    return `
-        <div class="mc-block mc-block-sim">
-            <div class="mc-block-body">
-                <div class="mc-block-title">${escapeHtml(block.title)}</div>
-                <div class="mc-block-subtitle">${escapeHtml(block.subtitle)}</div>
-                <div class="mc-sim-readiness">
-                    Readiness: ${block.readiness_pct}%
-                </div>
-            </div>
-            <div class="mc-block-meta">
-                <button class="mc-sim-btn" onclick="event.stopPropagation(); window.app.startSimulation(${block.action_data?.certId})">
-                    Start practice exam
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Empty state — no blocks, guide the user.
- * When a cert is selected: immersive entry point with diagnostic invitation.
- * When no cert: simple prompt to pick one.
- */
-function renderNoBlocks(ctx) {
-    const cert = ctx.certification;
-    if (cert) {
-        const certName = escapeHtml(cert.name || cert.code);
-        const certCode = cert.code ? escapeHtml(cert.code) : '';
-        return `
-            <div class="mc-entry">
-                <div class="mc-entry-header">
-                    ${certCode ? `<span class="mc-entry-code">${certCode}</span>` : ''}
-                    <h1 class="mc-entry-cert">${certName}</h1>
-                    <p class="mc-entry-welcome">Your prep starts here. Let's find out where you stand.</p>
-                </div>
-
-                <div class="mc-diagnostic-card" onclick="window.app.startSimulation(${cert.id})" style="cursor:pointer">
-                    <div class="mc-diagnostic-content">
-                        <span class="mc-diagnostic-label">Recommended first step</span>
-                        <h2 class="mc-diagnostic-title">Diagnostic Exam</h2>
-                        <p class="mc-diagnostic-desc">A 20-question assessment across all exam domains. Takes about 15 minutes. Tells us exactly where to focus your prep.</p>
-                    </div>
-                    <div class="mc-diagnostic-action">
-                        <button class="mc-primary-btn" onclick="event.stopPropagation(); window.app.startSimulation(${cert.id})">Begin Diagnostic</button>
-                    </div>
-                </div>
-
-                <div class="mc-locked-section">
-                    <span class="mc-locked-heading">Available after diagnostic</span>
-                    <div class="mc-locked-grid">
-                        <div class="mc-locked-card">
-                            <div class="mc-locked-icon">${icon('barChart')}</div>
-                            <div class="mc-locked-info">
-                                <span class="mc-locked-title">Domain Breakdown</span>
-                                <span class="mc-locked-desc">See your readiness across every exam objective</span>
-                            </div>
-                        </div>
-                        <div class="mc-locked-card">
-                            <div class="mc-locked-icon">${icon('target')}</div>
-                            <div class="mc-locked-info">
-                                <span class="mc-locked-title">Weak Areas</span>
-                                <span class="mc-locked-desc">Pinpoint the topics that need the most attention</span>
-                            </div>
-                        </div>
-                        <div class="mc-locked-card">
-                            <div class="mc-locked-icon">${icon('listChecks')}</div>
-                            <div class="mc-locked-info">
-                                <span class="mc-locked-title">Study Plan</span>
-                                <span class="mc-locked-desc">A personalised session plan built from your results</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    // Exam date badge
+    let examBadge = '';
+    if (ctx.target_date && ctx.days_remaining !== null && ctx.days_remaining !== undefined) {
+        const dateStr = new Date(ctx.target_date + 'T00:00:00').toLocaleDateString(undefined, {
+            month: 'long', day: 'numeric', year: 'numeric'
+        });
+        examBadge = `
+            <div class="mc-exam-badge">
+                ${icon('calendar')} ${ctx.days_remaining} days until exam &mdash; ${dateStr}
             </div>
         `;
+    } else {
+        examBadge = `
+            <button class="mc-exam-date-link" onclick="window.app.showExamDateModal(${cert.id})">
+                Set exam date
+            </button>
+        `;
     }
+
     return `
-        <div class="mc-empty">
-            <p class="mc-empty-text">Pick a certification to get started.</p>
-            <div class="mc-empty-actions">
-                <button class="mc-primary-btn" onclick="window.app.showCertPicker()">Add Certification</button>
+    <div class="mc-cert-header">
+        <span class="mc-cert-label">ACTIVE CERTIFICATION</span>
+        <h1 class="mc-cert-name">${escapeHtml(cert.name || cert.code)}</h1>
+        <div class="mc-stats-row">
+            <div class="mc-stat-item">
+                <span class="mc-stat-value mc-stat-value--accent">${readiness}%</span>
+                <span class="mc-stat-unit">readiness</span>
+            </div>
+            <span class="mc-stat-sep"></span>
+            <div class="mc-stat-item">
+                <span class="mc-stat-value">${answered.toLocaleString()}</span>
+                <span class="mc-stat-unit">questions answered</span>
+            </div>
+            <span class="mc-stat-sep"></span>
+            <div class="mc-stat-item">
+                <span class="mc-stat-value">${accuracy}%</span>
+                <span class="mc-stat-unit">accuracy</span>
             </div>
         </div>
+        ${examBadge}
+    </div>
+    `;
+}
+
+// ==================== NEW USER VIEW ====================
+
+function renderNewUserView(ctx) {
+    const cert = ctx.certification;
+    if (!cert) return '';
+
+    const domainCount = (ctx.domains || []).length || 6;
+
+    return `
+    <div class="mc-new-user">
+        <span class="mc-section-label">YOUR STUDY PLAN</span>
+
+        <div class="mc-diagnostic-card">
+            <span class="mc-diagnostic-start-label">START HERE</span>
+            <h2 class="mc-diagnostic-title">Take your diagnostic exam</h2>
+            <p class="mc-diagnostic-desc">
+                A 20-question assessment across all ${domainCount} ${escapeHtml(cert.name || cert.code)} domains.
+                Takes about 15 minutes. This tells us exactly where you stand and builds your personalised study plan &mdash;
+                so every session from here focuses on what will actually move your score.
+            </p>
+            <div class="mc-diagnostic-meta">
+                <span class="mc-diagnostic-meta-item">${icon('clock')} 15 minutes</span>
+                <span class="mc-diagnostic-meta-item">${icon('listOrdered')} 20 questions</span>
+                <span class="mc-diagnostic-meta-item">${icon('star')} All ${domainCount} domains</span>
+            </div>
+            <div class="mc-diagnostic-actions">
+                <button class="mc-primary-btn" onclick="window.app.startSimulation(${cert.id})">Begin diagnostic</button>
+                <button class="mc-secondary-btn" onclick="window.app.navigate('readiness')">Open workspace</button>
+            </div>
+        </div>
+
+        <span class="mc-section-label">AVAILABLE AFTER YOUR DIAGNOSTIC</span>
+
+        <div class="mc-locked-grid">
+            <div class="mc-locked-card">
+                <h3 class="mc-locked-card-title">Domain Breakdown</h3>
+                <p class="mc-locked-card-desc">Your performance across all ${domainCount} exam domains with specific weak areas identified.</p>
+                <span class="mc-locked-badge">AFTER DIAGNOSTIC</span>
+            </div>
+            <div class="mc-locked-card">
+                <h3 class="mc-locked-card-title">Readiness Score</h3>
+                <p class="mc-locked-card-desc">Your predicted pass probability based on domain performance and exam weighting.</p>
+                <span class="mc-locked-badge">AFTER DIAGNOSTIC</span>
+            </div>
+            <div class="mc-locked-card">
+                <h3 class="mc-locked-card-title">Daily Study Sessions</h3>
+                <p class="mc-locked-card-desc">Personalised question sets targeting your weakest domains, updated every session.</p>
+                <span class="mc-locked-badge">AFTER DIAGNOSTIC</span>
+            </div>
+            <div class="mc-locked-card">
+                <h3 class="mc-locked-card-title">Weak Points Drill</h3>
+                <p class="mc-locked-card-desc">Questions you got wrong, surfaced again when you're ready to retry them.</p>
+                <span class="mc-locked-badge">AFTER DIAGNOSTIC</span>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+// ==================== RETURNING USER VIEW ====================
+
+function renderReturningUserView(ctx, blocks) {
+    const readiness = ctx.overall_readiness || 0;
+    const domains = ctx.domains || [];
+
+    // Compute "Day X of Y"
+    let sessionHeading = "TODAY'S SESSION";
+    if (ctx.started_at && ctx.target_date) {
+        try {
+            const start = new Date(ctx.started_at);
+            const target = new Date(ctx.target_date + 'T00:00:00');
+            const now = new Date();
+            const totalDays = Math.max(1, Math.round((target - start) / 86400000));
+            const currentDay = Math.max(1, Math.round((now - start) / 86400000) + 1);
+            if (currentDay <= totalDays) {
+                sessionHeading = `TODAY'S SESSION &mdash; DAY ${currentDay} OF ${totalDays}`;
+            }
+        } catch (e) {
+            // Fall back to default heading
+        }
+    }
+
+    // Sort blocks for display: weak domains → SRS → practice → simulation
+    const sorted = sortBlocksForDisplay(blocks);
+
+    return `
+    <div class="mc-returning-user">
+        ${renderReadinessPanel(readiness, domains)}
+
+        <span class="mc-section-label">${sessionHeading}</span>
+
+        <div class="mc-session-stream">
+            ${sorted.length > 0 ? sorted.map((block, i) => renderSessionBlock(block, i, sorted)).join('') : `
+                <div class="mc-session-empty">
+                    <p>No study blocks for today. Great work keeping up!</p>
+                    <button class="mc-secondary-btn" onclick="window.app.refreshSession()">Refresh</button>
+                </div>
+            `}
+        </div>
+    </div>
+    `;
+}
+
+// ==================== READINESS PANEL ====================
+
+function renderReadinessPanel(readiness, domains) {
+    // Only show domains that have data or are relevant
+    const displayDomains = domains.slice(0, 6);
+
+    return `
+    <div class="mc-readiness-panel">
+        <div class="mc-readiness-left">
+            <span class="mc-readiness-big">${readiness}%</span>
+            <span class="mc-readiness-big-label">READINESS</span>
+        </div>
+        <div class="mc-readiness-divider"></div>
+        <div class="mc-readiness-right">
+            ${displayDomains.map(d => {
+                const score = Math.round(d.score || 0);
+                const colorClass = score >= 70 ? 'mc-bar-good' : score >= 40 ? 'mc-bar-moderate' : 'mc-bar-weak';
+                return `
+                <div class="mc-domain-row">
+                    <span class="mc-domain-name">${escapeHtml(d.name)}</span>
+                    <div class="mc-domain-bar">
+                        <div class="mc-domain-fill ${colorClass}" style="width:${score}%"></div>
+                    </div>
+                    <span class="mc-domain-pct ${colorClass}">${score}%</span>
+                </div>
+                `;
+            }).join('')}
+        </div>
+    </div>
+    `;
+}
+
+// ==================== SESSION BLOCKS ====================
+
+function sortBlocksForDisplay(blocks) {
+    const weak = [];
+    const srs = [];
+    const practice = [];
+    const sim = [];
+
+    for (const b of blocks) {
+        if (b.type === 'srs_review') srs.push(b);
+        else if (b.type === 'simulation_prompt') sim.push(b);
+        else if (b.type === 'domain_quiz') {
+            if (b.domain_status === 'weak' || b.domain_status === 'unseen') {
+                weak.push(b);
+            } else {
+                practice.push(b);
+            }
+        }
+    }
+
+    return [...weak, ...srs, ...practice, ...sim];
+}
+
+function getBlockMeta(block, index, allBlocks) {
+    if (block.type === 'srs_review') {
+        return { label: 'SRS REVIEW', colorClass: 'mc-block--srs' };
+    }
+    if (block.type === 'simulation_prompt') {
+        return { label: 'PRACTICE EXAM', colorClass: 'mc-block--practice' };
+    }
+    if (block.type === 'domain_quiz') {
+        if (block.domain_status === 'weak' || block.domain_status === 'unseen') {
+            // First weak/unseen domain is PRIORITY, rest are WEAK AREA
+            const isFirst = allBlocks.findIndex(b =>
+                b.type === 'domain_quiz' && (b.domain_status === 'weak' || b.domain_status === 'unseen')
+            ) === index;
+            return isFirst
+                ? { label: 'PRIORITY', colorClass: 'mc-block--priority' }
+                : { label: 'WEAK AREA', colorClass: 'mc-block--weak' };
+        }
+        return { label: 'PRACTICE', colorClass: 'mc-block--practice' };
+    }
+    return { label: '', colorClass: '' };
+}
+
+function renderSessionBlock(block, index, allBlocks) {
+    const meta = getBlockMeta(block, index, allBlocks);
+    const est = block.estimate_minutes ? `~${block.estimate_minutes} min` : '';
+
+    // Determine click handler
+    let onclick = '';
+    if (block.type === 'srs_review') {
+        onclick = 'window.app.startSrsReview()';
+    } else if (block.type === 'domain_quiz') {
+        onclick = `window.app.startSessionDomainQuiz(${block.action_data?.domainId}, ${block.question_count})`;
+    } else if (block.type === 'simulation_prompt') {
+        onclick = `window.app.startSimulation(${block.action_data?.certId})`;
+    }
+
+    return `
+    <div class="mc-session-block ${meta.colorClass}" onclick="${onclick}" style="cursor:pointer">
+        <div class="mc-session-block-header">
+            <span class="mc-session-label">${meta.label}</span>
+            <span class="mc-session-time">${est}</span>
+        </div>
+        <div class="mc-session-block-body">
+            <div class="mc-session-block-content">
+                <h3 class="mc-session-title">${escapeHtml(block.title)}</h3>
+                <p class="mc-session-desc">${escapeHtml(block.subtitle)}</p>
+            </div>
+            <span class="mc-session-arrow">&rarr;</span>
+        </div>
+    </div>
+    `;
+}
+
+// ==================== EMPTY / ERROR / SKELETON STATES ====================
+
+function renderNoCerts() {
+    return `
+    <div class="mc-empty">
+        <p class="mc-empty-text">Pick a certification to get started.</p>
+        <div class="mc-empty-actions">
+            <button class="mc-primary-btn" onclick="window.app.showCertPicker()">Add Certification</button>
+        </div>
+    </div>
+    `;
+}
+
+function renderErrorState() {
+    return `
+    <div class="mc-empty">
+        <p class="mc-empty-text">Couldn't load your session. Check your connection and try again.</p>
+        <button class="mc-primary-btn" onclick="window.app.refreshSession()">Retry</button>
+    </div>
     `;
 }
 
 function renderSkeleton() {
     return `
-        <div class="mc-skeleton">
-            <div class="mc-skel-headline"></div>
-            <div class="mc-skel-stats"></div>
-            <div class="mc-skel-block"></div>
-            <div class="mc-skel-block"></div>
-            <div class="mc-skel-block"></div>
-        </div>
-    `;
-}
-
-function renderEmpty() {
-    return `
-        <div class="mc-empty">
-            <p class="mc-empty-text">Couldn't load your session. Check your connection and try again.</p>
-            <button class="mc-primary-btn" onclick="window.app.refreshSession()">Retry</button>
-        </div>
+    <div class="mc-skeleton">
+        <div class="mc-skel-headline"></div>
+        <div class="mc-skel-stats"></div>
+        <div class="mc-skel-block"></div>
+        <div class="mc-skel-block"></div>
+        <div class="mc-skel-block"></div>
+    </div>
     `;
 }

@@ -2986,7 +2986,7 @@ def get_session_plan():
     blocks = []
 
     # 1. Get user certifications with target dates
-    c.execute('''SELECT uc.certification_id, uc.target_date, uc.status,
+    c.execute('''SELECT uc.certification_id, uc.target_date, uc.status, uc.started_at as enrolled_at,
         cert.code, cert.name, cert.passing_score
         FROM user_certifications uc
         JOIN certifications cert ON uc.certification_id = cert.id
@@ -2994,7 +2994,14 @@ def get_session_plan():
         ORDER BY uc.started_at DESC''', (request.user_id,))
     user_certs = [dict(r) for r in c.fetchall()]
 
-    primary_cert = user_certs[0] if user_certs else None
+    # Allow switching active cert via query parameter
+    requested_cert_id = request.args.get('cert_id', type=int)
+    if requested_cert_id:
+        primary_cert = next((uc for uc in user_certs if uc['certification_id'] == requested_cert_id), None)
+        if not primary_cert:
+            primary_cert = user_certs[0] if user_certs else None
+    else:
+        primary_cert = user_certs[0] if user_certs else None
 
     # Calculate days remaining
     days_remaining = None
@@ -3162,10 +3169,18 @@ def get_session_plan():
 
     # 6. Overall readiness for header context
     overall_readiness = 0
+    total_questions_answered = 0
+    total_correct = 0
+    has_history = False
     if weak_domains:
         total_weight = sum(d['weight'] for d in weak_domains)
         if total_weight > 0:
             overall_readiness = round(sum(d['score'] * d['weight'] for d in weak_domains) / total_weight)
+        total_questions_answered = sum(d['seen'] for d in weak_domains)
+        total_correct = sum(round(d['score'] * d['seen'] / 100) for d in weak_domains)
+        has_history = total_questions_answered > 0
+
+    overall_accuracy = round(total_correct / total_questions_answered * 100) if total_questions_answered > 0 else 0
 
     # 7. Recent study stats
     c.execute('''SELECT COALESCE(SUM(duration_seconds), 0) as total_secs
@@ -3190,6 +3205,11 @@ def get_session_plan():
                 } if primary_cert else None,
                 'days_remaining': days_remaining,
                 'overall_readiness': overall_readiness,
+                'total_questions_answered': total_questions_answered,
+                'overall_accuracy': overall_accuracy,
+                'has_history': has_history,
+                'target_date': primary_cert.get('target_date') if primary_cert else None,
+                'started_at': primary_cert.get('enrolled_at') if primary_cert else None,
                 'study_hours_30d': study_hours,
                 'domains': weak_domains[:6] if weak_domains else [],
             },
