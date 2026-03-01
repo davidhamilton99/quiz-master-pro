@@ -23,6 +23,16 @@ from functools import wraps
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'static'))
 CORS(app)
 
+# Ensure all HTTP error responses come back as JSON, not HTML.
+# Flask's default handlers return HTML pages which the frontend cannot parse.
+@app.errorhandler(400)
+def bad_request_handler(e):
+    return jsonify({'error': str(e)}), 400
+
+@app.errorhandler(413)
+def request_too_large_handler(e):
+    return jsonify({'error': 'File too large for the server to accept.'}), 413
+
 DATABASE = os.path.join(BASE_DIR, 'quiz_master.db')
 
 # Admin token for protected admin endpoints (set this to a secret value in production)
@@ -862,7 +872,13 @@ def _extract_text_from_file(file_storage):
     if ext not in ALLOWED_EXTENSIONS:
         return None, f'Unsupported file type: .{ext}. Supported: {", ".join(sorted(ALLOWED_EXTENSIONS))}'
 
-    raw = file_storage.read()
+    try:
+        raw = file_storage.read()
+    except Exception as e:
+        return None, f'Could not read uploaded file stream: {str(e)}'
+
+    if len(raw) == 0:
+        return None, 'Uploaded file is empty.'
     if len(raw) > UPLOAD_MAX_SIZE:
         return None, f'File too large ({len(raw) // (1024*1024)}MB). Maximum is 10MB.'
 
@@ -916,14 +932,47 @@ def _extract_text_from_file(file_storage):
 @token_required
 def upload_material():
     """Extract text from uploaded file and return it for use in the wizard."""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
+    try:
+        files = request.files
+    except Exception as e:
+        # Werkzeug raises BadRequest (HTTP 400) when multipart parsing fails,
+        # which Flask would normally return as an HTML page.  Catch it here so
+        # the frontend always receives JSON it can display to the user.
+        app.logger.error(f'upload_material: failed to parse multipart body: {e}')
+        return jsonify({
+            'error': f'Failed to parse upload request: {str(e)}',
+            'detail': (
+                f'Content-Type received: {request.environ.get("CONTENT_TYPE", "not set")} — '
+                'make sure the request is multipart/form-data with a file field named "file".'
+            )
+        }), 400
 
-    f = request.files['file']
+    if 'file' not in files:
+        content_type = request.content_type or 'not set'
+        form_keys = list(request.form.keys())
+        app.logger.warning(
+            f'upload_material: "file" field missing. '
+            f'Content-Type={content_type!r}, form keys={form_keys}'
+        )
+        return jsonify({
+            'error': 'No file received — the "file" field was not found in the request.',
+            'detail': (
+                f'Content-Type was {content_type!r}. '
+                'This usually means the request was not sent as multipart/form-data, '
+                'or the field name does not match "file".'
+            )
+        }), 400
+
+    f = files['file']
     if not f.filename:
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'error': 'No filename — the file appears to have no name. Try re-selecting it.'}), 400
 
-    text, error = _extract_text_from_file(f)
+    try:
+        text, error = _extract_text_from_file(f)
+    except Exception as e:
+        app.logger.error(f'upload_material: unexpected error in _extract_text_from_file: {e}', exc_info=True)
+        return jsonify({'error': f'Unexpected error reading file: {str(e)}'}), 400
+
     if error:
         return jsonify({'error': error}), 400
 
