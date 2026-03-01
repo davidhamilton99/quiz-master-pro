@@ -1071,28 +1071,30 @@ def _build_ai_user_prompt(study_material, question_count, question_types, catego
     model avoids generating duplicates when called multiple times on the same material.
     """
     type_descriptions = {
-        'choice':      ('Multiple Choice', '"type": "choice", one correct answer from 4 options, "correct": [single_index]'),
-        'multiselect': ('Multi-Select',    '"type": "choice", 2+ correct answers, "correct": [index1, index2, ...]  — use multiple indices to signal multi-select'),
-        'truefalse':   ('True/False',      '"type": "truefalse", options must be ["True","False"], "correct": [0] for True or [1] for False'),
-        'matching':    ('Matching',        '"type": "matching", populate "pairs" with 4 {left,right} term-definition pairs'),
-        'ordering':    ('Ordering',        '"type": "ordering", "options" lists 4 items in their CORRECT order, "correct": [0,1,2,3]'),
+        'choice':      ('"type": "choice"',      'one correct answer from 4 options — best for factual recall, definitions, or "which of these" questions'),
+        'multiselect': ('"type": "multiselect"', '2+ correct answers from 4-5 options — best when multiple things are true simultaneously'),
+        'truefalse':   ('"type": "truefalse"',   'options must be ["True","False"] — best for clear factual statements, common misconceptions'),
+        'matching':    ('"type": "matching"',    'populate "pairs" with 4 {left,right} objects — best for term-definition pairs, cause-effect, or category mapping'),
+        'ordering':    ('"type": "ordering"',    '"options" lists items in their CORRECT order — best for steps in a process, chronology, or ranked sequences'),
     }
 
-    # Calculate exact per-type counts so the model can't default to one type.
-    # Spread the remainder across the first N types (one extra each).
     valid_types = [t for t in question_types if t in type_descriptions]
-    n = len(valid_types)
-    base, remainder = divmod(question_count, n)
-    counts = [base + (1 if i < remainder else 0) for i in range(n)]
 
-    # Drop types that got 0 questions (happens when question_count < n_types)
-    type_lines = []
-    for qt, count in zip(valid_types, counts):
-        if count == 0:
-            continue
-        label, fmt = type_descriptions[qt]
-        type_lines.append(f"- {label} × {count}  →  {fmt}")
-    types_str = '\n'.join(type_lines)
+    if len(valid_types) == 1:
+        # Only one type selected — no choice needed, keep it simple
+        schema_val, guidance = type_descriptions[valid_types[0]]
+        types_str = f"All questions must use {schema_val} ({guidance})."
+    else:
+        type_lines = []
+        for qt in valid_types:
+            schema_val, guidance = type_descriptions[qt]
+            type_lines.append(f"  {schema_val} — {guidance}")
+        types_str = (
+            "For each question, choose the type that BEST FITS the content:\n"
+            + '\n'.join(type_lines) + "\n"
+            "Use your judgment — don't force a type that doesn't fit. "
+            "Aim for variety across the set."
+        )
 
     code_instruction = ""
     if include_code:
@@ -1110,7 +1112,7 @@ Do NOT repeat or rephrase any question already generated:
 
     return f"""Generate exactly {question_count} quiz questions from the study material below.
 
-YOU MUST produce EXACTLY this many of each question type — do not substitute one type for another:
+QUESTION TYPES:
 {types_str}
 {code_instruction}
 {f'Subject area: {category}' if category else ''}
