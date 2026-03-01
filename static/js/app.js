@@ -855,14 +855,19 @@ async function init() {
         // Start with mission-control; we'll redirect to onboarding-v2 if needed after data loads
         setState({ view: 'mission-control' });
         try {
+            // getUserCertifications failure (timeout, 401, network) must NOT be treated
+            // as "user has no certs" — track whether the call succeeded.
+            let certLoadOk = true;
             const [quizzes, userCerts, bms] = await Promise.all([
                 loadQuizzes(),
-                getUserCertifications().catch(() => []),
+                getUserCertifications().catch(() => { certLoadOk = false; return []; }),
                 getBookmarks().catch(() => []),
             ]);
             setState({
                 quizzes,
-                userCertifications: userCerts,
+                // Only set userCertifications when the call actually succeeded.
+                // Leaving it undefined tells the UI "still loading" vs empty = confirmed none.
+                ...(certLoadOk && { userCertifications: userCerts }),
                 bookmarks: bms,
                 bookmarkedQuestions: new Set(bms.map(b => b.question_id)),
             }, true);
@@ -870,8 +875,10 @@ async function init() {
             // Bug #1 fix: Load and cache in-progress quizzes
             await loadInProgressQuizzes();
 
-            // Route to immersive onboarding if user has no certs enrolled
-            if (needsImmersiveOnboarding()) {
+            // Only route to onboarding when we CONFIRMED the user has no certs.
+            // If the cert API call failed, stay on mission-control rather than
+            // incorrectly wiping the user's session with the onboarding screen.
+            if (certLoadOk && needsImmersiveOnboarding()) {
                 setState({ view: 'onboarding-v2' });
             } else {
                 setState({ view: 'mission-control' });

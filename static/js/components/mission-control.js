@@ -154,7 +154,11 @@ function renderMCContent() {
     const ctx = _sessionData?.context || {};
     const blocks = _sessionData?.blocks || [];
     const state = getState();
-    const certs = state.userCertifications || [];
+    const certs = state.userCertifications;
+
+    // undefined = cert API call hasn't returned yet; keep showing skeleton
+    // rather than flashing "Pick a certification to get started"
+    if (!Array.isArray(certs)) return renderSkeleton();
 
     return `
         ${renderContextHeader(ctx, certs, blocks.length > 0)}
