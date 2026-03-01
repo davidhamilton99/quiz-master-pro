@@ -10,7 +10,7 @@ let _loading = false;
 function memberSince(dateStr) {
     if (!dateStr) return '';
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 async function _load() {
@@ -33,12 +33,11 @@ export function renderProfile() {
     if (!data) {
         return `
         <div class="profile-page">
-            <button class="btn btn-ghost mb-4" onclick="window.app.navigate('mission-control')">
-                ${icon('arrowLeft')} Back
-            </button>
-            <div class="empty-state">
-                <div class="spinner"></div>
-                <p class="text-muted">Loading profile…</p>
+            <div class="profile-container">
+                <div class="profile-loading">
+                    <div class="spinner"></div>
+                    <p class="text-muted">Loading profile…</p>
+                </div>
             </div>
         </div>`;
     }
@@ -52,60 +51,64 @@ export function renderProfile() {
 
     return `
     <div class="profile-page">
-        <button class="btn btn-ghost mb-4" onclick="window.app.navigate('mission-control')">
-            ${icon('arrowLeft')} Back
-        </button>
+        <div class="profile-container">
 
-        <!-- Hero -->
-        <div class="profile-hero">
-            <div class="profile-avatar-lg">${escapeHtml(initial)}</div>
-            <div>
-                <div class="profile-username">${escapeHtml(user.username || 'User')}</div>
-                <div class="profile-meta text-muted">
-                    ${user.created_at ? `<span>Member since ${memberSince(user.created_at)}</span>` : ''}
+            <!-- Profile Header -->
+            <div class="profile-header">
+                <div class="profile-avatar-lg">${escapeHtml(initial)}</div>
+                <div class="profile-identity">
+                    <h1 class="profile-username">${escapeHtml(user.username || 'User')}</h1>
+                    ${user.created_at ? `<p class="profile-member-since">Member since ${memberSince(user.created_at)}</p>` : ''}
                 </div>
             </div>
-        </div>
 
-        <!-- Stats -->
-        <div class="profile-card">
-            <div class="profile-card-title">Stats</div>
+            <!-- Stats Grid -->
             <div class="profile-stats-grid">
-                <div>
+                <div class="profile-stat-card">
                     <div class="profile-stat-val">${(user.quiz_count || 0).toLocaleString()}</div>
                     <div class="profile-stat-lbl">Quizzes</div>
                 </div>
-                <div>
+                <div class="profile-stat-card">
                     <div class="profile-stat-val">${(profile.total_answered || 0).toLocaleString()}</div>
-                    <div class="profile-stat-lbl">Questions</div>
+                    <div class="profile-stat-lbl">Questions Answered</div>
                 </div>
-                <div>
+                <div class="profile-stat-card">
                     <div class="profile-stat-val">${accuracy}%</div>
                     <div class="profile-stat-lbl">Accuracy</div>
                 </div>
-                <div>
+                <div class="profile-stat-card">
                     <div class="profile-stat-val">${profile.daily_streak || 0}</div>
                     <div class="profile-stat-lbl">Day Streak</div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Extra -->
-        <div class="profile-card">
-            <div class="profile-stats-grid">
-                <div>
-                    <div class="profile-stat-val">${(profile.perfect_scores || 0).toLocaleString()}</div>
-                    <div class="profile-stat-lbl">Perfect Scores</div>
-                </div>
-                <div>
+                <div class="profile-stat-card">
                     <div class="profile-stat-val">${(profile.quizzes_completed || 0).toLocaleString()}</div>
                     <div class="profile-stat-lbl">Completed</div>
                 </div>
-                <div>
-                    <div class="profile-stat-val">${(profile.gems || 0).toLocaleString()}</div>
-                    <div class="profile-stat-lbl">Gems</div>
+                <div class="profile-stat-card">
+                    <div class="profile-stat-val">${(profile.perfect_scores || 0).toLocaleString()}</div>
+                    <div class="profile-stat-lbl">Perfect Scores</div>
                 </div>
             </div>
+
+            <!-- Account Section -->
+            <div class="profile-section">
+                <h2 class="profile-section-title">Account</h2>
+                <div class="profile-menu-list">
+                    <button class="profile-menu-item" onclick="window.app.showChangePassword()">
+                        <span class="profile-menu-label">${icon('shield')} Change Password</span>
+                        <span class="profile-menu-arrow">${icon('chevronRight')}</span>
+                    </button>
+                    <button class="profile-menu-item" onclick="window.app.navigate('mission-control')">
+                        <span class="profile-menu-label">${icon('settings')} Account Settings</span>
+                        <span class="profile-menu-arrow">${icon('chevronRight')}</span>
+                    </button>
+                    <button class="profile-menu-item profile-menu-danger" onclick="window.app.logout()">
+                        <span class="profile-menu-label">${icon('logOut')} Sign Out</span>
+                        <span class="profile-menu-arrow">${icon('chevronRight')}</span>
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
     `;

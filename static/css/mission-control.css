@@ -952,12 +952,8 @@
 
 /* === Bottom tab bar (always visible in MC shell) === */
 
-.mc-tab-bar {
-    display: flex !important;
-}
-
 .mc-page .mc-main {
-    padding-bottom: 5rem;
+    padding-bottom: 2rem;
 }
 
 /* === Responsive === */
