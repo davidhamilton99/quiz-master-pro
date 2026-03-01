@@ -21,12 +21,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'static'))
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload limit
 CORS(app)
-
-@app.errorhandler(413)
-def too_large(e):
-    return jsonify({'error': 'File too large. Maximum upload size is 10MB.'}), 413
 
 DATABASE = os.path.join(BASE_DIR, 'quiz_master.db')
 
@@ -921,32 +916,29 @@ def _extract_text_from_file(file_storage):
 @token_required
 def upload_material():
     """Extract text from uploaded file and return it for use in the wizard."""
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded. Make sure the form field is named "file".'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
 
-        f = request.files['file']
-        if not f.filename:
-            return jsonify({'error': 'No file selected'}), 400
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'No file selected'}), 400
 
-        text, error = _extract_text_from_file(f)
-        if error:
-            return jsonify({'error': error}), 400
+    text, error = _extract_text_from_file(f)
+    if error:
+        return jsonify({'error': error}), 400
 
-        # Truncate very large texts to avoid overwhelming the AI (keep first ~80k chars)
-        max_chars = 80_000
-        truncated = len(text) > max_chars
-        if truncated:
-            text = text[:max_chars]
+    # Truncate very large texts to avoid overwhelming the AI (keep first ~80k chars)
+    max_chars = 80_000
+    truncated = len(text) > max_chars
+    if truncated:
+        text = text[:max_chars]
 
-        return jsonify({
-            'text': text,
-            'char_count': len(text),
-            'truncated': truncated,
-            'filename': f.filename
-        })
-    except Exception as e:
-        return jsonify({'error': f'Server error processing file: {str(e)}'}), 500
+    return jsonify({
+        'text': text,
+        'char_count': len(text),
+        'truncated': truncated,
+        'filename': f.filename
+    })
 
 
 # === AI Quiz Generation ===
