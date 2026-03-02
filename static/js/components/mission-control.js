@@ -292,19 +292,21 @@ function renderCertHeader(ctx) {
     const answered = ctx.total_questions_answered || 0;
     const accuracy = ctx.overall_accuracy || 0;
 
-    // Exam date badge
-    let examBadge = '';
+    // Exam date section
+    let examSection = '';
     if (ctx.target_date && ctx.days_remaining !== null && ctx.days_remaining !== undefined) {
         const dateStr = new Date(ctx.target_date + 'T00:00:00').toLocaleDateString(undefined, {
             month: 'long', day: 'numeric', year: 'numeric'
         });
-        examBadge = `
+        examSection = `
             <div class="mc-exam-badge">
-                ${icon('calendar')} ${ctx.days_remaining} days until exam &mdash; ${dateStr}
+                <span class="mc-exam-days">${ctx.days_remaining}</span>
+                <span class="mc-exam-days-unit">days until exam</span>
             </div>
+            <div class="mc-exam-date-full">${dateStr}</div>
         `;
     } else {
-        examBadge = `
+        examSection = `
             <button class="mc-exam-date-link" onclick="window.app.showExamDateModal(${cert.id})">
                 Set exam date
             </button>
@@ -331,7 +333,7 @@ function renderCertHeader(ctx) {
                 <span class="mc-stat-unit">accuracy</span>
             </div>
         </div>
-        ${examBadge}
+        ${examSection}
     </div>
     `;
 }
@@ -445,14 +447,20 @@ function renderReadinessPanel(readiness, domains) {
     // Only show domains that have data or are relevant
     const displayDomains = domains.slice(0, 6);
 
+    // Dynamic colour for the readiness number
+    const readinessColorClass = readiness >= 70 ? 'mc-readiness-big--good'
+        : readiness >= 40 ? 'mc-readiness-big--moderate'
+        : 'mc-readiness-big--weak';
+
     return `
     <div class="mc-readiness-panel">
         <div class="mc-readiness-left">
-            <span class="mc-readiness-big">${readiness}%</span>
+            <span class="mc-readiness-big ${readinessColorClass}">${readiness}%</span>
             <span class="mc-readiness-big-label">READINESS</span>
         </div>
         <div class="mc-readiness-divider"></div>
         <div class="mc-readiness-right">
+            <span class="mc-readiness-domains-heading">DOMAIN BREAKDOWN</span>
             ${displayDomains.map(d => {
                 const score = Math.round(d.score || 0);
                 const colorClass = score >= 70 ? 'mc-bar-good' : score >= 40 ? 'mc-bar-moderate' : 'mc-bar-weak';
