@@ -1403,6 +1403,7 @@ export async function submitQuiz() {
         try {
             await recordSimulation({
                 certification_id: simConfig.certification.id,
+                exam_type: simConfig.exam_type || 'practice',
                 score: correct,
                 total,
                 percentage,

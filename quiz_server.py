@@ -2206,20 +2206,132 @@ def start_exam_simulation(cert_id):
         }
     })
 
+@app.route('/api/certifications/<int:cert_id>/diagnostic', methods=['POST'])
+@token_required
+def start_diagnostic(cert_id):
+    """Generate a 20-question diagnostic exam sampling proportionally across all domains."""
+    DIAGNOSTIC_QUESTIONS = 20
+
+    conn = get_db()
+    c = conn.cursor()
+
+    c.execute('SELECT * FROM certifications WHERE id = ?', (cert_id,))
+    cert = c.fetchone()
+    if not cert:
+        conn.close()
+        return jsonify({'error': 'Certification not found'}), 404
+    cert = dict(cert)
+
+    c.execute('SELECT * FROM domains WHERE certification_id = ? ORDER BY sort_order', (cert_id,))
+    all_domains = [dict(r) for r in c.fetchall()]
+    top_domains = [d for d in all_domains if d.get('parent_domain_id') is None]
+
+    c.execute(
+        'SELECT COUNT(*) as cnt FROM cert_questions WHERE certification_id = ? AND is_active = 1',
+        (cert_id,)
+    )
+    use_cert_bank = c.fetchone()['cnt'] > 0
+
+    sim_questions = []
+    seen_ids = set()
+
+    for domain in top_domains:
+        weight = domain.get('weight') or (1.0 / len(top_domains))
+        domain_count = max(1, round(DIAGNOSTIC_QUESTIONS * weight))
+
+        if use_cert_bank:
+            if seen_ids:
+                exclusion = 'AND id NOT IN ({})'.format(','.join('?' * len(seen_ids)))
+                params = (domain['id'], cert_id, *seen_ids, domain_count)
+            else:
+                exclusion = ''
+                params = (domain['id'], cert_id, domain_count)
+            c.execute('''
+                SELECT id, question_text, options, correct_answer, explanation
+                FROM   cert_questions
+                WHERE  domain_id = ? AND certification_id = ? AND is_active = 1
+                {}
+                ORDER BY RANDOM()
+                LIMIT  ?
+            '''.format(exclusion), params)
+            for row in c.fetchall():
+                seen_ids.add(row['id'])
+                sim_questions.append({
+                    'id':            row['id'],
+                    'cert_question_id': row['id'],
+                    'question':      row['question_text'],
+                    'type':          'choice',
+                    'options':       json.loads(row['options']),
+                    'correct':       row['correct_answer'],
+                    'explanation':   row['explanation'],
+                    'domainName':    domain['name'],
+                    'domainCode':    domain['code'],
+                })
+        else:
+            c.execute('''
+                SELECT q.* FROM questions q
+                JOIN   question_domains qd ON q.id = qd.question_id
+                WHERE  qd.domain_id = ? AND q.is_active = 1
+            ''', (domain['id'],))
+            pool = [dict(r) for r in c.fetchall() if r['id'] not in seen_ids]
+            chosen = random.sample(pool, min(domain_count, len(pool)))
+            for row in chosen:
+                seen_ids.add(row['id'])
+                q = {
+                    'id':       row['id'],
+                    'question': row['question_text'],
+                    'type':     row.get('type', 'choice'),
+                    'domainName': domain['name'],
+                    'domainCode': domain['code'],
+                }
+                if row.get('options'):
+                    q['options'] = json.loads(row['options'])
+                if row.get('correct'):
+                    q['correct'] = json.loads(row['correct'])
+                if row.get('explanation'):
+                    q['explanation'] = row['explanation']
+                sim_questions.append(q)
+
+    random.shuffle(sim_questions)
+    # Trim to exactly DIAGNOSTIC_QUESTIONS if rounding pushed over
+    sim_questions = sim_questions[:DIAGNOSTIC_QUESTIONS]
+    conn.close()
+
+    return jsonify({
+        'simulation': {
+            'exam_type':     'diagnostic',
+            'certification': cert,
+            'questions':     sim_questions,
+            'time_limit':    15 * 60,
+            'passing_score': cert.get('passing_score'),
+            'passing_scale': cert.get('passing_scale'),
+            'total_questions': len(sim_questions),
+            'domains':       all_domains,
+        }
+    })
+
+
 @app.route('/api/exam-simulations', methods=['POST'])
 @token_required
 def record_exam_simulation():
     """Record a completed exam simulation."""
     data = request.get_json()
+    exam_type = data.get('exam_type', 'practice')
     conn = get_db()
     c = conn.cursor()
     c.execute('''INSERT INTO exam_simulations
-        (user_id, certification_id, score, total, percentage, passed, time_taken, time_limit, domain_scores, answers)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (user_id, certification_id, score, total, percentage, passed, time_taken, time_limit, domain_scores, answers, exam_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         (request.user_id, data['certification_id'], data['score'], data['total'],
          data['percentage'], data['passed'], data.get('time_taken'),
          data.get('time_limit'), json.dumps(data.get('domain_scores', {})),
-         json.dumps(data.get('answers', []))))
+         json.dumps(data.get('answers', [])), exam_type))
+
+    if exam_type == 'diagnostic':
+        c.execute('''UPDATE user_certifications
+            SET diagnostic_completed_at = ?
+            WHERE user_id = ? AND certification_id = ?''',
+            (datetime.now(), request.user_id, data['certification_id']))
 
     # Also update question_performance for each answered question
     try:

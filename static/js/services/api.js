@@ -541,6 +541,13 @@ export async function startSimulation(certId, questionCount = null) {
     return data.simulation;
 }
 
+export async function startDiagnostic(certId) {
+    const data = await apiCall(`/certifications/${certId}/diagnostic`, {
+        method: 'POST'
+    });
+    return data.simulation;
+}
+
 /**
  * Record a completed exam simulation
  */
