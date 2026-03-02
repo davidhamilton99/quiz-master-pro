@@ -2082,11 +2082,17 @@ def get_weak_questions():
 @app.route('/api/certifications/<int:cert_id>/simulate', methods=['POST'])
 @token_required
 def start_exam_simulation(cert_id):
-    """Generate an exam simulation with domain-weighted question selection."""
+    """Generate an exam simulation with domain-weighted question selection.
+
+    Routing logic:
+    - If the certification has questions in cert_questions (the Security+ bank
+      and any future dedicated question bank), those are used exclusively.
+    - Otherwise falls back to the legacy questions+question_domains tables
+      used by certifications that rely on user-quiz-style question tagging.
+    """
     conn = get_db()
     c = conn.cursor()
 
-    # Get cert info
     c.execute('SELECT * FROM certifications WHERE id = ?', (cert_id,))
     cert = c.fetchone()
     if not cert:
@@ -2094,73 +2100,109 @@ def start_exam_simulation(cert_id):
         return jsonify({'error': 'Certification not found'}), 404
     cert = dict(cert)
 
-    # Get domains with weights
+    # All domains for this cert, ordered for consistent domain ordering in results
     c.execute('SELECT * FROM domains WHERE certification_id = ? ORDER BY sort_order', (cert_id,))
-    domains = [dict(r) for r in c.fetchall()]
+    all_domains = [dict(r) for r in c.fetchall()]
+
+    # Top-level domains only (no sub-objectives) — these carry the exam weights
+    # and are the level at which cert_questions are tagged
+    top_domains = [d for d in all_domains if d.get('parent_domain_id') is None]
 
     total_questions = cert.get('total_questions') or 60
     data = request.get_json() or {}
     requested_count = data.get('question_count') or total_questions
 
-    import random
-    selected_questions = []
+    # Determine which question source to use
+    c.execute(
+        'SELECT COUNT(*) as cnt FROM cert_questions WHERE certification_id = ? AND is_active = 1',
+        (cert_id,)
+    )
+    use_cert_bank = c.fetchone()['cnt'] > 0
 
-    for domain in domains:
-        weight = domain.get('weight') or (1.0 / len(domains))
+    sim_questions = []
+    seen_ids = set()  # guard against a question appearing in two domains
+
+    for domain in top_domains:
+        weight = domain.get('weight') or (1.0 / len(top_domains))
         domain_count = max(1, round(requested_count * weight))
 
-        # Get questions tagged with this domain
-        c.execute('''SELECT q.* FROM questions q
-            JOIN question_domains qd ON q.id = qd.question_id
-            WHERE qd.domain_id = ? AND q.is_active = 1''', (domain['id'],))
-        domain_questions = [dict(r) for r in c.fetchall()]
+        if use_cert_bank:
+            # ── New path: cert_questions ───────────────────────────────────────
+            # correct_answer is an integer 0-3; the quiz engine's checkIfCorrect
+            # handles this via `return answer === correctAnswer` for choice type.
+            # NOT IN is omitted when seen_ids is empty — NOT IN (SELECT NULL)
+            # evaluates to NULL in SQL and would filter every row.
+            if seen_ids:
+                exclusion = 'AND id NOT IN ({})'.format(','.join('?' * len(seen_ids)))
+                params = (domain['id'], cert_id, *seen_ids, domain_count)
+            else:
+                exclusion = ''
+                params = (domain['id'], cert_id, domain_count)
+            c.execute('''
+                SELECT id, question_text, options, correct_answer, explanation
+                FROM   cert_questions
+                WHERE  domain_id = ? AND certification_id = ? AND is_active = 1
+                {}
+                ORDER BY RANDOM()
+                LIMIT  ?
+            '''.format(exclusion), params)
+            for row in c.fetchall():
+                seen_ids.add(row['id'])
+                sim_questions.append({
+                    'id':            row['id'],
+                    'cert_question_id': row['id'],
+                    'question':      row['question_text'],
+                    'type':          'choice',
+                    'options':       json.loads(row['options']),
+                    'correct':       row['correct_answer'],
+                    'explanation':   row['explanation'],
+                    'domainName':    domain['name'],
+                    'domainCode':    domain['code'],
+                })
+        else:
+            # ── Legacy path: questions + question_domains ──────────────────────
+            c.execute('''
+                SELECT q.* FROM questions q
+                JOIN   question_domains qd ON q.id = qd.question_id
+                WHERE  qd.domain_id = ? AND q.is_active = 1
+            ''', (domain['id'],))
+            pool = [dict(r) for r in c.fetchall() if r['id'] not in seen_ids]
+            chosen = random.sample(pool, min(domain_count, len(pool)))
+            for row in chosen:
+                seen_ids.add(row['id'])
+                q = {
+                    'id':       row['id'],
+                    'question': row['question_text'],
+                    'type':     row.get('type', 'choice'),
+                    'domainName': domain['name'],
+                    'domainCode': domain['code'],
+                }
+                if row.get('options'):
+                    q['options'] = json.loads(row['options'])
+                if row.get('correct'):
+                    q['correct'] = json.loads(row['correct'])
+                if row.get('pairs'):
+                    q['pairs'] = json.loads(row['pairs'])
+                if row.get('code'):
+                    q['code'] = row['code']
+                if row.get('code_language'):
+                    q['codeLanguage'] = row['code_language']
+                if row.get('explanation'):
+                    q['explanation'] = row['explanation']
+                sim_questions.append(q)
 
-        if domain_questions:
-            chosen = random.sample(domain_questions, min(domain_count, len(domain_questions)))
-            for q in chosen:
-                q['domain_id'] = domain['id']
-                q['domain_name'] = domain['name']
-                q['domain_code'] = domain['code']
-            selected_questions.extend(chosen)
-
-    random.shuffle(selected_questions)
-
-    # Convert to frontend format
-    sim_questions = []
-    for row in selected_questions:
-        q = {
-            'id': row['id'],
-            'question': row['question_text'],
-            'type': row['type'],
-        }
-        if row.get('options'):
-            q['options'] = json.loads(row['options'])
-        if row.get('correct'):
-            q['correct'] = json.loads(row['correct'])
-        if row.get('pairs'):
-            q['pairs'] = json.loads(row['pairs'])
-        if row.get('code'):
-            q['code'] = row['code']
-        if row.get('code_language'):
-            q['codeLanguage'] = row['code_language']
-        if row.get('explanation'):
-            q['explanation'] = row['explanation']
-        if row.get('domain_name'):
-            q['domainName'] = row['domain_name']
-            q['domainCode'] = row.get('domain_code')
-        sim_questions.append(q)
-
+    random.shuffle(sim_questions)
     conn.close()
 
     return jsonify({
         'simulation': {
             'certification': cert,
-            'questions': sim_questions,
-            'time_limit': (cert.get('exam_duration_minutes') or 90) * 60,
+            'questions':     sim_questions,
+            'time_limit':    (cert.get('exam_duration_minutes') or 90) * 60,
             'passing_score': cert.get('passing_score'),
             'passing_scale': cert.get('passing_scale'),
             'total_questions': len(sim_questions),
-            'domains': domains
+            'domains':       all_domains,
         }
     })
 
