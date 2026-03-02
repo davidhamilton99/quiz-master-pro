@@ -414,6 +414,72 @@ def init_db():
     c.execute('CREATE INDEX IF NOT EXISTS idx_question_performance_user ON question_performance(user_id, question_id)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_question_domains_domain ON question_domains(domain_id)')
 
+    # === Security+ Certification Question Bank ===
+    # cert_questions is COMPLETELY SEPARATE from the `questions` table.
+    # `questions` belongs to user-created quizzes (FK → quizzes).
+    # `cert_questions` belongs to the certification question bank (FK → certifications).
+    # No foreign key exists between these two tables — structural separation is the guarantee.
+    # ON DELETE RESTRICT on both FKs: deleting a cert or domain that has questions attached
+    # will fail loudly rather than silently wiping the question bank.
+    c.execute('''CREATE TABLE IF NOT EXISTS cert_questions (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        certification_id INTEGER NOT NULL,
+        domain_id        INTEGER NOT NULL,
+        sub_objective    TEXT,
+        question_text    TEXT NOT NULL,
+        options          TEXT NOT NULL,
+        correct_answer   INTEGER NOT NULL,
+        explanation      TEXT NOT NULL,
+        difficulty       INTEGER NOT NULL DEFAULT 5,
+        is_active        INTEGER NOT NULL DEFAULT 1,
+        created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (certification_id) REFERENCES certifications(id) ON DELETE RESTRICT,
+        FOREIGN KEY (domain_id)        REFERENCES domains(id)        ON DELETE RESTRICT
+    )''')
+
+    c.execute('CREATE INDEX IF NOT EXISTS idx_cq_cert ON cert_questions(certification_id)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_cq_domain ON cert_questions(domain_id)')
+    # Primary query pattern: all active questions for cert X in domain Y
+    c.execute('CREATE INDEX IF NOT EXISTS idx_cq_cert_domain ON cert_questions(certification_id, domain_id)')
+
+    # cert_question_performance mirrors question_performance but references cert_questions only.
+    # These two tables share no data and no foreign keys — per-user performance data
+    # for cert questions is fully isolated from user-quiz performance data.
+    c.execute('''CREATE TABLE IF NOT EXISTS cert_question_performance (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id          INTEGER NOT NULL,
+        cert_question_id INTEGER NOT NULL,
+        times_seen       INTEGER NOT NULL DEFAULT 0,
+        times_correct    INTEGER NOT NULL DEFAULT 0,
+        times_incorrect  INTEGER NOT NULL DEFAULT 0,
+        last_seen_at     TIMESTAMP,
+        last_correct_at  TIMESTAMP,
+        average_time_ms  INTEGER,
+        created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, cert_question_id),
+        FOREIGN KEY (user_id)          REFERENCES users(id)          ON DELETE CASCADE,
+        FOREIGN KEY (cert_question_id) REFERENCES cert_questions(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('CREATE INDEX IF NOT EXISTS idx_cqp_user ON cert_question_performance(user_id)')
+    # Upsert lookup: exact row for a user+question pair
+    c.execute('CREATE INDEX IF NOT EXISTS idx_cqp_user_question ON cert_question_performance(user_id, cert_question_id)')
+    # Priority-3 sort (seen and all-correct, order by oldest last_seen_at first)
+    c.execute('CREATE INDEX IF NOT EXISTS idx_cqp_user_last_seen ON cert_question_performance(user_id, last_seen_at)')
+
+    # security_plus_questions view: hard-codes the SY0-701 cert code so ALL queries
+    # for Security+ questions go through this view rather than cert_questions directly.
+    # Future certifications added to cert_questions never appear here — zero contamination.
+    # DROP + CREATE ensures the view definition is always current on server restart.
+    c.execute('DROP VIEW IF EXISTS security_plus_questions')
+    c.execute('''CREATE VIEW security_plus_questions AS
+        SELECT cq.*
+        FROM   cert_questions cq
+        JOIN   certifications c ON c.id = cq.certification_id
+        WHERE  c.code = 'comptia-sec-sy0-701'
+        AND    cq.is_active = 1''')
+
     # Enable WAL mode for better concurrent read performance
     conn.execute('PRAGMA journal_mode=WAL')
 
@@ -425,6 +491,20 @@ def init_db():
         pass  # Column already exists
     try:
         c.execute('ALTER TABLE questions ADD COLUMN option_explanations TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Security+ question bank: exam_type distinguishes diagnostic from practice exams.
+    # Default 'practice' correctly classifies all existing exam_simulations rows.
+    try:
+        c.execute("ALTER TABLE exam_simulations ADD COLUMN exam_type TEXT NOT NULL DEFAULT 'practice'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # diagnostic_completed_at: NULL until the user completes the diagnostic.
+    # The session engine gates first practice exam access on this being non-NULL.
+    try:
+        c.execute('ALTER TABLE user_certifications ADD COLUMN diagnostic_completed_at TIMESTAMP')
     except sqlite3.OperationalError:
         pass  # Column already exists
 
@@ -3754,6 +3834,126 @@ def create_sample_quiz():
 def health():
     return jsonify({'status': 'ok'})
 
+# === Security+ Question Bank Parser ===
+
+def _parse_security_plus_questions(filepath):
+    """Parse the Security+ SY0-701 question bank text file into structured dicts.
+
+    File format (one field per line; blank lines separate question blocks):
+
+        Domain: 4.0 Security Operations
+        Sub-objective: 4.1 — Given a scenario, apply common security techniques...
+        Question: <question text — single line, may be very long>
+        A) <option text>
+        B) <option text>
+        C) <option text>
+        D) <option text>
+        Correct: B
+        Explanation: <first paragraph on this line>
+        Why A is wrong: <continuation line>
+        Why C is wrong: <continuation line>
+        Why D is wrong: <continuation line>
+
+    Returns (questions, errors):
+        questions — list of dicts ready for INSERT into cert_questions
+        errors    — list of strings describing any blocks that failed to parse
+    """
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Split on blank lines immediately before a new "Domain:" line.
+    # re.split with a lookahead preserves the "Domain:" prefix on the next block.
+    raw_blocks = re.split(r'\n{2,}(?=Domain:)', content.strip())
+
+    ANSWER_MAP = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
+    questions = []
+    errors = []
+
+    for block_num, block in enumerate(raw_blocks, start=1):
+        lines = block.strip().split('\n')
+
+        domain_code = None
+        sub_objective = None
+        question_text = None
+        options = []
+        correct_answer = None
+        explanation_parts = []
+        state = 'init'
+
+        for line in lines:
+            s = line.strip()
+            if not s:
+                continue
+
+            if s.startswith('Domain:'):
+                # "4.0 Security Operations" → domain_code = "4.0"
+                domain_code = s[len('Domain:'):].strip().split()[0]
+                state = 'domain'
+
+            elif s.startswith('Sub-objective:'):
+                sub_objective = s[len('Sub-objective:'):].strip()
+                state = 'sub_objective'
+
+            elif s.startswith('Question:'):
+                question_text = s[len('Question:'):].strip()
+                state = 'question'
+
+            elif re.match(r'^[A-D]\)\s', s):
+                # "A) option text" — capture everything after the "X) " prefix
+                m = re.match(r'^[A-D]\)\s+(.+)$', s)
+                options.append(m.group(1).strip() if m else s[3:].strip())
+                state = 'option'
+
+            elif s.startswith('Correct:'):
+                letter = s[len('Correct:'):].strip().upper()
+                correct_answer = ANSWER_MAP.get(letter)
+                state = 'correct'
+
+            elif s.startswith('Explanation:'):
+                text = s[len('Explanation:'):].strip()
+                if text:
+                    explanation_parts.append(text)
+                state = 'explanation'
+
+            elif state == 'question':
+                # Rare multi-line question text — append with a space
+                question_text += ' ' + s
+
+            elif state == 'explanation':
+                # "Why A is wrong: ..." continuation lines
+                explanation_parts.append(s)
+
+        explanation = '\n'.join(explanation_parts)
+
+        # Validate: every field must be present and options must be exactly 4
+        missing = []
+        if not domain_code:
+            missing.append('domain_code')
+        if not question_text:
+            missing.append('question_text')
+        if len(options) != 4:
+            missing.append(f'options (got {len(options)}, need 4)')
+        if correct_answer is None:
+            missing.append('correct_answer')
+        if not explanation:
+            missing.append('explanation')
+
+        if missing:
+            errors.append(f'Block {block_num}: missing {", ".join(missing)}')
+            continue
+
+        questions.append({
+            'domain_code':   domain_code,
+            'sub_objective': sub_objective,
+            'question_text': question_text,
+            'options':       options,
+            'correct_answer': correct_answer,
+            'explanation':   explanation,
+        })
+
+    return questions, errors
+
+
 # === Admin Routes ===
 
 def require_admin_token(f):
@@ -3777,6 +3977,130 @@ def admin_seed():
     count = c.fetchone()['cnt']
     conn.close()
     return jsonify({'message': f'Seed complete. {count} certifications in database.'})
+
+
+@app.route('/api/admin/seed-security-plus', methods=['POST'])
+@require_admin_token
+def admin_seed_security_plus():
+    """Seed the Security+ SY0-701 cert_questions table from the question bank file.
+
+    Reads data/security_plus_questions.txt, parses all 218 questions, and inserts
+    them into cert_questions linked to the comptia-sec-sy0-701 certification.
+
+    Idempotent: if any cert_questions rows already exist for Security+, returns
+    200 with status='already_seeded' and does not insert duplicates. To re-seed,
+    delete existing rows via /api/admin/clear-security-plus first.
+
+    Required header: X-Admin-Token matching QUIZ_ADMIN_TOKEN env var.
+    """
+    questions_file = os.path.join(BASE_DIR, 'data', 'security_plus_questions.txt')
+
+    if not os.path.exists(questions_file):
+        return jsonify({
+            'error': 'Question bank file not found',
+            'expected_path': questions_file,
+            'hint': 'Place the question bank at data/security_plus_questions.txt relative to the project root.'
+        }), 404
+
+    conn = get_db()
+    c = conn.cursor()
+
+    try:
+        # Resolve the Security+ certification ID
+        c.execute("SELECT id FROM certifications WHERE code = 'comptia-sec-sy0-701'")
+        cert_row = c.fetchone()
+        if not cert_row:
+            conn.close()
+            return jsonify({
+                'error': 'Security+ certification not found in the certifications table.',
+                'hint': 'POST to /api/admin/seed first to create the certification record.'
+            }), 400
+        cert_id = cert_row['id']
+
+        # Idempotency check — any existing rows means a previous seed ran
+        c.execute('SELECT COUNT(*) as cnt FROM cert_questions WHERE certification_id = ?', (cert_id,))
+        existing_count = c.fetchone()['cnt']
+        if existing_count > 0:
+            conn.close()
+            return jsonify({
+                'status': 'already_seeded',
+                'count': existing_count,
+                'message': (
+                    f'cert_questions already contains {existing_count} questions for Security+. '
+                    'No changes made. To re-seed, delete existing rows first.'
+                )
+            }), 200
+
+        # Build domain_code → domain_id map for top-level Security+ domains
+        c.execute('''
+            SELECT id, code FROM domains
+            WHERE  certification_id = ? AND parent_domain_id IS NULL
+            ORDER BY sort_order
+        ''', (cert_id,))
+        domain_map = {row['code']: row['id'] for row in c.fetchall()}
+
+        if len(domain_map) < 5:
+            conn.close()
+            return jsonify({
+                'error': f'Expected 5 top-level domains for Security+, found {len(domain_map)}.',
+                'hint': 'POST to /api/admin/seed first to create domain records.'
+            }), 400
+
+        # Parse the question bank file
+        parsed, parse_errors = _parse_security_plus_questions(questions_file)
+
+        if not parsed:
+            conn.close()
+            return jsonify({
+                'error': 'Parser returned zero valid questions.',
+                'parse_errors': parse_errors
+            }), 400
+
+        # Insert all parsed questions in a single transaction
+        inserted = 0
+        skipped = 0
+        insert_errors = []
+
+        with _db_write_lock:
+            for q in parsed:
+                domain_id = domain_map.get(q['domain_code'])
+                if domain_id is None:
+                    skipped += 1
+                    insert_errors.append(f"Unrecognised domain code '{q['domain_code']}' — question skipped.")
+                    continue
+
+                c.execute('''
+                    INSERT INTO cert_questions
+                        (certification_id, domain_id, sub_objective,
+                         question_text, options, correct_answer, explanation, difficulty)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    cert_id,
+                    domain_id,
+                    q['sub_objective'],
+                    q['question_text'],
+                    json.dumps(q['options']),
+                    q['correct_answer'],
+                    q['explanation'],
+                    5,  # default difficulty; can be refined per-question later
+                ))
+                inserted += 1
+
+            conn.commit()
+
+        conn.close()
+        return jsonify({
+            'status': 'ok',
+            'inserted': inserted,
+            'skipped': skipped,
+            'parse_errors': parse_errors or None,
+            'insert_errors': insert_errors or None,
+            'message': f'Successfully seeded {inserted} Security+ questions into cert_questions.'
+        }), 201
+
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/cleanup-sessions', methods=['POST'])
 @require_admin_token
