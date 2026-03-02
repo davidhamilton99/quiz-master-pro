@@ -362,7 +362,7 @@ function renderNewUserView(ctx) {
                 <span class="mc-diagnostic-meta-item">${icon('star')} All ${domainCount} domains</span>
             </div>
             <div class="mc-diagnostic-actions">
-                <button class="mc-primary-btn" onclick="window.app.startSimulation(${cert.id})">Begin diagnostic</button>
+                <button class="mc-primary-btn" onclick="window.app.startDiagnostic(${cert.id})">Begin diagnostic</button>
                 <button class="mc-secondary-btn" onclick="window.app.navigate('readiness')">Open workspace</button>
             </div>
         </div>

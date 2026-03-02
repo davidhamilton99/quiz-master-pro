@@ -55,7 +55,8 @@ import {
     getUserCertifications, enrollCertification, unenrollCertification,
     getCertPerformance, getCertTrends, getWeakQuestions, getCertification,
     getCertifications,
-    startSimulation as apiStartSimulation
+    startSimulation as apiStartSimulation,
+    startDiagnostic as apiStartDiagnostic
 } from './services/api.js';
 
 // NEW: Landing page and wizard
@@ -832,6 +833,27 @@ window.app = {
         } catch (e) {
             hideLoading();
             showToast('Failed to start simulation: ' + e.message, 'error');
+        }
+    },
+    startDiagnostic: async (certId) => {
+        try {
+            showLoading();
+            const sim = await apiStartDiagnostic(certId);
+            if (!sim || !sim.questions || sim.questions.length === 0) {
+                hideLoading();
+                showToast('No questions available for the diagnostic yet. The question bank is still being built.', 'warning');
+                return;
+            }
+            startQuiz(null, {
+                studyMode: false,
+                timed: true,
+                minutes: Math.ceil(sim.time_limit / 60),
+                simulation: sim,
+            });
+            hideLoading();
+        } catch (e) {
+            hideLoading();
+            showToast('Failed to start diagnostic: ' + e.message, 'error');
         }
     },
 };
