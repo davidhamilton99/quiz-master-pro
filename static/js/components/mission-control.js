@@ -5,6 +5,7 @@ import { icon } from '../utils/icons.js';
 import { getSessionPlan, invalidateSession } from './session.js';
 import { enrollCertification, getUserCertifications } from '../services/api.js';
 import { showToast } from '../utils/toast.js';
+import { showModal } from '../utils/modal.js';
 
 let _sessionData = null;
 let _loading = true;
@@ -62,32 +63,19 @@ export async function switchSessionCert(certId) {
  * Show a modal to set or update the exam date for a certification.
  */
 export function showExamDateModal(certId) {
-    const existing = document.getElementById('exam-date-modal');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'exam-date-modal';
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-        <div class="modal" style="max-width:380px">
-            <div class="modal-header">
-                <h2>Set Exam Date</h2>
-                <button class="btn btn-ghost btn-icon" onclick="document.getElementById('exam-date-modal').remove()">${icon('x')}</button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted" style="margin-bottom:1rem">When is your exam scheduled?</p>
-                <input type="date" id="exam-date-input" class="input" style="width:100%"
-                       min="${new Date().toISOString().split('T')[0]}">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="document.getElementById('exam-date-modal').remove()">Cancel</button>
-                <button class="btn btn-primary" onclick="window.app.saveExamDate(${certId})">Save</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.remove();
+    showModal({
+        id: 'exam-date-modal',
+        title: 'Set Exam Date',
+        maxWidth: '380px',
+        body: `
+            <p class="text-muted" style="margin-bottom:1rem">When is your exam scheduled?</p>
+            <input type="date" id="exam-date-input" class="input" style="width:100%"
+                   min="${new Date().toISOString().split('T')[0]}">
+        `,
+        footer: `
+            <button class="btn btn-secondary" data-modal-close>Cancel</button>
+            <button class="btn btn-primary" onclick="window.app.saveExamDate(${certId})">Save</button>
+        `,
     });
 }
 

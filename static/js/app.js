@@ -5,6 +5,8 @@ import { ExportService, ImportService, showExportModal, showImportModal } from '
 import { showToast } from './utils/toast.js';
 import { showLoading, hideLoading } from './utils/dom.js';
 import { icon } from './utils/icons.js';
+import { showModal, confirmModal } from './utils/modal.js';
+// ── Static imports (core + frequently-used components) ──
 import { renderAuth, setAuthMode, handleAuth } from './components/auth.js';
 import { renderProfile } from './components/profile.js';
 import {
@@ -19,36 +21,6 @@ import { renderOnboardingV2, needsImmersiveOnboarding, onboardingSearch, onboard
 import { startDomainQuiz as sessionStartDomainQuiz, invalidateSession } from './components/session.js';
 import { renderCommunity, setCommunityFilter, setCommunitySearch } from './components/community.js';
 import { renderReadiness, setReadinessTab, setWorkspaceView, selectReadinessCert, setObjectiveConfidence, toggleObjectiveDomain } from './components/readiness.js';
-import {
-    renderQuiz, startQuiz, selectOption, selectTF, checkMultipleChoiceAnswer, toggleMultiSelect,
-    nextQuestion, prevQuestion, goToQuestion, toggleFlag, exitQuiz, submitQuiz, stopTimer,
-    selectMatchLeft, selectMatchRight, unmatchItem, removeMatch, clearAllMatches,
-    moveOrderItem, initQuizHandlers, checkMatchingAnswer, checkOrderingAnswer
-} from './components/quiz.js';
-import { renderResults, renderReview, retryQuiz, reviewQuiz, setReviewFilter, animateScoreCounter } from './components/results.js';
-import {
-    renderCreate, setTitle, setCat, setData, toggleHelp, saveQuiz, editQuiz,
-    openVisual, closeVisual, selectQ, addQ, deleteQ, updateQ, updateOpt, addOpt,
-    toggleCorrect, saveVisual, setTFAnswer, updatePair, addPair, removePair,
-    saveField, changeType, savePair, saveOption,
-    removeOpt, previewImage, clearImage, toggleOptionExplanations, saveOptionExplanation
-} from './components/create.js';
-import {
-    renderStudyGuide, sgHandleFile, sgClearFile, sgGenerate, sgOpen, sgDownload, sgReset, initStudyGuideDragDrop
-} from './components/studyGuide.js';
-
-// Flashcards
-import {
-    renderFlashcards, initFlashcards, fcFlip, fcNext, fcPrev, fcRate,
-    fcShuffle, fcRestart, fcStudyMissed, fcGoToCard,
-    fcToggleMenu, fcToggleShortcuts, exitFlashcards,
-    fcTouchStart, fcTouchMove, fcTouchEnd
-} from './components/flashcards.js';
-
-// SRS Review
-import { renderSrsReview, initSrsReview, srsFlip, srsRate, exitSrsReview } from './components/srsReview.js';
-
-// Dashboard
 import { renderDashboard, loadStudyStats } from './components/dashboard.js';
 import { renderCertPicker } from './components/certPicker.js';
 import {
@@ -58,24 +30,57 @@ import {
     startSimulation as apiStartSimulation,
     startDiagnostic as apiStartDiagnostic
 } from './services/api.js';
-
-// NEW: Landing page and wizard
 import { renderLanding, scrollToHowItWorks } from './components/landing.js';
 import {
     renderOnboarding, shouldShowOnboarding, startOnboarding,
     completeOnboarding, onboardingNext, onboardingBack, onboardingSkip
 } from './components/onboarding.js';
-import {
-    renderWizard, resetWizard, wizardSetTitle, wizardSetCategory, wizardToggleType,
-    wizardToggleCode, wizardSetCount, wizardAdjustCount, wizardNext, wizardBack,
-    wizardSetContent, wizardPreviewContent, wizardCopyPrompt, wizardFinish, exitWizard
-} from './components/wizard.js';
 
-// Lightweight animation utils (shake/pulse only - gamification removed)
-import { addShakeAnimation, addPulseAnimation, showConfetti, showFireworks, burstCorrect, burstWrong } from './utils/animations.js';
-window.animations = { addShakeAnimation, addPulseAnimation, showConfetti, showFireworks, burstCorrect, burstWrong };
+// ── Lazy-loaded component cache (heavy, infrequently used modules) ──
+const _mods = {};
+async function loadMod(name) {
+    if (_mods[name]) return _mods[name];
+    const paths = {
+        quiz:       './components/quiz.js',
+        results:    './components/results.js',
+        create:     './components/create.js',
+        wizard:     './components/wizard.js',
+        flashcards: './components/flashcards.js',
+        srsReview:  './components/srsReview.js',
+        studyGuide: './components/studyGuide.js',
+    };
+    _mods[name] = await import(paths[name]);
+    return _mods[name];
+}
+
+// Loading placeholder for first-time component loads
+const LOADING_HTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:60vh"><div class="spinner"></div></div>';
 
 const app = document.getElementById('app');
+
+// ==================== LAZY CSS LOADER ====================
+
+const _loadedCSS = new Set();
+function loadCSS(href) {
+    if (_loadedCSS.has(href)) return;
+    _loadedCSS.add(href);
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+}
+
+const VIEW_CSS = {
+    'landing':         '/static/css/landing.css',
+    'flashcards':      '/static/css/flashcards.css',
+    'library':         '/static/css/library-v3.css',
+    'study':           '/static/css/library-v3.css',
+    'dashboard':       '/static/css/dashboard.css',
+    'mission-control': '/static/css/mission-control.css',
+    'readiness':       '/static/css/mission-control.css',
+    'cert-picker':     '/static/css/mission-control.css',
+    'community':       '/static/css/mission-control.css',
+};
 
 // ==================== EXPORT/IMPORT HANDLERS ====================
 
@@ -121,125 +126,102 @@ function showQuizOptions(quizId) {
     const state = getState();
     const quiz = state.quizzes.find(q => q.id === quizId);
     if (!quiz) return;
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal">
-            <div class="modal-header">
-                <h2>Start Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
+
+    showModal({
+        title: 'Start Quiz',
+        body: `
+            <h3 style="margin-bottom: 1rem;">${quiz.title}</h3>
+            <p class="text-muted mb-4">${quiz.questions?.length || 0} questions</p>
+
+            <div class="form-group">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="study-mode-toggle" checked>
+                    <span>Study Mode</span>
+                </label>
+                <p class="helper-text">See answers immediately after each question</p>
             </div>
-            <div class="modal-body">
-                <h3 style="margin-bottom: 1rem;">${quiz.title}</h3>
-                <p class="text-muted mb-4">${quiz.questions?.length || 0} questions</p>
-                
-                <div class="form-group">
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="study-mode-toggle" checked>
-                        <span>Study Mode</span>
-                    </label>
-                    <p class="helper-text">See answers immediately after each question</p>
-                </div>
-                
-                <div class="form-group">
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="randomize-toggle">
-                        <span>Shuffle Choices</span>
-                    </label>
-                    <p class="helper-text">Randomize answer order to prevent memorization</p>
-                </div>
-                
-                <div class="form-group">
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" id="timer-toggle">
-                        <span>Enable Timer</span>
-                    </label>
-                </div>
-                
-                <div class="form-group" id="timer-options" style="display: none;">
-                    <label>Time Limit (minutes)</label>
-                    <input type="number" class="input" id="timer-minutes" value="15" min="1" max="180">
-                </div>
+
+            <div class="form-group">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="randomize-toggle">
+                    <span>Shuffle Choices</span>
+                </label>
+                <p class="helper-text">Randomize answer order to prevent memorization</p>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-                <button class="btn btn-primary" onclick="window.app.launchQuiz(${quizId})">Start Quiz</button>
+
+            <div class="form-group">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="timer-toggle">
+                    <span>Enable Timer</span>
+                </label>
             </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const timerToggle = modal.querySelector('#timer-toggle');
-    const timerOptions = modal.querySelector('#timer-options');
-    timerToggle.addEventListener('change', () => {
-        timerOptions.style.display = timerToggle.checked ? 'block' : 'none';
-    });
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.remove();
+
+            <div class="form-group" id="timer-options" style="display: none;">
+                <label>Time Limit (minutes)</label>
+                <input type="number" class="input" id="timer-minutes" value="15" min="1" max="180">
+            </div>
+        `,
+        footer: `
+            <button class="btn btn-secondary" data-modal-close>Cancel</button>
+            <button class="btn btn-primary" onclick="window.app.launchQuiz(${quizId})">Start Quiz</button>
+        `,
+        onMount(overlay) {
+            const timerToggle = overlay.querySelector('#timer-toggle');
+            const timerOptions = overlay.querySelector('#timer-options');
+            timerToggle.addEventListener('change', () => {
+                timerOptions.style.display = timerToggle.checked ? 'block' : 'none';
+            });
+        },
     });
 }
 
-function launchQuiz(quizId) {
+async function launchQuiz(quizId) {
     const modal = document.querySelector('.modal-overlay');
     const studyMode = modal?.querySelector('#study-mode-toggle')?.checked ?? true;
     const randomizeOptions = modal?.querySelector('#randomize-toggle')?.checked ?? false;
     const timed = modal?.querySelector('#timer-toggle')?.checked ?? false;
     const minutes = parseInt(modal?.querySelector('#timer-minutes')?.value) || 15;
-    
+
     if (modal) modal.remove();
-    startQuiz(quizId, { studyMode, randomizeOptions, timed, minutes });
+    const m = await loadMod('quiz');
+    m.startQuiz(quizId, { studyMode, randomizeOptions, timed, minutes });
 }
 
 // ==================== CREATE OPTIONS MODAL ====================
 
 function showCreateOptions() {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal">
-            <div class="modal-header">
-                <h2>Create New Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted mb-4">How would you like to create your quiz?</p>
+    showModal({
+        title: 'Create New Quiz',
+        body: `
+            <p class="text-muted mb-4">How would you like to create your quiz?</p>
 
-                <div class="create-options">
-                    <button class="create-option" onclick="window.app.startWizard()">
-                        <div class="create-option-icon">${icon('bot', 'icon-2xl')}</div>
-                        <div class="create-option-content">
-                            <h3>AI-Assisted</h3>
-                            <p>Get step-by-step help using ChatGPT or Claude to generate questions from your notes</p>
-                        </div>
-                        <span class="create-option-badge">Recommended</span>
-                    </button>
+            <div class="create-options">
+                <button class="create-option" onclick="window.app.startWizard()">
+                    <div class="create-option-icon">${icon('bot', 'icon-2xl')}</div>
+                    <div class="create-option-content">
+                        <h3>AI-Assisted</h3>
+                        <p>Get step-by-step help using ChatGPT or Claude to generate questions from your notes</p>
+                    </div>
+                    <span class="create-option-badge">Recommended</span>
+                </button>
 
-                    <button class="create-option" onclick="window.app.startManualCreate()">
-                        <div class="create-option-icon">${icon('penLine', 'icon-2xl')}</div>
-                        <div class="create-option-content">
-                            <h3>Manual Entry</h3>
-                            <p>Type or paste questions directly using our text format or visual editor</p>
-                        </div>
-                    </button>
-                </div>
+                <button class="create-option" onclick="window.app.startManualCreate()">
+                    <div class="create-option-icon">${icon('penLine', 'icon-2xl')}</div>
+                    <div class="create-option-content">
+                        <h3>Manual Entry</h3>
+                        <p>Type or paste questions directly using our text format or visual editor</p>
+                    </div>
+                </button>
             </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.remove();
+        `,
     });
 }
 
-function startWizard() {
+async function startWizard() {
     const modal = document.querySelector('.modal-overlay');
     if (modal) modal.remove();
-    resetWizard();
+    const m = await loadMod('wizard');
+    m.resetWizard();
     setState({ view: 'wizard' });
 }
 
@@ -250,6 +232,8 @@ function startManualCreate() {
 }
 
 // ==================== RENDER ====================
+
+let _lastView = null;
 
 function render() {
     try {
@@ -273,6 +257,10 @@ function renderInternal() {
     let content = '';
     let wrapInShell = false; // true → wrap in mc-page shell with MC nav
 
+    // Lazy-load CSS for current view
+    const cssHref = VIEW_CSS[state.view];
+    if (cssHref) loadCSS(cssHref);
+
     switch (state.view) {
         // ── Unauthenticated views (no shell) ──
         case 'landing':
@@ -283,37 +271,49 @@ function renderInternal() {
             content = renderAuth();
             break;
 
-        // ── Full-screen immersive views (own navigation) ──
+        // ── Lazy-loaded full-screen views ──
         case 'quiz':
-            content = renderQuiz();
+            if (!_mods.quiz) {
+                content = LOADING_HTML;
+                loadMod('quiz').then(() => render());
+                break;
+            }
+            content = _mods.quiz.renderQuiz();
             setTimeout(() => {
-                if (window.app.initQuizHandlers) {
-                    window.app.initQuizHandlers();
+                if (_mods.quiz?.initQuizHandlers) {
+                    _mods.quiz.initQuizHandlers();
                 }
             }, 50);
             break;
         case 'results':
-            content = renderResults();
-            setTimeout(animateScoreCounter, 100);
+            if (!_mods.results) { content = LOADING_HTML; loadMod('results').then(() => render()); break; }
+            content = _mods.results.renderResults();
+            setTimeout(() => _mods.results?.animateScoreCounter?.(), 100);
             break;
         case 'review':
-            content = renderReview();
+            if (!_mods.results) { content = LOADING_HTML; loadMod('results').then(() => render()); break; }
+            content = _mods.results.renderReview();
             break;
         case 'create':
-            content = renderCreate();
+            if (!_mods.create) { content = LOADING_HTML; loadMod('create').then(() => render()); break; }
+            content = _mods.create.renderCreate();
             break;
         case 'wizard':
-            content = renderWizard();
+            if (!_mods.wizard) { content = LOADING_HTML; loadMod('wizard').then(() => render()); break; }
+            content = _mods.wizard.renderWizard();
             break;
         case 'studyGuide':
-            content = renderStudyGuide();
-            setTimeout(initStudyGuideDragDrop, 50);
+            if (!_mods.studyGuide) { content = LOADING_HTML; loadMod('studyGuide').then(() => render()); break; }
+            content = _mods.studyGuide.renderStudyGuide();
+            setTimeout(() => _mods.studyGuide?.initStudyGuideDragDrop?.(), 50);
             break;
         case 'flashcards':
-            content = renderFlashcards();
+            if (!_mods.flashcards) { content = LOADING_HTML; loadMod('flashcards').then(() => render()); break; }
+            content = _mods.flashcards.renderFlashcards();
             break;
         case 'srsReview':
-            content = renderSrsReview();
+            if (!_mods.srsReview) { content = LOADING_HTML; loadMod('srsReview').then(() => render()); break; }
+            content = _mods.srsReview.renderSrsReview();
             break;
         case 'onboarding-v2':
             content = renderOnboardingV2();
@@ -362,6 +362,15 @@ function renderInternal() {
         content = `<div class="mc-page">${renderMCNav(state.view)}${content}</div>`;
     }
 
+    // Replay view transition animation on navigation
+    const currentView = state.view;
+    if (_lastView !== currentView) {
+        app.style.animation = 'none';
+        app.offsetHeight; // force reflow
+        app.style.animation = '';
+        _lastView = currentView;
+    }
+
     app.innerHTML = content + renderOnboarding();
 }
 
@@ -379,32 +388,35 @@ document.addEventListener('keydown', (e) => {
     const q = state.currentQuiz?.questions[state.currentQuestionIndex];
     if (!q) return;
     
+    const qm = _mods.quiz;
+    if (!qm) return;
+
     if (e.key >= '1' && e.key <= '9') {
         const idx = parseInt(e.key) - 1;
         if (q.type === 'truefalse') {
-            if (e.key === '1') selectTF(true);
-            else if (e.key === '2') selectTF(false);
+            if (e.key === '1') qm.selectTF(true);
+            else if (e.key === '2') qm.selectTF(false);
         } else if (q.options && idx < q.options.length) {
-            selectOption(idx);
+            qm.selectOption(idx);
         }
     }
-    
+
     if (q.type === 'truefalse') {
-        if (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'y') selectTF(true);
-        if (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'n') selectTF(false);
+        if (e.key.toLowerCase() === 't' || e.key.toLowerCase() === 'y') qm.selectTF(true);
+        if (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'n') qm.selectTF(false);
     }
-    
+
     if (e.key === 'ArrowRight' || e.key === 'Enter') {
         if (state.currentQuestionIndex < state.currentQuiz.questions.length - 1) {
-            nextQuestion();
+            qm.nextQuestion();
         }
     }
     if (e.key === 'ArrowLeft') {
-        prevQuestion();
+        qm.prevQuestion();
     }
-    
+
     if (e.key === 'Escape') {
-        exitQuiz();
+        qm.exitQuiz();
     }
 });
 
@@ -513,20 +525,20 @@ window.app = {
     startWizard,
     startManualCreate,
     
-    // Wizard
-    wizardSetTitle,
-    wizardSetCategory,
-    wizardToggleType,
-    wizardToggleCode,
-    wizardSetCount,
-    wizardAdjustCount,
-    wizardNext,
-    wizardBack,
-    wizardSetContent,
-    wizardPreviewContent,
-    wizardCopyPrompt,
-    wizardFinish,
-    exitWizard,
+    // Wizard (lazy-loaded)
+    wizardSetTitle: (...a) => _mods.wizard?.wizardSetTitle?.(...a),
+    wizardSetCategory: (...a) => _mods.wizard?.wizardSetCategory?.(...a),
+    wizardToggleType: (...a) => _mods.wizard?.wizardToggleType?.(...a),
+    wizardToggleCode: (...a) => _mods.wizard?.wizardToggleCode?.(...a),
+    wizardSetCount: (...a) => _mods.wizard?.wizardSetCount?.(...a),
+    wizardAdjustCount: (...a) => _mods.wizard?.wizardAdjustCount?.(...a),
+    wizardNext: (...a) => _mods.wizard?.wizardNext?.(...a),
+    wizardBack: (...a) => _mods.wizard?.wizardBack?.(...a),
+    wizardSetContent: (...a) => _mods.wizard?.wizardSetContent?.(...a),
+    wizardPreviewContent: (...a) => _mods.wizard?.wizardPreviewContent?.(...a),
+    wizardCopyPrompt: (...a) => _mods.wizard?.wizardCopyPrompt?.(...a),
+    wizardFinish: (...a) => _mods.wizard?.wizardFinish?.(...a),
+    exitWizard: (...a) => _mods.wizard?.exitWizard?.(...a),
     
     // Export/Import
     showExportModal: (quizId) => {
@@ -541,96 +553,95 @@ window.app = {
     // Profile
     showChangePassword: () => showToast('Password change coming soon', 'info'),
 
-    // Quiz
+    // Quiz (lazy-loaded)
     showQuizOptions,
     launchQuiz,
-    startQuiz,
-    selectOption,
-    selectTF,
-    checkMultipleChoiceAnswer,
-    toggleMultiSelect,
-    nextQuestion,
-    prevQuestion,
-    goToQuestion,
-    toggleFlag,
-    exitQuiz,
-    submitQuiz,
-    
-    // Matching & Ordering
-    selectMatchLeft,
-    selectMatchRight,
-    unmatchItem,
-    removeMatch,
-    clearAllMatches,
-    moveOrderItem,
-    initQuizHandlers,
-    checkMatchingAnswer,
-    checkOrderingAnswer,
-    
-    // Results
-    retryQuiz,
-    reviewQuiz,
-    setReviewFilter,
-    
-    // Create (manual)
-    setTitle,
-    setCat,
-    setData,
-    toggleHelp,
-    saveQuiz,
-    editQuiz,
-    openVisual,
-    closeVisual,
-    selectQ,
-    addQ,
-    deleteQ,
-    updateQ,
-    updateOpt,
-    addOpt,
-    toggleCorrect,
-    saveVisual,
-    setTFAnswer,
-    updatePair,
-    addPair,
-    removePair,
-    saveField,
-    changeType,
-    savePair,
-    saveOption,
-    removeOpt,
-    previewImage,
-    clearImage,
-    toggleOptionExplanations,
-    saveOptionExplanation,
+    startQuiz: (...a) => _mods.quiz?.startQuiz?.(...a),
+    selectOption: (...a) => _mods.quiz?.selectOption?.(...a),
+    selectTF: (...a) => _mods.quiz?.selectTF?.(...a),
+    checkMultipleChoiceAnswer: (...a) => _mods.quiz?.checkMultipleChoiceAnswer?.(...a),
+    toggleMultiSelect: (...a) => _mods.quiz?.toggleMultiSelect?.(...a),
+    nextQuestion: (...a) => _mods.quiz?.nextQuestion?.(...a),
+    prevQuestion: (...a) => _mods.quiz?.prevQuestion?.(...a),
+    goToQuestion: (...a) => _mods.quiz?.goToQuestion?.(...a),
+    toggleFlag: (...a) => _mods.quiz?.toggleFlag?.(...a),
+    exitQuiz: (...a) => _mods.quiz?.exitQuiz?.(...a),
+    submitQuiz: (...a) => _mods.quiz?.submitQuiz?.(...a),
+    selectMatchLeft: (...a) => _mods.quiz?.selectMatchLeft?.(...a),
+    selectMatchRight: (...a) => _mods.quiz?.selectMatchRight?.(...a),
+    unmatchItem: (...a) => _mods.quiz?.unmatchItem?.(...a),
+    removeMatch: (...a) => _mods.quiz?.removeMatch?.(...a),
+    clearAllMatches: (...a) => _mods.quiz?.clearAllMatches?.(...a),
+    moveOrderItem: (...a) => _mods.quiz?.moveOrderItem?.(...a),
+    initQuizHandlers: (...a) => _mods.quiz?.initQuizHandlers?.(...a),
+    checkMatchingAnswer: (...a) => _mods.quiz?.checkMatchingAnswer?.(...a),
+    checkOrderingAnswer: (...a) => _mods.quiz?.checkOrderingAnswer?.(...a),
 
-    // Study Guide Builder
-    sgHandleFile,
-    sgClearFile,
-    sgGenerate,
-    sgOpen,
-    sgDownload,
-    sgReset,
-    
-    // Flashcards v2
+    // Results (lazy-loaded)
+    retryQuiz: (...a) => _mods.results?.retryQuiz?.(...a),
+    reviewQuiz: (...a) => _mods.results?.reviewQuiz?.(...a),
+    setReviewFilter: (...a) => _mods.results?.setReviewFilter?.(...a),
+
+    // Create (lazy-loaded)
+    setTitle: (...a) => _mods.create?.setTitle?.(...a),
+    setCat: (...a) => _mods.create?.setCat?.(...a),
+    setData: (...a) => _mods.create?.setData?.(...a),
+    toggleHelp: (...a) => _mods.create?.toggleHelp?.(...a),
+    saveQuiz: async (...a) => { const m = await loadMod('create'); m.saveQuiz(...a); },
+    editQuiz: async (...a) => { const m = await loadMod('create'); m.editQuiz(...a); },
+    openVisual: (...a) => _mods.create?.openVisual?.(...a),
+    closeVisual: (...a) => _mods.create?.closeVisual?.(...a),
+    selectQ: (...a) => _mods.create?.selectQ?.(...a),
+    addQ: (...a) => _mods.create?.addQ?.(...a),
+    deleteQ: (...a) => _mods.create?.deleteQ?.(...a),
+    updateQ: (...a) => _mods.create?.updateQ?.(...a),
+    updateOpt: (...a) => _mods.create?.updateOpt?.(...a),
+    addOpt: (...a) => _mods.create?.addOpt?.(...a),
+    toggleCorrect: (...a) => _mods.create?.toggleCorrect?.(...a),
+    saveVisual: (...a) => _mods.create?.saveVisual?.(...a),
+    setTFAnswer: (...a) => _mods.create?.setTFAnswer?.(...a),
+    updatePair: (...a) => _mods.create?.updatePair?.(...a),
+    addPair: (...a) => _mods.create?.addPair?.(...a),
+    removePair: (...a) => _mods.create?.removePair?.(...a),
+    saveField: (...a) => _mods.create?.saveField?.(...a),
+    changeType: (...a) => _mods.create?.changeType?.(...a),
+    savePair: (...a) => _mods.create?.savePair?.(...a),
+    saveOption: (...a) => _mods.create?.saveOption?.(...a),
+    removeOpt: (...a) => _mods.create?.removeOpt?.(...a),
+    previewImage: (...a) => _mods.create?.previewImage?.(...a),
+    clearImage: (...a) => _mods.create?.clearImage?.(...a),
+    toggleOptionExplanations: (...a) => _mods.create?.toggleOptionExplanations?.(...a),
+    saveOptionExplanation: (...a) => _mods.create?.saveOptionExplanation?.(...a),
+
+    // Study Guide (lazy-loaded)
+    sgHandleFile: (...a) => _mods.studyGuide?.sgHandleFile?.(...a),
+    sgClearFile: (...a) => _mods.studyGuide?.sgClearFile?.(...a),
+    sgGenerate: (...a) => _mods.studyGuide?.sgGenerate?.(...a),
+    sgOpen: (...a) => _mods.studyGuide?.sgOpen?.(...a),
+    sgDownload: (...a) => _mods.studyGuide?.sgDownload?.(...a),
+    sgReset: (...a) => _mods.studyGuide?.sgReset?.(...a),
+
+    // Flashcards (lazy-loaded)
     startFlashcards: async (quizId) => {
         const { getQuiz } = await import('./services/api.js');
+        const m = await loadMod('flashcards');
         const quiz = await getQuiz(quizId);
-        initFlashcards(quiz);
+        m.initFlashcards(quiz);
     },
-    fcFlip,
-    fcNext,
-    fcPrev,
-    fcRate,
-    fcShuffle,
-    fcRestart,
-    fcStudyMissed,
-    fcGoToCard,
-    fcToggleMenu,
-    fcToggleShortcuts,
-    exitFlashcards,
-    fcTouchStart,
-    fcTouchMove,
-    fcTouchEnd,
+    fcFlip: (...a) => _mods.flashcards?.fcFlip?.(...a),
+    fcNext: (...a) => _mods.flashcards?.fcNext?.(...a),
+    fcPrev: (...a) => _mods.flashcards?.fcPrev?.(...a),
+    fcRate: (...a) => _mods.flashcards?.fcRate?.(...a),
+    fcShuffle: (...a) => _mods.flashcards?.fcShuffle?.(...a),
+    fcRestart: (...a) => _mods.flashcards?.fcRestart?.(...a),
+    fcStudyMissed: (...a) => _mods.flashcards?.fcStudyMissed?.(...a),
+    fcGoToCard: (...a) => _mods.flashcards?.fcGoToCard?.(...a),
+    fcToggleMenu: (...a) => _mods.flashcards?.fcToggleMenu?.(...a),
+    fcToggleShortcuts: (...a) => _mods.flashcards?.fcToggleShortcuts?.(...a),
+    exitFlashcards: (...a) => _mods.flashcards?.exitFlashcards?.(...a),
+    fcTouchStart: (...a) => _mods.flashcards?.fcTouchStart?.(...a),
+    fcTouchMove: (...a) => _mods.flashcards?.fcTouchMove?.(...a),
+    fcTouchEnd: (...a) => _mods.flashcards?.fcTouchEnd?.(...a),
     
 
     // Onboarding (legacy)
@@ -669,7 +680,8 @@ window.app = {
                 return;
             }
             hideLoading();
-            startQuiz(null, {
+            const qm = await loadMod('quiz');
+            qm.startQuiz(null, {
                 studyMode: true,
                 randomizeOptions: false,
                 timed: false,
@@ -697,11 +709,11 @@ window.app = {
         }
     },
 
-    // SRS Review
-    startSrsReview: () => initSrsReview(),
-    srsFlip,
-    srsRate,
-    exitSrsReview,
+    // SRS Review (lazy-loaded)
+    startSrsReview: async () => { const m = await loadMod('srsReview'); m.initSrsReview(); },
+    srsFlip: (...a) => _mods.srsReview?.srsFlip?.(...a),
+    srsRate: (...a) => _mods.srsReview?.srsRate?.(...a),
+    exitSrsReview: (...a) => _mods.srsReview?.exitSrsReview?.(...a),
 
     // Dashboard & Certifications
     showCertPicker: async () => {
@@ -775,29 +787,11 @@ window.app = {
         });
     },
     unenrollCert: async (certId, certName) => {
-        const confirmed = await new Promise(resolve => {
-            const overlay = document.createElement('div');
-            overlay.className = 'modal-overlay';
-            overlay.innerHTML = `
-                <div class="modal">
-                    <div class="modal-header">
-                        <h2>Remove Certification</h2>
-                        <button class="btn btn-ghost btn-icon" data-action="cancel">${icon('x')}</button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Remove <strong>${certName}</strong> from your dashboard? Your study progress won't be affected.</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
-                        <button class="btn btn-primary danger" data-action="confirm">Remove</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay || e.target.closest('[data-action="cancel"]')) { overlay.remove(); resolve(false); }
-                if (e.target.closest('[data-action="confirm"]')) { overlay.remove(); resolve(true); }
-            });
+        const confirmed = await confirmModal({
+            title: 'Remove Certification',
+            message: `Remove <strong>${certName}</strong> from your dashboard? Your study progress won't be affected.`,
+            confirmText: 'Remove',
+            danger: true,
         });
         if (!confirmed) return;
         try {
@@ -823,7 +817,8 @@ window.app = {
                 showToast('No questions available for simulation yet. The certification question bank is still being built.', 'warning');
                 return;
             }
-            startQuiz(null, {
+            const qm = await loadMod('quiz');
+            qm.startQuiz(null, {
                 studyMode: false,
                 timed: true,
                 minutes: Math.ceil(sim.time_limit / 60),
@@ -844,7 +839,8 @@ window.app = {
                 showToast('No questions available for the diagnostic yet. The question bank is still being built.', 'warning');
                 return;
             }
-            startQuiz(null, {
+            const qm = await loadMod('quiz');
+            qm.startQuiz(null, {
                 studyMode: false,
                 timed: true,
                 minutes: Math.ceil(sim.time_limit / 60),

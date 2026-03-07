@@ -1,6 +1,7 @@
 /* Import/Export Service */
 import { escapeHtml } from '../utils/dom.js';
 import { showToast } from '../utils/toast.js';
+import { showModal } from '../utils/modal.js';
 
 export const ExportService = {
     toAnki(quiz) {
@@ -117,17 +118,31 @@ export const ImportService = {
 };
 
 export function showExportModal(quiz) {
-    const m = document.createElement('div');
-    m.className = 'modal-overlay'; m.id = 'export-modal';
-    m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="modal"><div class="modal-header"><h2>📤 Export</h2><button class="btn btn-icon btn-ghost" onclick="document.getElementById('export-modal').remove()">✕</button></div><div class="modal-body"><p class="text-muted mb-4">${escapeHtml(quiz.title)}</p><div class="export-grid"><button class="export-opt" onclick="window.app.exportAs(${quiz.id},'json')"><span class="export-icon">📦</span><span class="export-label">JSON</span></button><button class="export-opt" onclick="window.app.exportAs(${quiz.id},'anki')"><span class="export-icon">🎴</span><span class="export-label">Anki</span></button><button class="export-opt" onclick="window.app.exportAs(${quiz.id},'csv')"><span class="export-icon">📊</span><span class="export-label">CSV</span></button><button class="export-opt" onclick="window.app.exportAs(${quiz.id},'markdown')"><span class="export-icon">📝</span><span class="export-label">Markdown</span></button></div></div></div>`;
-    document.body.appendChild(m);
+    showModal({
+        id: 'export-modal',
+        title: 'Export',
+        body: `
+            <p class="text-muted mb-4">${escapeHtml(quiz.title)}</p>
+            <div class="export-grid">
+                <button class="export-opt" onclick="window.app.exportAs(${quiz.id},'json')"><span class="export-icon">JSON</span></button>
+                <button class="export-opt" onclick="window.app.exportAs(${quiz.id},'anki')"><span class="export-icon">Anki</span></button>
+                <button class="export-opt" onclick="window.app.exportAs(${quiz.id},'csv')"><span class="export-icon">CSV</span></button>
+                <button class="export-opt" onclick="window.app.exportAs(${quiz.id},'markdown')"><span class="export-icon">MD</span></button>
+            </div>
+        `,
+    });
 }
 
 export function showImportModal() {
-    const m = document.createElement('div');
-    m.className = 'modal-overlay'; m.id = 'import-modal';
-    m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="modal"><div class="modal-header"><h2>📥 Import</h2><button class="btn btn-icon btn-ghost" onclick="document.getElementById('import-modal').remove()">✕</button></div><div class="modal-body"><label class="card" style="display:block;cursor:pointer;text-align:center;padding:2rem"><input type="file" accept=".json,.csv" style="display:none" onchange="window.app.handleImport(this.files[0])"><div style="font-size:2rem">📁</div><div class="font-medium">Select file</div><div class="text-sm text-muted">.json or .csv</div></label></div></div>`;
-    document.body.appendChild(m);
+    showModal({
+        id: 'import-modal',
+        title: 'Import',
+        body: `
+            <label class="card" style="display:block;cursor:pointer;text-align:center;padding:2rem">
+                <input type="file" accept=".json,.csv" style="display:none" onchange="window.app.handleImport(this.files[0])">
+                <div class="font-medium">Select file</div>
+                <div class="text-sm text-muted">.json or .csv</div>
+            </label>
+        `,
+    });
 }

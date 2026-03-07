@@ -6,6 +6,34 @@ import { API } from '../utils/constants.js';
 
 const API_URL = window.location.origin + '/api';
 
+// ==================== Response Cache ====================
+
+const _cache = new Map();
+const CACHE_TTL = {
+    '/certifications': 5 * 60 * 1000,
+    '/user-certifications': 2 * 60 * 1000,
+    '/profile': 2 * 60 * 1000,
+    '/bookmarks': 2 * 60 * 1000,
+};
+
+function getCached(key) {
+    const entry = _cache.get(key);
+    if (entry && Date.now() - entry.ts < entry.ttl) return entry.data;
+    _cache.delete(key);
+    return null;
+}
+
+function setCache(key, data, ttl) {
+    _cache.set(key, { data, ts: Date.now(), ttl });
+}
+
+/** Invalidate cache entries matching a prefix */
+export function invalidateCache(prefix) {
+    for (const key of _cache.keys()) {
+        if (key.startsWith(prefix)) _cache.delete(key);
+    }
+}
+
 // State update callback - set by state.js to avoid circular import
 let stateUpdater = null;
 let authClearer = null;
@@ -23,11 +51,22 @@ export function registerStateCallbacks(updateFn, clearAuthFn) {
  * Exported so state.js can use the same client (fixes Bug #8)
  */
 export async function apiCall(endpoint, options = {}, retryCount = 0) {
+    const method = (options.method || 'GET').toUpperCase();
+
+    // Check cache for GET requests
+    if (method === 'GET') {
+        const ttl = CACHE_TTL[endpoint];
+        if (ttl) {
+            const cached = getCached(endpoint);
+            if (cached) return cached;
+        }
+    }
+
     const token = localStorage.getItem('token');
-    
+
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    
+
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), API.REQUEST_TIMEOUT_MS || 15000);
@@ -66,8 +105,16 @@ export async function apiCall(endpoint, options = {}, retryCount = 0) {
             }
         }
         
-        return await res.json();
-        
+        const result = await res.json();
+
+        // Cache GET responses with matching TTL
+        if (method === 'GET') {
+            const ttl = CACHE_TTL[endpoint];
+            if (ttl) setCache(endpoint, result, ttl);
+        }
+
+        return result;
+
     } catch (err) {
         // Handle network errors and timeouts
         if (err.name === 'AbortError') {
@@ -171,6 +218,7 @@ export async function register(username, password, email = null) {
 export function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    _cache.clear();
     if (authClearer) authClearer();
     showToast('Logged out successfully', 'info');
 }
@@ -389,10 +437,12 @@ export async function loadProfile() {
  * Save user profile to server
  */
 export async function saveProfileToServer(profileData) {
-    return await apiCall('/profile', {
+    const result = await apiCall('/profile', {
         method: 'PUT',
         body: JSON.stringify(profileData)
     });
+    invalidateCache('/profile');
+    return result;
 }
 
 /**
@@ -487,17 +537,21 @@ export async function getUserCertifications() {
  * Enroll in a certification track
  */
 export async function enrollCertification(certificationId, targetDate = null) {
-    return await apiCall('/user-certifications', {
+    const result = await apiCall('/user-certifications', {
         method: 'POST',
         body: JSON.stringify({ certification_id: certificationId, target_date: targetDate })
     });
+    invalidateCache('/user-certifications');
+    return result;
 }
 
 /**
  * Unenroll from a certification track
  */
 export async function unenrollCertification(certId) {
-    return await apiCall(`/user-certifications/${certId}`, { method: 'DELETE' });
+    const result = await apiCall(`/user-certifications/${certId}`, { method: 'DELETE' });
+    invalidateCache('/user-certifications');
+    return result;
 }
 
 // ==================== Domain & Performance ====================
@@ -705,15 +759,19 @@ export async function getBookmarks() {
  * Bookmark a question
  */
 export async function addBookmark(questionId, note = null) {
-    return await apiCall('/bookmarks', {
+    const result = await apiCall('/bookmarks', {
         method: 'POST',
         body: JSON.stringify({ question_id: questionId, note })
     });
+    invalidateCache('/bookmarks');
+    return result;
 }
 
 /**
  * Remove a bookmark
  */
 export async function removeBookmark(questionId) {
-    return await apiCall(`/bookmarks/${questionId}`, { method: 'DELETE' });
+    const result = await apiCall(`/bookmarks/${questionId}`, { method: 'DELETE' });
+    invalidateCache('/bookmarks');
+    return result;
 }

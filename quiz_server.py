@@ -63,15 +63,24 @@ except ImportError:
 
 @app.route('/')
 def index():
-    return send_from_directory(BASE_DIR, 'index.html')
+    response = send_from_directory(BASE_DIR, 'index.html')
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 @app.route('/app')
 def app_page():
-    return send_from_directory(BASE_DIR, 'index.html')
+    response = send_from_directory(BASE_DIR, 'index.html')
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    return send_from_directory(os.path.join(BASE_DIR, 'static'), filename)
+    response = send_from_directory(os.path.join(BASE_DIR, 'static'), filename)
+    if filename.endswith(('.css', '.js')):
+        response.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400'
+    elif filename.endswith(('.png', '.jpg', '.svg', '.woff2', '.woff', '.ttf')):
+        response.headers['Cache-Control'] = 'public, max-age=604800'
+    return response
 
 # === Database ===
 
