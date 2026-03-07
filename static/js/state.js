@@ -114,10 +114,15 @@ export function getState() {
  * Update state
  */
 export function setState(newState, skipRender = false) {
+    const prev = state;
     state = { ...state, ...newState };
-    
+
     if (!skipRender) {
-        listeners.forEach(fn => fn(getState()));
+        // Skip render if no values actually changed (shallow comparison)
+        const changed = Object.keys(newState).some(k => newState[k] !== prev[k]);
+        if (changed) {
+            listeners.forEach(fn => fn(getState()));
+        }
     }
 }
 

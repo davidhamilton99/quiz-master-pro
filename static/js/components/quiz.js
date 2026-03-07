@@ -803,19 +803,9 @@ function handleStudyModeCheck(userAnswer, question) {
         const newMaxStreak = Math.max(newStreak, state.maxQuizStreak || 0);
         setState({ quizStreak: newStreak, maxQuizStreak: newMaxStreak }, true);
         recordCorrectAnswer();
-        if (window.sounds) window.sounds.playCorrect(newStreak);
-        if (window.animations) {
-            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
-            if (answerEl) window.animations.burstCorrect(answerEl);
-        }
     } else {
         setState({ quizStreak: 0 }, true);
         recordWrongAnswer();
-        if (window.sounds) window.sounds.playWrong();
-        if (window.animations) {
-            const answerEl = document.querySelector('.option.selected') || document.querySelector('.tf-options button.selected');
-            if (answerEl) window.animations.burstWrong(answerEl);
-        }
     }
 
     setState({ showAnswer: true });
@@ -1261,7 +1251,6 @@ export async function startQuiz(quizId, options = {}) {
                 simulationConfig: isSimulation ? options.simulation : null,
             });
 
-            if (window.sounds) window.sounds.playQuizStart();
         }
 
         if (options.timed) {
@@ -1305,14 +1294,6 @@ function startTimer() {
             return;
         }
         
-        if (window.sounds) {
-            if (state.timeRemaining === TIME.TIMER_WARNING_SECONDS) {
-                window.sounds.playTimerWarning();
-            } else if (state.timeRemaining <= TIME.TIMER_URGENT_SECONDS) {
-                window.sounds.playTimerUrgent();
-            }
-        }
-        
         setState({ timeRemaining: state.timeRemaining - 1 });
     }, 1000);
 }
@@ -1348,18 +1329,6 @@ export async function submitQuiz() {
 
     // Log quiz completion event
     logEvent('quiz_completed', { quiz_id: quiz.id, correct, total, percentage, isPerfect });
-
-    // Celebrations
-    if (window.sounds && window.animations) {
-        if (isPerfect) {
-            window.sounds.playPerfectScore();
-            setTimeout(() => window.animations.showFireworks(), 300);
-        } else if (percentage >= 75) {
-            window.animations.showConfetti(true);
-        } else if (percentage >= 50) {
-            window.animations.showConfetti(false);
-        }
-    }
 
     // Build per-question answer map for backend performance tracking
     const answersMap = {};

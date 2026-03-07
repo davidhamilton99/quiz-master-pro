@@ -3,6 +3,7 @@
 import { getState, setState } from '../state.js';
 import { escapeHtml } from '../utils/dom.js';
 import { getStudyStats, getCertReadiness } from '../services/api.js';
+import { handleError } from '../utils/errors.js';
 
 // Study stats cache (7-day global)
 let studyStatsCache = null;
@@ -12,7 +13,7 @@ export async function loadStudyStats() {
         studyStatsCache = data;
         return data;
     } catch (e) {
-        console.error('Failed to load study stats:', e);
+        handleError(e, 'Failed to load study stats', { silent: true });
         return null;
     }
 }
@@ -25,7 +26,7 @@ export async function loadReadiness(certId) {
         readinessCache[certId] = data;
         return data;
     } catch (e) {
-        console.error('Failed to load readiness:', e);
+        handleError(e, 'Failed to load readiness', { silent: true });
         return null;
     }
 }

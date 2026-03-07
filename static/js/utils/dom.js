@@ -10,16 +10,3 @@ export function showLoading() {
     o.style.display = 'flex';
 }
 export function hideLoading() { const o = document.querySelector('.loading-overlay'); if (o) o.style.display = 'none'; }
-
-export function showConfetti() {
-    const colors = ['#2563eb','#16a34a','#d97706','#0891b2','#dc2626'];
-    for (let i = 0; i < 50; i++) {
-        setTimeout(() => {
-            const c = document.createElement('div');
-            c.style.cssText = `position:fixed;z-index:9999;pointer-events:none;width:${6+Math.random()*6}px;height:${6+Math.random()*6}px;background:${colors[Math.floor(Math.random()*colors.length)]};left:${Math.random()*100}vw;top:-10px;border-radius:${Math.random()>0.5?'50%':'2px'}`;
-            c.animate([{transform:'translateY(0) rotate(0)',opacity:1},{transform:`translateY(100vh) rotate(${Math.random()*720}deg)`,opacity:0}],{duration:2500,easing:'ease-out'});
-            document.body.appendChild(c);
-            setTimeout(() => c.remove(), 2500);
-        }, i * 30);
-    }
-}

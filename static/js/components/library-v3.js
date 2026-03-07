@@ -5,6 +5,7 @@ import { escapeHtml, formatDate } from '../utils/dom.js';
 import { icon } from '../utils/icons.js';
 
 import { showToast } from '../utils/toast.js';
+import { showModal, confirmModal } from '../utils/modal.js';
 
 // View mode
 let viewMode = 'grid'; // 'grid' or 'list'
@@ -692,48 +693,35 @@ export async function showShareSettings(quizId) {
     const quiz = state.quizzes.find(q => q.id === quizId);
     if (!quiz) return;
 
-    const existing = document.getElementById('share-settings-modal');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'share-settings-modal';
-    overlay.className = 'modal-overlay share-modal-overlay';
-    overlay.innerHTML = `
-        <div class="modal share-settings-modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2>${icon('globe')} Share Settings</h2>
-                <button class="btn btn-ghost btn-icon" onclick="document.getElementById('share-settings-modal').remove()">${icon('x')}</button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted mb-4" style="font-size:0.875rem">${escapeHtml(quiz.title)}</p>
-
-                <div class="share-toggle-row">
-                    <div>
-                        <div style="font-weight:600">Make Public</div>
-                        <div class="text-muted" style="font-size:0.8rem">Allow community to find and study this quiz</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="share-public-toggle" class="toggle-checkbox" ${quiz.is_public ? 'checked' : ''}>
-                        <span class="toggle-slider"></span>
-                    </label>
+    showModal({
+        id: 'share-settings-modal',
+        title: `${icon('globe')} Share Settings`,
+        className: 'share-modal-overlay',
+        body: `
+            <p class="text-muted mb-4" style="font-size:0.875rem">${escapeHtml(quiz.title)}</p>
+            <div class="share-toggle-row">
+                <div>
+                    <div style="font-weight:600">Make Public</div>
+                    <div class="text-muted" style="font-size:0.8rem">Allow community to find and study this quiz</div>
                 </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="share-public-toggle" class="toggle-checkbox" ${quiz.is_public ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="document.getElementById('share-settings-modal').remove()">Cancel</button>
-                <button class="btn btn-primary" id="share-save-btn">${icon('save')} Save</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    // Save
-    overlay.querySelector('#share-save-btn').addEventListener('click', async () => {
-        const isPublic = overlay.querySelector('#share-public-toggle').checked;
-        overlay.remove();
-        await updateQuizSettings(quizId, { isPublic });
+        `,
+        footer: `
+            <button class="btn btn-secondary" data-modal-close>Cancel</button>
+            <button class="btn btn-primary" id="share-save-btn">${icon('save')} Save</button>
+        `,
+        onMount(overlay) {
+            overlay.querySelector('#share-save-btn').addEventListener('click', async () => {
+                const isPublic = overlay.querySelector('#share-public-toggle').checked;
+                overlay.remove();
+                await updateQuizSettings(quizId, { isPublic });
+            });
+        },
     });
-
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
 export async function confirmDelete(quizId) {
@@ -741,29 +729,13 @@ export async function confirmDelete(quizId) {
     const quiz = state.quizzes.find(q => q.id === quizId);
     if (!quiz) return;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-        <div class="modal">
-            <div class="modal-header">
-                <h2>Delete Quiz</h2>
-                <button class="btn btn-ghost btn-icon" onclick="this.closest('.modal-overlay').remove()">${icon('x')}</button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete <strong>${escapeHtml(quiz.title)}</strong>? This cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-                <button class="btn btn-primary danger" id="confirm-delete-btn">${icon('trash')} Delete</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelector('#confirm-delete-btn').addEventListener('click', async () => {
-        overlay.remove();
-        await deleteQuiz(quizId);
+    const confirmed = await confirmModal({
+        title: 'Delete Quiz',
+        message: `Are you sure you want to delete <strong>${escapeHtml(quiz.title)}</strong>? This cannot be undone.`,
+        confirmText: `${icon('trash')} Delete`,
+        danger: true,
     });
+    if (confirmed) await deleteQuiz(quizId);
 }
 
 // Close menus when clicking outside
